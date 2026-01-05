@@ -1,7 +1,7 @@
 name: "Quality Gate"
 guid: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-version: "1.0.0.1"
-targetAbi: "10.10.0.0"
+version: "1.0.0.3"
+targetAbi: "10.11.0.0"
 framework: "net9.0"
 owner: "GeiserX"
 overview: "Restrict users to specific media versions based on configurable path-based policies."
@@ -11,6 +11,14 @@ imageUrl: ""
 artifacts:
   - Jellyfin.Plugin.QualityGate.dll
 changelog: |
+  ## v1.0.0.3
+  - Fixed configuration UI - buttons and dropdowns now work properly
+  - Added comprehensive documentation with policy examples
+  ## v1.0.0.2
+  - Fixed targetAbi for Jellyfin 10.11+
+  - Added default policy support
+  - Added user overrides with full-access option
+  - Added middleware filtering to hide blocked versions
   ## v1.0.0.0
   - Initial release
   - Define path-based quality policies
