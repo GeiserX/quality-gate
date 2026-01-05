@@ -1,0 +1,11 @@
+{
+  "guid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "name": "Quality Gate",
+  "overview": "Restrict users to specific media versions based on configurable path-based policies.",
+  "description": "Quality Gate allows Jellyfin administrators to define policies that restrict certain users to specific media versions.",
+  "owner": "GeiserX",
+  "category": "General",
+  "version": "1.0.0.1",
+  "targetAbi": "10.10.0.0",
+  "timestamp": "2026-01-05T18:07:00Z"
+}
