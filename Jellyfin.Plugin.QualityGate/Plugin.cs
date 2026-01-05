@@ -169,7 +169,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 
     /// <summary>
     /// Finds an allowed alternate version of the given item based on the policy.
-    /// Searches for items with similar name patterns that match allowed paths.
+    /// Searches for items in the same directory with quality suffix variations.
     /// </summary>
     private BaseItem? FindAllowedVersion(BaseItem item, QualityPolicy policy)
     {
@@ -186,87 +186,97 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                 return null;
             }
 
-            // Try to find the allowed version by constructing the expected path
-            // Based on allowed/blocked prefixes, we can find the corresponding version
-            foreach (var allowedPrefix in policy.AllowedPathPrefixes)
+            var fileName = System.IO.Path.GetFileName(originalPath);
+            var directory = System.IO.Path.GetDirectoryName(originalPath) ?? string.Empty;
+
+            _logger?.LogDebug(
+                "QualityGate: Looking for allowed version. Original: {Path}, Dir: {Dir}, File: {File}",
+                originalPath, directory, fileName);
+
+            // Try common quality suffix replacements in the same directory
+            var suffixReplacements = new[]
             {
-                foreach (var blockedPrefix in policy.BlockedPathPrefixes)
+                (" - 1080p", " - 720p"),
+                (" - 4K", " - 720p"),
+                (" - 2160p", " - 720p"),
+                (" - UHD", " - 720p"),
+                ("1080p", "720p"),
+                ("4K", "720p"),
+                ("2160p", "720p")
+            };
+
+            foreach (var (from, to) in suffixReplacements)
+            {
+                if (fileName.Contains(from, StringComparison.OrdinalIgnoreCase))
                 {
-                    if (!originalPath.StartsWith(blockedPrefix, StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    // Get the relative path after the blocked prefix
-                    var relativePath = originalPath.Substring(blockedPrefix.TrimEnd('/').Length);
+                    var newFileName = fileName.Replace(from, to, StringComparison.OrdinalIgnoreCase);
+                    var altPath = System.IO.Path.Combine(directory, newFileName);
                     
-                    // Construct the potential allowed path
-                    var allowedPath = allowedPrefix.TrimEnd('/') + relativePath;
-                    
-                    _logger?.LogDebug(
-                        "QualityGate: Looking for allowed version at: {AllowedPath}",
-                        allowedPath);
+                    _logger?.LogDebug("QualityGate: Checking alternate path: {AltPath}", altPath);
 
-                    // Search for an item with this path
-                    var query = new InternalItemsQuery
+                    var altQuery = new InternalItemsQuery
                     {
-                        Path = allowedPath,
+                        Path = altPath,
                         IsVirtualItem = false,
                         Limit = 1
                     };
 
-                    var matches = _libraryManager.GetItemList(query);
-                    if (matches.Count > 0)
+                    var altMatches = _libraryManager.GetItemList(altQuery);
+                    if (altMatches.Count > 0)
                     {
-                        var match = matches[0];
+                        var match = altMatches[0];
+                        _logger?.LogDebug(
+                            "QualityGate: Found match at {MatchPath}, checking if allowed...",
+                            match.Path);
+                        
                         if (QualityGateService.IsPathAllowed(policy, match.Path))
                         {
-                            _logger?.LogDebug(
+                            _logger?.LogInformation(
                                 "QualityGate: Found allowed version: {MatchPath}",
                                 match.Path);
                             return match;
                         }
-                    }
-
-                    // Also try with quality suffix variations
-                    var fileName = System.IO.Path.GetFileName(originalPath);
-                    var directory = System.IO.Path.GetDirectoryName(allowedPath) ?? string.Empty;
-                    
-                    // Try common quality suffix replacements
-                    var suffixReplacements = new[]
-                    {
-                        (" - 1080p", " - 720p"),
-                        (" - 4K", " - 720p"),
-                        (" - 2160p", " - 720p"),
-                        ("1080p", "720p"),
-                        ("4K", "720p"),
-                        ("2160p", "720p")
-                    };
-
-                    foreach (var (from, to) in suffixReplacements)
-                    {
-                        if (fileName.Contains(from, StringComparison.OrdinalIgnoreCase))
+                        else
                         {
-                            var newFileName = fileName.Replace(from, to, StringComparison.OrdinalIgnoreCase);
-                            var altPath = System.IO.Path.Combine(directory, newFileName);
-                            
-                            var altQuery = new InternalItemsQuery
-                            {
-                                Path = altPath,
-                                IsVirtualItem = false,
-                                Limit = 1
-                            };
-
-                            var altMatches = _libraryManager.GetItemList(altQuery);
-                            if (altMatches.Count > 0 && QualityGateService.IsPathAllowed(policy, altMatches[0].Path))
-                            {
-                                return altMatches[0];
-                            }
+                            _logger?.LogDebug(
+                                "QualityGate: Match {MatchPath} is not allowed by policy",
+                                match.Path);
                         }
                     }
                 }
             }
 
+            // If no suffix match found, search for any version in the same parent folder
+            // that has " - 720p" in its name
+            _logger?.LogDebug("QualityGate: Trying pattern search for 720p in same directory");
+            
+            var parentQuery = new InternalItemsQuery
+            {
+                IsVirtualItem = false,
+                Limit = 10
+            };
+
+            // Get all items and filter by directory
+            var allItems = _libraryManager.GetItemList(parentQuery);
+            foreach (var candidate in allItems)
+            {
+                if (candidate.Path == null) continue;
+                var candidateDir = System.IO.Path.GetDirectoryName(candidate.Path);
+                var candidateFile = System.IO.Path.GetFileName(candidate.Path);
+                
+                // Same directory and has 720p in name
+                if (candidateDir == directory && 
+                    candidateFile.Contains("720p", StringComparison.OrdinalIgnoreCase) &&
+                    QualityGateService.IsPathAllowed(policy, candidate.Path))
+                {
+                    _logger?.LogInformation(
+                        "QualityGate: Found allowed 720p version via search: {Path}",
+                        candidate.Path);
+                    return candidate;
+                }
+            }
+
+            _logger?.LogWarning("QualityGate: No allowed version found after exhaustive search");
             return null;
         }
         catch (Exception ex)
