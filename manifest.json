@@ -3,20 +3,19 @@
     "guid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "name": "Quality Gate",
     "overview": "Restrict users to specific media versions based on configurable path-based policies.",
-    "description": "Quality Gate allows Jellyfin administrators to define policies that restrict certain users to specific media versions. This is useful for scenarios where you have both high-quality original files and lower-bitrate transcoded versions, and want to limit some users to only the transcoded versions to save bandwidth or manage access.",
+    "description": "Quality Gate allows Jellyfin administrators to define policies that restrict certain users to specific media versions. Features include: Default policy for all users, per-user overrides, full access exemptions, middleware filtering to hide blocked versions from UI, and auto-fallback to allowed versions.",
     "owner": "GeiserX",
     "category": "General",
     "imageUrl": "",
     "versions": [
       {
         "version": "1.0.0.0",
-        "changelog": "Initial release - Define path-based quality policies, assign policies to users, filter media sources based on user policies.",
+        "changelog": "Initial release with default policy support, user overrides, middleware filtering, and auto-fallback.",
         "targetAbi": "10.10.0.0",
-        "sourceUrl": "https://github.com/GeiserX/jellyfin-quality-gate/releases/download/v1.0.0.0/quality-gate.zip",
+        "sourceUrl": "https://github.com/GeiserX/jellyfin-quality-gate/releases/download/v1.0.0/jellyfin-quality-gate-v1.0.0.zip",
         "checksum": "",
-        "timestamp": "2026-01-05T00:00:00Z"
+        "timestamp": "2026-01-05T17:01:00Z"
       }
     ]
   }
 ]
-
