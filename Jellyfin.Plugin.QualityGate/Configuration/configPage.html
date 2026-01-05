@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Quality Gate</title>
+    <style>
+        .section {
+            margin-bottom: 2em;
+            padding: 1em;
+            border: 1px solid #444;
+            border-radius: 8px;
+        }
+        .section-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 1em;
+            color: #00a4dc;
+        }
+        .policy-card, .user-card {
+            background: #1a1a1a;
+            padding: 1em;
+            margin: 0.5em 0;
+            border-radius: 4px;
+        }
+        .policy-card.disabled {
+            opacity: 0.5;
+        }
+        .form-group {
+            margin: 0.8em 0;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.3em;
+            font-weight: 500;
+        }
+        .form-group input[type="text"],
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 0.5em;
+            border: 1px solid #555;
+            border-radius: 4px;
+            background: #2a2a2a;
+            color: #fff;
+        }
+        .form-group textarea {
+            min-height: 60px;
+            resize: vertical;
+        }
+        .btn {
+            padding: 0.5em 1em;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 0.5em;
+        }
+        .btn-primary {
+            background: #00a4dc;
+            color: #fff;
+        }
+        .btn-danger {
+            background: #c43;
+            color: #fff;
+        }
+        .btn-secondary {
+            background: #555;
+            color: #fff;
+        }
+        .help-text {
+            font-size: 0.85em;
+            color: #888;
+            margin-top: 0.3em;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            text-align: left;
+            padding: 0.5em;
+            border-bottom: 1px solid #333;
+        }
+    </style>
+</head>
+<body>
+    <div id="QualityGateConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-select,emby-checkbox">
+        <div data-role="content">
+            <div class="content-primary">
+                <h2>Quality Gate Configuration</h2>
+                <p>Configure policies to restrict users to specific media versions (e.g., lower bitrate transcoded files).</p>
+
+                <!-- Policies Section -->
+                <div class="section">
+                    <div class="section-title">📋 Policies</div>
+                    <p class="help-text">Define quality restriction policies. Each policy specifies which file paths are allowed or blocked.</p>
+                    
+                    <div id="policiesList"></div>
+                    
+                    <button type="button" class="btn btn-primary" id="addPolicyBtn">+ Add Policy</button>
+                </div>
+
+                <!-- User Assignments Section -->
+                <div class="section">
+                    <div class="section-title">👥 User Policy Assignments</div>
+                    <p class="help-text">Assign policies to users. Users without a policy have full access to all media versions.</p>
+                    
+                    <table id="userAssignmentsTable">
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Assigned Policy</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="userAssignmentsList"></tbody>
+                    </table>
+
+                    <div class="form-group" style="margin-top: 1em;">
+                        <label>Add User Assignment</label>
+                        <div style="display: flex; gap: 0.5em;">
+                            <select id="newAssignmentUser" style="flex: 1;"></select>
+                            <select id="newAssignmentPolicy" style="flex: 1;"></select>
+                            <button type="button" class="btn btn-primary" id="addAssignmentBtn">Add</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Save Button -->
+                <div style="margin-top: 2em;">
+                    <button is="emby-button" type="button" class="raised button-submit block" id="saveConfig">
+                        <span>Save</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Policy Template (hidden) -->
+    <template id="policyTemplate">
+        <div class="policy-card" data-policy-id="">
+            <div class="form-group">
+                <label>Policy Name</label>
+                <input type="text" class="policy-name" placeholder="e.g., Low Bitrate Only">
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <input type="text" class="policy-description" placeholder="Optional description">
+            </div>
+            <div class="form-group">
+                <label>Allowed Path Prefixes (one per line)</label>
+                <textarea class="policy-allowed" placeholder="/media-transcoded/&#10;/low-quality/"></textarea>
+                <p class="help-text">Files must match at least one of these prefixes. Leave empty to allow all paths.</p>
+            </div>
+            <div class="form-group">
+                <label>Blocked Path Prefixes (one per line)</label>
+                <textarea class="policy-blocked" placeholder="/media/&#10;/high-quality/"></textarea>
+                <p class="help-text">Files matching these prefixes will be blocked.</p>
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" class="policy-enabled" checked> Enabled
+                </label>
+            </div>
+            <button type="button" class="btn btn-danger delete-policy">Delete Policy</button>
+        </div>
+    </template>
+
+    <script>
+        let config = { Policies: [], UserPolicies: [] };
+        let users = [];
+
+        function generateId() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        function loadConfig() {
+            ApiClient.getPluginConfiguration('a1b2c3d4-e5f6-7890-abcd-ef1234567890').then(function(cfg) {
+                config = cfg || { Policies: [], UserPolicies: [] };
+                if (!config.Policies) config.Policies = [];
+                if (!config.UserPolicies) config.UserPolicies = [];
+                renderPolicies();
+                renderUserAssignments();
+            });
+
+            ApiClient.getUsers().then(function(userList) {
+                users = userList;
+                populateUserDropdown();
+            });
+        }
+
+        function renderPolicies() {
+            const container = document.getElementById('policiesList');
+            container.innerHTML = '';
+
+            config.Policies.forEach(function(policy) {
+                const template = document.getElementById('policyTemplate');
+                const card = template.content.cloneNode(true).querySelector('.policy-card');
+                
+                card.dataset.policyId = policy.Id;
+                card.querySelector('.policy-name').value = policy.Name || '';
+                card.querySelector('.policy-description').value = policy.Description || '';
+                card.querySelector('.policy-allowed').value = (policy.AllowedPathPrefixes || []).join('\n');
+                card.querySelector('.policy-blocked').value = (policy.BlockedPathPrefixes || []).join('\n');
+                card.querySelector('.policy-enabled').checked = policy.Enabled !== false;
+
+                if (!policy.Enabled) {
+                    card.classList.add('disabled');
+                }
+
+                card.querySelector('.delete-policy').addEventListener('click', function() {
+                    if (confirm('Delete this policy?')) {
+                        config.Policies = config.Policies.filter(p => p.Id !== policy.Id);
+                        config.UserPolicies = config.UserPolicies.filter(up => up.PolicyId !== policy.Id);
+                        renderPolicies();
+                        renderUserAssignments();
+                    }
+                });
+
+                container.appendChild(card);
+            });
+
+            updatePolicyDropdown();
+        }
+
+        function renderUserAssignments() {
+            const tbody = document.getElementById('userAssignmentsList');
+            tbody.innerHTML = '';
+
+            config.UserPolicies.forEach(function(assignment) {
+                const policy = config.Policies.find(p => p.Id === assignment.PolicyId);
+                const policyName = policy ? policy.Name : '(Unknown Policy)';
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${assignment.Username || assignment.UserId}</td>
+                    <td>${policyName}</td>
+                    <td><button type="button" class="btn btn-danger btn-sm remove-assignment">Remove</button></td>
+                `;
+                tr.querySelector('.remove-assignment').addEventListener('click', function() {
+                    config.UserPolicies = config.UserPolicies.filter(up => up.UserId !== assignment.UserId);
+                    renderUserAssignments();
+                });
+                tbody.appendChild(tr);
+            });
+        }
+
+        function populateUserDropdown() {
+            const select = document.getElementById('newAssignmentUser');
+            select.innerHTML = '<option value="">-- Select User --</option>';
+            users.forEach(function(user) {
+                const option = document.createElement('option');
+                option.value = user.Id;
+                option.textContent = user.Name;
+                select.appendChild(option);
+            });
+        }
+
+        function updatePolicyDropdown() {
+            const select = document.getElementById('newAssignmentPolicy');
+            select.innerHTML = '<option value="">-- Select Policy --</option>';
+            config.Policies.forEach(function(policy) {
+                if (policy.Enabled) {
+                    const option = document.createElement('option');
+                    option.value = policy.Id;
+                    option.textContent = policy.Name;
+                    select.appendChild(option);
+                }
+            });
+        }
+
+        function collectPoliciesFromDOM() {
+            const cards = document.querySelectorAll('.policy-card');
+            config.Policies = Array.from(cards).map(function(card) {
+                return {
+                    Id: card.dataset.policyId,
+                    Name: card.querySelector('.policy-name').value,
+                    Description: card.querySelector('.policy-description').value,
+                    AllowedPathPrefixes: card.querySelector('.policy-allowed').value.split('\n').filter(s => s.trim()),
+                    BlockedPathPrefixes: card.querySelector('.policy-blocked').value.split('\n').filter(s => s.trim()),
+                    Enabled: card.querySelector('.policy-enabled').checked
+                };
+            });
+        }
+
+        document.getElementById('addPolicyBtn').addEventListener('click', function() {
+            collectPoliciesFromDOM();
+            config.Policies.push({
+                Id: generateId(),
+                Name: 'New Policy',
+                Description: '',
+                AllowedPathPrefixes: [],
+                BlockedPathPrefixes: [],
+                Enabled: true
+            });
+            renderPolicies();
+        });
+
+        document.getElementById('addAssignmentBtn').addEventListener('click', function() {
+            const userId = document.getElementById('newAssignmentUser').value;
+            const policyId = document.getElementById('newAssignmentPolicy').value;
+            
+            if (!userId || !policyId) {
+                Dashboard.alert('Please select both a user and a policy.');
+                return;
+            }
+
+            const user = users.find(u => u.Id === userId);
+            
+            // Remove existing assignment for this user
+            config.UserPolicies = config.UserPolicies.filter(up => up.UserId !== userId);
+            
+            config.UserPolicies.push({
+                UserId: userId,
+                Username: user ? user.Name : '',
+                PolicyId: policyId
+            });
+
+            renderUserAssignments();
+            document.getElementById('newAssignmentUser').value = '';
+            document.getElementById('newAssignmentPolicy').value = '';
+        });
+
+        document.getElementById('saveConfig').addEventListener('click', function() {
+            collectPoliciesFromDOM();
+            
+            ApiClient.updatePluginConfiguration('a1b2c3d4-e5f6-7890-abcd-ef1234567890', config).then(function() {
+                Dashboard.alert('Configuration saved.');
+            });
+        });
+
+        // Initialize
+        loadConfig();
+    </script>
+</body>
+</html>
+
