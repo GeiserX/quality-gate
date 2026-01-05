@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "v1.0.0.3: Fixed configuration UI - buttons and dropdowns now work properly.",
+  "changelog": "v1.0.0.4: v1.0.0.4: Fixed config page loading - now properly fetches users and policies.",
   "description": "Quality Gate allows Jellyfin administrators to define policies that restrict certain users to specific media versions.",
   "guid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "name": "Quality Gate",
@@ -8,5 +8,5 @@
   "owner": "GeiserX",
   "targetAbi": "10.11.0.0",
   "timestamp": "2026-01-05T19:20:00Z",
-  "version": "1.0.0.3"
+  "version": "1.0.0.4"
 }
