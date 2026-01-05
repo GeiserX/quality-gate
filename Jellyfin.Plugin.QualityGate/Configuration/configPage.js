@@ -1,5 +1,5 @@
 const PLUGIN_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
-let config = { Policies: [], UserPolicies: [], DefaultPolicyId: '' };
+let config = { Policies: [], UserPolicies: [], DefaultPolicyId: '', DefaultIntroVideoPath: '' };
 let users = [];
 
 function escapeHtml(text) {
@@ -26,6 +26,7 @@ function loadConfig(view) {
         config.Policies = config.Policies || [];
         config.UserPolicies = config.UserPolicies || [];
         config.DefaultPolicyId = config.DefaultPolicyId || '';
+        config.DefaultIntroVideoPath = config.DefaultIntroVideoPath || '';
         return ApiClient.getUsers();
     }).then(function(userList) {
         console.log('[QualityGate] Users loaded: ' + (userList ? userList.length : 0));
@@ -45,6 +46,8 @@ function renderAll(view) {
     renderDefaultPolicyDropdown(view);
     renderUserOverrides(view);
     renderUserDropdowns(view);
+    // Set default intro path
+    view.querySelector('#defaultIntroPath').value = config.DefaultIntroVideoPath || '';
 }
 
 function renderPolicies(view) {
@@ -197,6 +200,7 @@ function collectFromDOM(view) {
         }
     });
     config.DefaultPolicyId = view.querySelector('#defaultPolicySelect').value;
+    config.DefaultIntroVideoPath = view.querySelector('#defaultIntroPath').value.trim();
 }
 
 function addPolicy(view) {

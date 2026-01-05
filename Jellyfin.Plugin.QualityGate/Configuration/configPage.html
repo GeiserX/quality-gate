@@ -162,12 +162,20 @@
                     </div>
 
                     <div class="verticalSection">
-                        <div class="qg-section-title">🌐 Default Policy</div>
+                        <div class="qg-section-title">🌐 Global Settings</div>
                         <div class="selectContainer">
-                            <label class="selectLabel" for="defaultPolicySelect">Applied to all users without a specific override</label>
+                            <label class="selectLabel" for="defaultPolicySelect">Default Policy (applied to all users without override)</label>
                             <select is="emby-select" id="defaultPolicySelect" class="emby-select-withcolor">
                                 <option value="">(No default - Full Access)</option>
                             </select>
+                        </div>
+                        <div class="qg-intro-section" style="margin-top: 1em;">
+                            <div class="qg-input-group" style="margin-bottom: 0;">
+                                <label>🎬 Default Intro Video</label>
+                                <input is="emby-input" type="text" id="defaultIntroPath" 
+                                       placeholder="/media/intros/GeiserLand.mp4" />
+                                <div class="qg-hint">Intro shown to users without a policy-specific intro (full-access users)</div>
+                            </div>
                         </div>
                     </div>
 

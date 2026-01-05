@@ -35,6 +35,12 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Empty string means no default policy (full access for all).
     /// </summary>
     public string DefaultPolicyId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the default intro video path for users without a policy-specific intro.
+    /// Example: "/media/intros/GeiserLand.mp4"
+    /// </summary>
+    public string DefaultIntroVideoPath { get; set; } = string.Empty;
 }
 
 /// <summary>

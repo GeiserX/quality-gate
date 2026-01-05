@@ -45,17 +45,33 @@ public class QualityGateIntroProvider : IIntroProvider
                 return Task.FromResult(result);
             }
 
-            var policy = QualityGateService.GetUserPolicy(user.Id);
-            if (policy == null)
+            var config = Plugin.Instance?.Configuration;
+            if (config == null)
             {
-                _logger.LogDebug("QualityGateIntroProvider: No policy for user {UserId}, using default intros", user.Id);
+                _logger.LogDebug("QualityGateIntroProvider: No configuration available");
                 return Task.FromResult(result);
             }
 
-            var introPath = policy.IntroVideoPath;
+            string? introPath = null;
+            string source = "default";
+
+            // Check if user has a policy with custom intro
+            var policy = QualityGateService.GetUserPolicy(user.Id);
+            if (policy != null && !string.IsNullOrWhiteSpace(policy.IntroVideoPath))
+            {
+                introPath = policy.IntroVideoPath;
+                source = $"policy '{policy.Name}'";
+            }
+            // Fall back to default intro
+            else if (!string.IsNullOrWhiteSpace(config.DefaultIntroVideoPath))
+            {
+                introPath = config.DefaultIntroVideoPath;
+                source = "global default";
+            }
+
             if (string.IsNullOrWhiteSpace(introPath))
             {
-                _logger.LogDebug("QualityGateIntroProvider: Policy '{PolicyName}' has no custom intro, using default", policy.Name);
+                _logger.LogDebug("QualityGateIntroProvider: No intro configured for user {UserName}", user.Username);
                 return Task.FromResult(result);
             }
 
@@ -67,11 +83,9 @@ public class QualityGateIntroProvider : IIntroProvider
             }
 
             _logger.LogInformation(
-                "QualityGateIntroProvider: User {UserName} (policy: {PolicyName}) gets custom intro: {IntroPath}",
-                user.Username, policy.Name, introPath);
+                "QualityGateIntroProvider: User {UserName} gets intro from {Source}: {IntroPath}",
+                user.Username, source, introPath);
 
-            // Return the custom intro - this will be added to (or replace depending on Jellyfin version)
-            // the intros from other providers
             return Task.FromResult<IEnumerable<IntroInfo>>(new[]
             {
                 new IntroInfo { Path = introPath }
