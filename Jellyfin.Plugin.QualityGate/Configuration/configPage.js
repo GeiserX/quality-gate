@@ -30,12 +30,12 @@ function loadConfig(view) {
     }).then(function(userList) {
         console.log('[QualityGate] Users loaded: ' + (userList ? userList.length : 0));
         users = userList || [];
-        statusEl.textContent = 'Loaded ' + config.Policies.length + ' policies, ' + users.length + ' users';
+        statusEl.textContent = '✓ Loaded ' + config.Policies.length + ' policies, ' + users.length + ' users';
         statusEl.style.color = '#4caf50';
         renderAll(view);
     }).catch(function(err) {
         console.error('[QualityGate] Error:', err);
-        statusEl.textContent = 'Error: ' + err;
+        statusEl.textContent = '✗ Error: ' + err;
         statusEl.style.color = '#f44336';
     });
 }
@@ -52,22 +52,63 @@ function renderPolicies(view) {
     container.innerHTML = '';
     
     if (config.Policies.length === 0) {
-        container.innerHTML = '<p class="fieldDescription">No policies. Click "+ Add Policy".</p>';
+        container.innerHTML = '<p class="fieldDescription" style="opacity: 0.6; font-style: italic;">No policies configured. Click "+ Add Policy" to create one.</p>';
         return;
     }
     
     config.Policies.forEach(function(policy, i) {
         const card = document.createElement('div');
-        card.className = 'cardBox';
-        card.style.cssText = 'background: rgba(0,0,0,0.3); border-radius: 8px; padding: 1em; margin-bottom: 1em;';
+        card.className = 'qg-policy-card';
         card.dataset.index = i;
-        card.innerHTML = 
-            '<div class="inputContainer"><label class="inputLabel">Name</label><input is="emby-input" type="text" class="policy-name" value="' + escapeHtml(policy.Name || '') + '" /></div>' +
-            '<div class="inputContainer"><label class="inputLabel">Allowed Paths (one per line)</label><textarea is="emby-input" class="policy-allowed" rows="2">' + escapeHtml((policy.AllowedPathPrefixes || []).join('\n')) + '</textarea></div>' +
-            '<div class="inputContainer"><label class="inputLabel">Blocked Paths (one per line)</label><textarea is="emby-input" class="policy-blocked" rows="2">' + escapeHtml((policy.BlockedPathPrefixes || []).join('\n')) + '</textarea></div>' +
-            '<div class="inputContainer"><label class="inputLabel">Blocked Message</label><input is="emby-input" type="text" class="policy-msg" value="' + escapeHtml(policy.BlockedMessageText || 'This quality is not available.') + '" /></div>' +
-            '<div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" class="policy-enabled" ' + (policy.Enabled !== false ? 'checked' : '') + ' /><span>Enabled</span></label></div>' +
-            '<button is="emby-button" type="button" class="raised btnDeletePolicy" style="background:#c62828;margin-top:0.5em;" data-index="' + i + '"><span>Delete</span></button>';
+        
+        card.innerHTML = `
+            <div class="qg-policy-header">
+                <input is="emby-input" type="text" class="policy-name qg-policy-name-input" 
+                       value="${escapeHtml(policy.Name || 'Unnamed Policy')}" 
+                       placeholder="Policy name..." />
+                <button is="emby-button" type="button" class="raised qg-delete-btn btnDeletePolicy" data-index="${i}">
+                    <span>🗑️ Delete</span>
+                </button>
+            </div>
+            
+            <div class="qg-two-col">
+                <div class="qg-input-group">
+                    <label>✅ Allowed Paths</label>
+                    <textarea is="emby-input" class="policy-allowed" rows="3" 
+                              placeholder="/path/to/allowed/media/&#10;/another/allowed/path/">${escapeHtml((policy.AllowedPathPrefixes || []).join('\n'))}</textarea>
+                    <div class="qg-hint">Files matching these paths will be accessible</div>
+                </div>
+                <div class="qg-input-group">
+                    <label>🚫 Blocked Paths</label>
+                    <textarea is="emby-input" class="policy-blocked" rows="3"
+                              placeholder="/path/to/blocked/media/&#10;/another/blocked/path/">${escapeHtml((policy.BlockedPathPrefixes || []).join('\n'))}</textarea>
+                    <div class="qg-hint">Files matching these paths will be blocked</div>
+                </div>
+            </div>
+            
+            <div class="qg-input-group">
+                <label>💬 Blocked Message</label>
+                <input is="emby-input" type="text" class="policy-msg" 
+                       value="${escapeHtml(policy.BlockedMessageText || 'This quality is not available.')}"
+                       placeholder="Message shown when playback is blocked" />
+            </div>
+            
+            <div class="qg-intro-section">
+                <div class="qg-input-group" style="margin-bottom: 0;">
+                    <label>🎬 Custom Intro Video (optional)</label>
+                    <input is="emby-input" type="text" class="policy-intro" 
+                           value="${escapeHtml(policy.IntroVideoPath || '')}"
+                           placeholder="/path/to/intro-720p.mp4 (leave empty for default intro)" />
+                    <div class="qg-hint">Users under this policy will see this intro instead of the default one</div>
+                </div>
+            </div>
+            
+            <div class="qg-checkbox-row">
+                <input is="emby-checkbox" type="checkbox" class="policy-enabled" id="enabled-${i}" ${policy.Enabled !== false ? 'checked' : ''} />
+                <label for="enabled-${i}">Policy Enabled</label>
+            </div>
+        `;
+        
         container.appendChild(card);
     });
     
@@ -96,17 +137,23 @@ function renderUserOverrides(view) {
     const container = view.querySelector('#userOverridesContainer');
     container.innerHTML = '';
     if (config.UserPolicies.length === 0) {
-        container.innerHTML = '<p class="fieldDescription">No overrides.</p>';
+        container.innerHTML = '<p class="fieldDescription" style="opacity: 0.6; font-style: italic;">No user overrides. All users use the default policy.</p>';
         return;
     }
     config.UserPolicies.forEach(function(up, i) {
         const user = users.find(function(u) { return u.Id === up.UserId; });
         const policy = config.Policies.find(function(p) { return p.Id === up.PolicyId; });
-        const policyName = up.PolicyId === '__FULL_ACCESS__' ? '✅ Full Access' : (policy ? policy.Name : '?');
+        const policyName = up.PolicyId === '__FULL_ACCESS__' ? '✅ Full Access' : (policy ? policy.Name : '❓ Unknown');
         const userName = user ? user.Name : (up.Username || up.UserId);
         const item = document.createElement('div');
-        item.style.cssText = 'display:flex;align-items:center;padding:0.5em;background:rgba(0,0,0,0.2);border-radius:4px;margin-bottom:0.5em;';
-        item.innerHTML = '<span style="flex:1;"><strong>' + escapeHtml(userName) + '</strong> → ' + escapeHtml(policyName) + '</span><button is="emby-button" type="button" class="raised btnRemoveOverride" style="background:#c62828;padding:0.3em 0.6em;" data-index="' + i + '"><span>✕</span></button>';
+        item.className = 'qg-override-item';
+        item.innerHTML = `
+            <span><strong>${escapeHtml(userName)}</strong> → <em>${escapeHtml(policyName)}</em></span>
+            <button is="emby-button" type="button" class="raised btnRemoveOverride" 
+                    style="background:#c62828;padding:0.3em 0.8em;border-radius:4px;" data-index="${i}">
+                <span>✕</span>
+            </button>
+        `;
         container.appendChild(item);
     });
     view.querySelectorAll('.btnRemoveOverride').forEach(function(btn) {
@@ -127,7 +174,7 @@ function renderUserDropdowns(view) {
     });
     
     const policySel = view.querySelector('#newOverridePolicy');
-    policySel.innerHTML = '<option value="">-- Select Policy --</option><option value="__FULL_ACCESS__">✅ Full Access</option>';
+    policySel.innerHTML = '<option value="">-- Select Policy --</option><option value="__FULL_ACCESS__">✅ Full Access (no restrictions)</option>';
     config.Policies.forEach(function(p) {
         if (p.Enabled !== false) {
             const opt = document.createElement('option');
@@ -139,12 +186,13 @@ function renderUserDropdowns(view) {
 }
 
 function collectFromDOM(view) {
-    view.querySelectorAll('#policiesContainer .cardBox').forEach(function(card, i) {
+    view.querySelectorAll('#policiesContainer .qg-policy-card').forEach(function(card, i) {
         if (config.Policies[i]) {
             config.Policies[i].Name = card.querySelector('.policy-name').value;
             config.Policies[i].AllowedPathPrefixes = card.querySelector('.policy-allowed').value.split('\n').map(function(s){return s.trim();}).filter(Boolean);
             config.Policies[i].BlockedPathPrefixes = card.querySelector('.policy-blocked').value.split('\n').map(function(s){return s.trim();}).filter(Boolean);
             config.Policies[i].BlockedMessageText = card.querySelector('.policy-msg').value;
+            config.Policies[i].IntroVideoPath = card.querySelector('.policy-intro').value.trim();
             config.Policies[i].Enabled = card.querySelector('.policy-enabled').checked;
         }
     });
@@ -160,14 +208,15 @@ function addPolicy(view) {
         BlockedPathPrefixes: [],
         Enabled: true,
         BlockedMessageHeader: 'Quality Restricted',
-        BlockedMessageText: 'This quality is not available.',
-        BlockedMessageTimeoutMs: 8000
+        BlockedMessageText: 'This quality version is not available for your account.',
+        BlockedMessageTimeoutMs: 8000,
+        IntroVideoPath: ''
     });
     renderAll(view);
 }
 
 function deletePolicy(view, index) {
-    if (confirm('Delete this policy?')) {
+    if (confirm('Delete this policy? This cannot be undone.')) {
         collectFromDOM(view);
         const id = config.Policies[index].Id;
         config.Policies.splice(index, 1);
@@ -181,7 +230,7 @@ function addOverride(view) {
     const userId = view.querySelector('#newOverrideUser').value;
     const policyId = view.querySelector('#newOverridePolicy').value;
     if (!userId || !policyId) { 
-        Dashboard.alert('Please select both user and policy');
+        Dashboard.alert('Please select both a user and a policy');
         return; 
     }
     collectFromDOM(view);
@@ -202,9 +251,17 @@ function removeOverride(view, index) {
 function saveConfig(view) {
     collectFromDOM(view);
     console.log('[QualityGate] Saving config...');
+    const statusEl = view.querySelector('#loadingStatus');
+    statusEl.textContent = 'Saving...';
+    statusEl.style.color = '#ffc107';
+    
     ApiClient.updatePluginConfiguration(PLUGIN_ID, config).then(function() {
+        statusEl.textContent = '✓ Configuration saved!';
+        statusEl.style.color = '#4caf50';
         Dashboard.processPluginConfigurationUpdateResult();
     }).catch(function(err) {
+        statusEl.textContent = '✗ Error saving: ' + err;
+        statusEl.style.color = '#f44336';
         Dashboard.alert('Error saving: ' + err);
     });
 }

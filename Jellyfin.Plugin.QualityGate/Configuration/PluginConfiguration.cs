@@ -90,6 +90,13 @@ public class QualityPolicy
     /// Gets or sets the timeout in milliseconds for the blocked message.
     /// </summary>
     public long BlockedMessageTimeoutMs { get; set; } = 8000;
+
+    /// <summary>
+    /// Gets or sets the path to a custom intro video for users under this policy.
+    /// If empty, uses Jellyfin's default intro video (if configured in plugin intros).
+    /// Example: "/media/intros/720p-intro.mp4"
+    /// </summary>
+    public string IntroVideoPath { get; set; } = string.Empty;
 }
 
 /// <summary>
