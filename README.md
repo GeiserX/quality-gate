@@ -132,24 +132,144 @@ unzip QualityGate.zip -d ~/.local/share/jellyfin/plugins/QualityGate/
 
 ## ⚙️ Configuration
 
-1. Navigate to **Dashboard → Plugins → Quality Gate**
-2. Create a policy:
-   - **Name**: Descriptive name (e.g., "Remote Users")
-   - **Allowed Paths**: Paths users CAN access (e.g., `/media-transcoded/`)
-   - **Blocked Paths**: Paths to explicitly deny (optional)
-3. Assign the policy to users in **User Policy Assignments**
-4. Click **Save**
+Navigate to **Dashboard → Plugins → Quality Gate** to configure the plugin.
+
+### Step 1: Create Policies
+
+Policies define which paths are allowed or blocked. Click **"+ Add Policy"** to create one.
+
+| Field | Description |
+|-------|-------------|
+| **Policy Name** | A descriptive name (e.g., "720p Only", "No 4K") |
+| **Allowed Path Prefixes** | Paths users CAN access. One per line. |
+| **Blocked Path Prefixes** | Paths that will be blocked. One per line. |
+| **Blocked Message** | Custom message shown when playback is blocked |
+| **Enabled** | Toggle policy on/off |
+
+### Step 2: Set Default Policy
+
+Choose a policy from the **Default Policy** dropdown. This applies to ALL users who don't have a specific override.
+
+- Select **(No default - Full Access)** to allow unrestricted access by default
+- Select a policy to restrict all users by default
+
+### Step 3: Add User Overrides
+
+Override the default for specific users:
+
+1. Select a **user** from the dropdown
+2. Select a **policy** (or "Full Access" for no restrictions)
+3. Click **"Add Override"**
 
 ### Policy Logic
 
+The plugin evaluates paths in this order:
+
+1. **Blocked Paths**: If file path starts with any blocked prefix → ❌ **BLOCKED**
+2. **Allowed Paths**: If allowed paths are defined and file doesn't match any → ❌ **BLOCKED**
+3. Otherwise → ✅ **ALLOWED**
+
 | Allowed Paths | Blocked Paths | File Path | Result |
 |---------------|---------------|-----------|--------|
-| `/media-transcoded/` | — | `/media-transcoded/Movie.mkv` | ✅ Allowed |
-| `/media-transcoded/` | — | `/media/Movie.mkv` | ❌ Blocked |
+| `/transcodes/` | — | `/transcodes/Movie.mkv` | ✅ Allowed |
+| `/transcodes/` | — | `/originals/Movie.mkv` | ❌ Blocked |
+| (empty) | `/originals/4K/` | `/originals/1080p/Film.mkv` | ✅ Allowed |
+| (empty) | `/originals/4K/` | `/originals/4K/Film.mkv` | ❌ Blocked |
 | `/media/` | `/media/4K/` | `/media/Movies/Film.mkv` | ✅ Allowed |
 | `/media/` | `/media/4K/` | `/media/4K/Film.mkv` | ❌ Blocked |
 
-> **Note**: If no Allowed Paths are set, all paths are allowed except those explicitly blocked.
+> **Tip**: If no Allowed Paths are set, all paths are allowed except those explicitly blocked.
+
+---
+
+## 📚 Policy Examples
+
+### Example 1: Restrict to 720p Transcodes Only
+
+**Use case**: You have originals in `/mnt/originals/` and 720p transcodes in `/mnt/transcodes/`. Restrict some users to only see transcoded versions.
+
+```
+Policy Name: 720p Only
+Allowed Path Prefixes:
+  /mnt/transcodes/
+  /mnt/remotes/transcodes/
+
+Blocked Path Prefixes:
+  (leave empty)
+```
+
+### Example 2: Block 4K Content
+
+**Use case**: Allow access to everything except 4K content stored in a specific folder.
+
+```
+Policy Name: No 4K
+Allowed Path Prefixes:
+  (leave empty - allows all by default)
+
+Blocked Path Prefixes:
+  /media/4K/
+  /media/UHD/
+  /mnt/storage/4K/
+```
+
+### Example 3: Multi-Version Setup (Recommended)
+
+**Use case**: You have a Jellyfin library with multi-version support where originals and transcodes are in the same folder. Originals come from `/mnt/originals/` and transcodes come from `/mnt/transcodes/`.
+
+```
+Policy Name: Standard Quality
+Allowed Path Prefixes:
+  /mnt/transcodes/
+
+Blocked Path Prefixes:
+  /mnt/originals/
+
+Blocked Message Header: Quality Restricted
+Blocked Message Text: Please select the 720p version to play this content.
+```
+
+Then set this as the **Default Policy** and add **Full Access** overrides for admin users.
+
+### Example 4: Tiered Access
+
+**Use case**: Premium users get full access, standard users get 1080p max.
+
+1. Create policy **"Standard (1080p max)"**:
+   ```
+   Blocked Path Prefixes:
+     /media/4K/
+     /media/2160p/
+   ```
+
+2. Create policy **"Premium (Full Access)"** or use the built-in Full Access
+
+3. Set **Default Policy** to "Standard (1080p max)"
+
+4. Add **User Overrides** for premium users → "Full Access"
+
+---
+
+## 🔄 How It Works
+
+1. **Middleware Filtering**: When Jellyfin returns media sources/versions to the client, the plugin filters out blocked versions so they don't appear in the UI.
+
+2. **Playback Interception**: If a user somehow attempts to play a blocked version, the plugin intercepts the playback and stops it with a custom message.
+
+3. **Path Matching**: The plugin matches the **full file path** of each media version against your policy prefixes.
+
+### Identifying Your Paths
+
+To see what paths your files have:
+
+1. Go to a movie/show in Jellyfin
+2. Click the **⋮** menu → **Media Info**
+3. Look at the **Path** field for each version
+
+Common path patterns:
+- Docker: `/media/Movies/Title (2024)/Title.mkv`
+- NFS mounts: `/mnt/nfs/media/Movies/...`
+- Remote transcodes: `/mnt/remotes/server/transcodes/...`
 
 ## 🏗️ Building from Source
 
