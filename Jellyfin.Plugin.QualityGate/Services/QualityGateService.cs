@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Jellyfin.Plugin.QualityGate.Configuration;
 using MediaBrowser.Model.Dto;
@@ -63,7 +64,38 @@ public static class QualityGateService
     }
 
     /// <summary>
+    /// Resolves a path, following symlinks to get the actual target path.
+    /// </summary>
+    /// <param name="path">The path to resolve.</param>
+    /// <returns>The resolved path (symlink target), or original path if not a symlink.</returns>
+    public static string ResolvePath(string path)
+    {
+        try
+        {
+            var fileInfo = new FileInfo(path);
+            if (fileInfo.LinkTarget != null)
+            {
+                // It's a symlink, return the target
+                // If target is relative, resolve it relative to the symlink's directory
+                var target = fileInfo.LinkTarget;
+                if (!Path.IsPathRooted(target))
+                {
+                    var dir = Path.GetDirectoryName(path) ?? string.Empty;
+                    target = Path.GetFullPath(Path.Combine(dir, target));
+                }
+                return target;
+            }
+        }
+        catch
+        {
+            // If we can't resolve, return original
+        }
+        return path;
+    }
+
+    /// <summary>
     /// Checks if a file path is allowed by the given policy.
+    /// Resolves symlinks to check against actual target paths.
     /// </summary>
     /// <param name="policy">The quality policy.</param>
     /// <param name="filePath">The file path to check.</param>
@@ -75,21 +107,26 @@ public static class QualityGateService
             return true; // Allow if no path (shouldn't happen)
         }
 
-        // Check blocked paths first
+        // Resolve symlinks to get actual target path
+        var resolvedPath = ResolvePath(filePath);
+
+        // Check blocked paths first (against both original and resolved)
         if (policy.BlockedPathPrefixes.Count > 0)
         {
             if (policy.BlockedPathPrefixes.Any(prefix => 
-                filePath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+                filePath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
+                resolvedPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
             {
                 return false;
             }
         }
 
-        // If allowed paths are specified, file must match at least one
+        // If allowed paths are specified, file must match at least one (check both original and resolved)
         if (policy.AllowedPathPrefixes.Count > 0)
         {
             var isAllowed = policy.AllowedPathPrefixes.Any(prefix => 
-                filePath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+                filePath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
+                resolvedPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
             
             if (!isAllowed)
             {
