@@ -1,6 +1,6 @@
 name: "Quality Gate"
 guid: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-version: "1.0.0.9"
+version: "1.0.1.0"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 owner: "GeiserX"
@@ -11,7 +11,7 @@ imageUrl: ""
 artifacts:
   - Jellyfin.Plugin.QualityGate.dll
 changelog: |
-  ## v1.0.0.9
+  ## v1.0.1.0
   - Fixed configuration UI - buttons and dropdowns now work properly
   - Added comprehensive documentation with policy examples
   ## v1.0.0.2
