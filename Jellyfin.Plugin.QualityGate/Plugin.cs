@@ -299,6 +299,11 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             {
                 Name = Name,
                 EmbeddedResourcePath = $"{GetType().Namespace}.Configuration.configPage.html"
+            },
+            new PluginPageInfo
+            {
+                Name = "configPage.js",
+                EmbeddedResourcePath = $"{GetType().Namespace}.Configuration.configPage.js"
             }
         };
     }
