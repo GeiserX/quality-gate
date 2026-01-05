@@ -16,6 +16,7 @@ public class PluginConfiguration : BasePluginConfiguration
     {
         Policies = new List<QualityPolicy>();
         UserPolicies = new List<UserPolicyAssignment>();
+        DefaultPolicyId = string.Empty;
     }
 
     /// <summary>
@@ -24,9 +25,16 @@ public class PluginConfiguration : BasePluginConfiguration
     public List<QualityPolicy> Policies { get; set; }
 
     /// <summary>
-    /// Gets or sets the user-to-policy assignments.
+    /// Gets or sets the user-to-policy assignments (overrides).
     /// </summary>
     public List<UserPolicyAssignment> UserPolicies { get; set; }
+
+    /// <summary>
+    /// Gets or sets the default policy ID applied to all users.
+    /// Users with specific assignments in UserPolicies override this.
+    /// Empty string means no default policy (full access for all).
+    /// </summary>
+    public string DefaultPolicyId { get; set; }
 }
 
 /// <summary>
@@ -67,13 +75,33 @@ public class QualityPolicy
     /// Gets or sets a value indicating whether this policy is enabled.
     /// </summary>
     public bool Enabled { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the header text shown when playback is blocked.
+    /// </summary>
+    public string BlockedMessageHeader { get; set; } = "Quality Restricted";
+
+    /// <summary>
+    /// Gets or sets the message shown when playback is blocked.
+    /// </summary>
+    public string BlockedMessageText { get; set; } = "This quality version is not available for your account.";
+
+    /// <summary>
+    /// Gets or sets the timeout in milliseconds for the blocked message.
+    /// </summary>
+    public long BlockedMessageTimeoutMs { get; set; } = 8000;
 }
 
 /// <summary>
-/// Assigns a policy to a user.
+/// Assigns a policy to a user (overrides the default policy).
 /// </summary>
 public class UserPolicyAssignment
 {
+    /// <summary>
+    /// Special policy ID that indicates full access (no restrictions).
+    /// </summary>
+    public const string FullAccessPolicyId = "__FULL_ACCESS__";
+
     /// <summary>
     /// Gets or sets the Jellyfin user ID.
     /// </summary>
@@ -86,8 +114,8 @@ public class UserPolicyAssignment
 
     /// <summary>
     /// Gets or sets the policy ID assigned to this user.
-    /// Empty string means no policy (full access).
+    /// Use "__FULL_ACCESS__" to give unrestricted access.
+    /// Empty string means use the default policy.
     /// </summary>
     public string PolicyId { get; set; } = string.Empty;
 }
-

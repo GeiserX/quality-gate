@@ -1,20 +1,66 @@
-# Build outputs
-bin/
-obj/
-out/
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
 
-# IDE
+# Visual Studio
 .vs/
-.vscode/
 *.user
 *.suo
-*.cache
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# Rider
+.idea/
+*.sln.iml
+
+# VS Code
+.vscode/
+
+# Build artifacts
+*.dll
+*.exe
+*.pdb
+*.nupkg
+*.snupkg
 
 # NuGet
-packages/
-*.nupkg
+*.nuget.props
+*.nuget.targets
+project.lock.json
+project.fragment.lock.json
+artifacts/
 
-# OS
+# Test Results
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+TestResult.xml
+*.trx
+*.coverage
+*.coveragexml
+
+# NCrunch
+*.ncrunchproject
+*.ncrunchsolution
+_NCrunch_*
+
+# Misc
+*.tmp
+*.temp
+*.log
+*.cache
 .DS_Store
 Thumbs.db
 
+# Local environment
+.env
+.env.local

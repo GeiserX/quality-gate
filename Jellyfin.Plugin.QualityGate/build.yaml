@@ -2,7 +2,7 @@ name: "Quality Gate"
 guid: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 version: "1.0.0.0"
 targetAbi: "10.10.0.0"
-framework: "net8.0"
+framework: "net9.0"
 owner: "GeiserX"
 overview: "Restrict users to specific media versions based on configurable path-based policies."
 description: "Quality Gate allows Jellyfin administrators to define policies that restrict certain users to specific media versions. This is useful for scenarios where you have both high-quality original files and lower-bitrate transcoded versions, and want to limit some users to only the transcoded versions to save bandwidth or manage access."
@@ -16,4 +16,3 @@ changelog: |
   - Define path-based quality policies
   - Assign policies to users
   - Filter media sources based on user policies
-

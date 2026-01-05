@@ -12,10 +12,11 @@ namespace Jellyfin.Plugin.QualityGate.Services;
 public static class QualityGateService
 {
     /// <summary>
-    /// Gets the policy assigned to a user.
+    /// Gets the effective policy for a user.
+    /// Priority: User-specific override > Default policy > No policy (full access).
     /// </summary>
     /// <param name="userId">The user ID.</param>
-    /// <returns>The assigned policy, or null if no policy is assigned.</returns>
+    /// <returns>The effective policy, or null if user has full access.</returns>
     public static QualityPolicy? GetUserPolicy(Guid userId)
     {
         var config = Plugin.Instance?.Configuration;
@@ -24,13 +25,41 @@ public static class QualityGateService
             return null;
         }
 
+        // Check for user-specific override
         var userAssignment = config.UserPolicies.FirstOrDefault(up => up.UserId == userId);
-        if (userAssignment == null || string.IsNullOrEmpty(userAssignment.PolicyId))
+        
+        if (userAssignment != null)
         {
-            return null;
+            // User has a specific assignment
+            if (userAssignment.PolicyId == UserPolicyAssignment.FullAccessPolicyId)
+            {
+                // User explicitly has full access
+                return null;
+            }
+
+            if (!string.IsNullOrEmpty(userAssignment.PolicyId))
+            {
+                // User has a specific policy
+                var policy = config.Policies.FirstOrDefault(p => p.Id == userAssignment.PolicyId && p.Enabled);
+                if (policy != null)
+                {
+                    return policy;
+                }
+            }
         }
 
-        return config.Policies.FirstOrDefault(p => p.Id == userAssignment.PolicyId && p.Enabled);
+        // No user-specific override, check for default policy
+        if (!string.IsNullOrEmpty(config.DefaultPolicyId))
+        {
+            var defaultPolicy = config.Policies.FirstOrDefault(p => p.Id == config.DefaultPolicyId && p.Enabled);
+            if (defaultPolicy != null)
+            {
+                return defaultPolicy;
+            }
+        }
+
+        // No policy applies - full access
+        return null;
     }
 
     /// <summary>
@@ -104,5 +133,15 @@ public static class QualityGateService
         }
 
         return IsPathAllowed(policy, path);
+    }
+
+    /// <summary>
+    /// Checks if a user has full access (no restrictions).
+    /// </summary>
+    /// <param name="userId">The user ID.</param>
+    /// <returns>True if user has full access.</returns>
+    public static bool HasFullAccess(Guid userId)
+    {
+        return GetUserPolicy(userId) == null;
     }
 }
