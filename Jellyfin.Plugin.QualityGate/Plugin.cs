@@ -52,6 +52,14 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 
     private void OnPlaybackStart(object? sender, PlaybackProgressEventArgs e)
     {
+        // NOTE: Playback blocking is DISABLED because:
+        // 1. The PlaybackInfo API already filters media sources for restricted users
+        // 2. The e.MediaInfo.Path property doesn't reliably return the selected media source path
+        // 3. Blocking here causes issues with HLS streaming and player state
+        // 
+        // If a user somehow bypasses the API filtering, they could play blocked content.
+        // For stronger enforcement, implement middleware to filter PlaybackInfo responses.
+        
         try
         {
             var session = e.Session;
@@ -65,70 +73,14 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             var policy = QualityGateService.GetUserPolicy(userId);
             if (policy == null)
             {
-                _logger?.LogDebug("QualityGate: No policy for user {UserId}", userId);
                 return;
             }
 
-            // Get the file path from the PLAYING MEDIA SOURCE, not the item's primary path
-            // e.MediaInfo.Path contains the actual media source being played (e.g., 720p version)
-            // e.Item.Path contains the item's primary/default path (often 1080p)
+            // Just log for debugging, don't block
             string? filePath = e.MediaInfo?.Path ?? e.Item?.Path;
-            var currentItem = e.Item;
-
-            if (string.IsNullOrEmpty(filePath))
-            {
-                _logger?.LogDebug("QualityGate: Could not determine file path for playback");
-                return;
-            }
-
-            _logger?.LogDebug("QualityGate: Checking access for user {UserId} to MediaSource path {Path} (Item path: {ItemPath})", 
-                userId, filePath, e.Item?.Path ?? "null");
-
-            var isAllowed = QualityGateService.IsPathAllowed(policy, filePath);
-
-            if (!isAllowed)
-            {
-                _logger?.LogWarning(
-                    "QualityGate: BLOCKING playback for user {UserId} (policy: {PolicyName}) - Path: {Path}",
-                    userId, policy.Name, filePath);
-
-                // Stop playback and show message - NO redirect to avoid double intro
-                Task.Run(async () =>
-                {
-                    try
-                    {
-                        if (_sessionManager != null && session != null)
-                        {
-                            // Stop the blocked playback
-                            await _sessionManager.SendPlaystateCommand(
-                                session.Id,
-                                session.Id,
-                                new PlaystateRequest { Command = PlaystateCommand.Stop },
-                                default).ConfigureAwait(false);
-
-                            // Show message telling user to select the correct version
-                            await _sessionManager.SendMessageCommand(
-                                session.Id,
-                                session.Id,
-                                new MessageCommand
-                                {
-                                    Header = policy.BlockedMessageHeader,
-                                    Text = policy.BlockedMessageText + "\n\nPlease select the 720p version.",
-                                    TimeoutMs = policy.BlockedMessageTimeoutMs
-                                },
-                                default).ConfigureAwait(false);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger?.LogError(ex, "QualityGate: Failed to handle blocked playback");
-                    }
-                });
-            }
-            else
-            {
-                _logger?.LogDebug("QualityGate: Allowed playback for user {UserId} - Path: {Path}", userId, filePath);
-            }
+            _logger?.LogDebug(
+                "QualityGate: Playback started for user {UserId} (policy: {PolicyName}) - Path: {Path}",
+                userId, policy.Name, filePath ?? "unknown");
         }
         catch (Exception ex)
         {
