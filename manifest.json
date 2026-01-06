@@ -9,12 +9,12 @@
     "imageUrl": "",
     "versions": [
       {
-        "version": "1.0.9.0",
-        "changelog": "See https://github.com/GeiserX/jellyfin-quality-gate/releases/tag/v1.0.9.0",
-        "targetAbi": "10.10.0.0",
-        "sourceUrl": "https://github.com/GeiserX/jellyfin-quality-gate/releases/download/v1.0.9.0/quality-gate.zip",
-        "checksum": "c7f20ab3f433e6ff5aeff29e8a6f91161443bf9e47d68680a1e481530e350d48",
-        "timestamp": "2026-01-06T13:45:12Z"
+        "version": "1.0.11.0",
+        "changelog": "Disabled middleware filtering - does not work due to Jellyfin response compression.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/GeiserX/jellyfin-quality-gate/releases/download/v1.0.11.0/quality-gate.zip",
+        "checksum": "placeholder",
+        "timestamp": "2026-01-06T15:30:00Z"
       }
     ]
   }
