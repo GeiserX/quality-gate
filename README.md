@@ -1,4 +1,4 @@
-<![CDATA[<div align="center">
+<div align="center">
 
 # 🎬 Jellyfin Quality Gate
 
@@ -332,4 +332,3 @@ This project is licensed under the GPL-3.0 License — see the [LICENSE](LICENSE
 Made with ❤️ for the Jellyfin community
 
 </div>
-]]>
