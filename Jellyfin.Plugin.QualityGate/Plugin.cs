@@ -89,7 +89,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                     "QualityGate: BLOCKING playback for user {UserId} (policy: {PolicyName}) - Path: {Path}",
                     userId, policy.Name, filePath);
 
-                // Stop playback and try to find/redirect to an allowed version
+                // Stop playback and show message - NO redirect to avoid double intro
                 Task.Run(async () =>
                 {
                     try
@@ -103,51 +103,17 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                                 new PlaystateRequest { Command = PlaystateCommand.Stop },
                                 default).ConfigureAwait(false);
 
-                            // Try to find an allowed alternate version
-                            BaseItem? allowedVersion = null;
-                            
-                            if (currentItem != null && _libraryManager != null)
-                            {
-                                allowedVersion = FindAllowedVersion(currentItem, policy);
-                            }
-                            
-                            if (allowedVersion != null)
-                            {
-                                _logger?.LogInformation(
-                                    "QualityGate: Auto-fallback to allowed version: {Path}",
-                                    allowedVersion.Path);
-
-                                // Small delay to let the stop command process
-                                await Task.Delay(500).ConfigureAwait(false);
-
-                                // Start playback of the allowed version
-                                await _sessionManager.SendPlayCommand(
-                                    session.Id,
-                                    session.Id,
-                                    new PlayRequest
-                                    {
-                                        ItemIds = new[] { allowedVersion.Id },
-                                        PlayCommand = PlayCommand.PlayNow
-                                    },
-                                    default).ConfigureAwait(false);
-                            }
-                            else
-                            {
-                                // No allowed version found - show configurable message
-                                _logger?.LogWarning(
-                                    "QualityGate: No allowed version found for blocked item");
-
-                                await _sessionManager.SendMessageCommand(
-                                    session.Id,
-                                    session.Id,
-                                    new MessageCommand
-                                    {
-                                        Header = policy.BlockedMessageHeader,
-                                        Text = policy.BlockedMessageText,
-                                        TimeoutMs = policy.BlockedMessageTimeoutMs
-                                    },
-                                    default).ConfigureAwait(false);
-                            }
+                            // Show message telling user to select the correct version
+                            await _sessionManager.SendMessageCommand(
+                                session.Id,
+                                session.Id,
+                                new MessageCommand
+                                {
+                                    Header = policy.BlockedMessageHeader,
+                                    Text = policy.BlockedMessageText + "\n\nPlease select the 720p version.",
+                                    TimeoutMs = policy.BlockedMessageTimeoutMs
+                                },
+                                default).ConfigureAwait(false);
                         }
                     }
                     catch (Exception ex)

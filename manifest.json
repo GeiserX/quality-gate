@@ -9,11 +9,11 @@
     "imageUrl": "",
     "versions": [
       {
-        "version": "1.0.4.0",
+        "version": "1.0.5.0",
         "changelog": "Fixed configuration UI - buttons and dropdowns now work properly.",
         "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://github.com/GeiserX/jellyfin-quality-gate/releases/download/v1.0.4.0/jellyfin-quality-gate-v1.0.4.0.zip",
-        "checksum": "e37dfce734c8908768f704c0cc259975",
+        "sourceUrl": "https://github.com/GeiserX/jellyfin-quality-gate/releases/download/v1.0.5.0/jellyfin-quality-gate-v1.0.5.0.zip",
+        "checksum": "49c28027a53473dc35f90d1079875704",
         "timestamp": "2026-01-05T19:20:00Z"
       }
     ]
