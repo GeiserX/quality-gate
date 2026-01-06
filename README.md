@@ -2,6 +2,16 @@
 
 # 🎬 Jellyfin Quality Gate
 
+> ⚠️ **DEPRECATED / NOT WORKING**
+> 
+> This plugin **does not work as intended**. The middleware approach to filter MediaSources from Jellyfin's API responses conflicts with Jellyfin's response compression, causing browser decoding errors.
+>
+> **Recommended Alternative**: Use **separate Jellyfin libraries** for different quality tiers (e.g., `/media` for 4K/1080p, `/media-720` for 720p only), and assign users to specific libraries via Jellyfin's built-in **Library Access** settings.
+>
+> The intro provider functionality works, but the core version-filtering feature does not.
+
+---
+
 **Intelligent media access control for Jellyfin**
 
 [![GitHub Release](https://img.shields.io/github/v/release/GeiserX/jellyfin-quality-gate?style=flat-square&logo=github)](https://github.com/GeiserX/jellyfin-quality-gate/releases)
