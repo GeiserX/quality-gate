@@ -69,8 +69,10 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                 return;
             }
 
-            // Get the file path from the playing item
-            string? filePath = e.Item?.Path ?? e.MediaInfo?.Path;
+            // Get the file path from the PLAYING MEDIA SOURCE, not the item's primary path
+            // e.MediaInfo.Path contains the actual media source being played (e.g., 720p version)
+            // e.Item.Path contains the item's primary/default path (often 1080p)
+            string? filePath = e.MediaInfo?.Path ?? e.Item?.Path;
             var currentItem = e.Item;
 
             if (string.IsNullOrEmpty(filePath))
@@ -79,7 +81,8 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                 return;
             }
 
-            _logger?.LogDebug("QualityGate: Checking access for user {UserId} to path {Path}", userId, filePath);
+            _logger?.LogDebug("QualityGate: Checking access for user {UserId} to MediaSource path {Path} (Item path: {ItemPath})", 
+                userId, filePath, e.Item?.Path ?? "null");
 
             var isAllowed = QualityGateService.IsPathAllowed(policy, filePath);
 
