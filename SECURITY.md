@@ -42,3 +42,8 @@ This plugin handles access control for media files. When deploying:
 
 We appreciate responsible disclosure and will acknowledge security researchers who help improve this plugin's security.
 
+
+
+
+
+

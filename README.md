@@ -1,18 +1,16 @@
-<div align="center">
+<p align="center"><img src="docs/images/banner.svg" alt="Jellyfin Quality Gate banner" width="900"/></p>
 
-# 🎬 Jellyfin Quality Gate
+<h1 align="center">Jellyfin Quality Gate</h1>
 
-> ⚠️ **DEPRECATED / NOT WORKING**
-> 
+> **DEPRECATED / NOT WORKING**
+>
 > This plugin **does not work as intended**. The middleware approach to filter MediaSources from Jellyfin's API responses conflicts with Jellyfin's response compression, causing browser decoding errors.
 >
 > **Recommended Alternative**: Use **separate Jellyfin libraries** for different quality tiers (e.g., `/media` for 4K/1080p, `/media-720` for 720p only), and assign users to specific libraries via Jellyfin's built-in **Library Access** settings.
 >
 > The intro provider functionality works, but the core version-filtering feature does not.
 
----
-
-**Intelligent media access control for Jellyfin**
+<p align="center">
 
 [![GitHub Release](https://img.shields.io/github/v/release/GeiserX/jellyfin-quality-gate?style=flat-square&logo=github)](https://github.com/GeiserX/jellyfin-quality-gate/releases)
 [![Jellyfin Version](https://img.shields.io/badge/Jellyfin-10.10+-00a4dc?style=flat-square&logo=jellyfin)](https://jellyfin.org)
@@ -20,24 +18,22 @@
 [![License](https://img.shields.io/github/license/GeiserX/jellyfin-quality-gate?style=flat-square)](LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/GeiserX/jellyfin-quality-gate/build.yml?style=flat-square&logo=github-actions&logoColor=white&label=CI)](https://github.com/GeiserX/jellyfin-quality-gate/actions)
 
-*Restrict users to specific media versions based on configurable path-based policies*
+</p>
 
-[Installation](#-installation) • [Configuration](#-configuration) • [Use Cases](#-use-cases) • [Contributing](#-contributing)
-
-</div>
+<p align="center"><strong>Intelligent media access control for Jellyfin</strong></p>
 
 ---
 
-## ✨ Features
+## Features
 
-- **🎯 Path-Based Policies** — Define granular access rules based on file path prefixes
-- **👥 Per-User Assignments** — Assign different policies to different users
-- **🖥️ Web Configuration** — Easy-to-use admin interface in Jellyfin dashboard
-- **🎞️ Multi-Version Support** — Seamlessly filter available media versions per user
-- **⚡ Real-Time Enforcement** — Policies are enforced at playback time
-- **📝 Detailed Logging** — Full audit trail of access decisions
+- **Path-Based Policies** -- Define granular access rules based on file path prefixes
+- **Per-User Assignments** -- Assign different policies to different users
+- **Web Configuration** -- Easy-to-use admin interface in Jellyfin dashboard
+- **Multi-Version Support** -- Seamlessly filter available media versions per user
+- **Real-Time Enforcement** -- Policies are enforced at playback time
+- **Detailed Logging** -- Full audit trail of access decisions
 
-## 🎯 Use Cases
+## Use Cases
 
 This plugin is perfect for scenarios where you have:
 
@@ -57,7 +53,7 @@ This plugin is perfect for scenarios where you have:
 
 Create a "Standard Access" policy allowing only `/media-transcoded/` and assign it to users who should be restricted.
 
-## 📦 Installation
+## Installation
 
 ### Method 1: Plugin Repository (Recommended)
 
@@ -73,7 +69,7 @@ Add this repository to your Jellyfin instance for automatic updates:
 ### Method 2: Manual Installation
 
 <details>
-<summary><b>🐳 Docker</b></summary>
+<summary><b>Docker</b></summary>
 
 ```bash
 # Download the latest release
@@ -96,7 +92,7 @@ volumes:
 </details>
 
 <details>
-<summary><b>🐧 Linux (Native)</b></summary>
+<summary><b>Linux (Native)</b></summary>
 
 ```bash
 # Download the latest release
@@ -116,7 +112,7 @@ sudo systemctl restart jellyfin
 </details>
 
 <details>
-<summary><b>🪟 Windows</b></summary>
+<summary><b>Windows</b></summary>
 
 1. Download the [latest release](https://github.com/GeiserX/jellyfin-quality-gate/releases/latest)
 2. Extract to `%LOCALAPPDATA%\jellyfin\plugins\QualityGate\`
@@ -125,7 +121,7 @@ sudo systemctl restart jellyfin
 </details>
 
 <details>
-<summary><b>🍎 macOS</b></summary>
+<summary><b>macOS</b></summary>
 
 ```bash
 # Download the latest release
@@ -140,7 +136,7 @@ unzip QualityGate.zip -d ~/.local/share/jellyfin/plugins/QualityGate/
 
 </details>
 
-## ⚙️ Configuration
+## Configuration
 
 Navigate to **Dashboard → Plugins → Quality Gate** to configure the plugin.
 
@@ -175,24 +171,24 @@ Override the default for specific users:
 
 The plugin evaluates paths in this order:
 
-1. **Blocked Paths**: If file path starts with any blocked prefix → ❌ **BLOCKED**
-2. **Allowed Paths**: If allowed paths are defined and file doesn't match any → ❌ **BLOCKED**
-3. Otherwise → ✅ **ALLOWED**
+1. **Blocked Paths**: If file path starts with any blocked prefix -- **BLOCKED**
+2. **Allowed Paths**: If allowed paths are defined and file doesn't match any -- **BLOCKED**
+3. Otherwise -- **ALLOWED**
 
 | Allowed Paths | Blocked Paths | File Path | Result |
 |---------------|---------------|-----------|--------|
-| `/transcodes/` | — | `/transcodes/Movie.mkv` | ✅ Allowed |
-| `/transcodes/` | — | `/originals/Movie.mkv` | ❌ Blocked |
-| (empty) | `/originals/4K/` | `/originals/1080p/Film.mkv` | ✅ Allowed |
-| (empty) | `/originals/4K/` | `/originals/4K/Film.mkv` | ❌ Blocked |
-| `/media/` | `/media/4K/` | `/media/Movies/Film.mkv` | ✅ Allowed |
-| `/media/` | `/media/4K/` | `/media/4K/Film.mkv` | ❌ Blocked |
+| `/transcodes/` | -- | `/transcodes/Movie.mkv` | Allowed |
+| `/transcodes/` | -- | `/originals/Movie.mkv` | Blocked |
+| (empty) | `/originals/4K/` | `/originals/1080p/Film.mkv` | Allowed |
+| (empty) | `/originals/4K/` | `/originals/4K/Film.mkv` | Blocked |
+| `/media/` | `/media/4K/` | `/media/Movies/Film.mkv` | Allowed |
+| `/media/` | `/media/4K/` | `/media/4K/Film.mkv` | Blocked |
 
 > **Tip**: If no Allowed Paths are set, all paths are allowed except those explicitly blocked.
 
 ---
 
-## 📚 Policy Examples
+## Policy Examples
 
 ### Example 1: Restrict to 720p Transcodes Only
 
@@ -260,7 +256,7 @@ Then set this as the **Default Policy** and add **Full Access** overrides for ad
 
 ---
 
-## 🔄 How It Works
+## How It Works
 
 1. **Middleware Filtering**: When Jellyfin returns media sources/versions to the client, the plugin filters out blocked versions so they don't appear in the UI.
 
@@ -281,7 +277,7 @@ Common path patterns:
 - NFS mounts: `/mnt/nfs/media/Movies/...`
 - Remote transcodes: `/mnt/remotes/server/transcodes/...`
 
-## 🏗️ Building from Source
+## Building from Source
 
 ### Prerequisites
 
@@ -308,13 +304,13 @@ dotnet watch build -c Debug
 dotnet test
 ```
 
-## 🔒 Security
+## Security
 
 - This plugin handles access control — review your policies carefully
 - Only administrators can configure policies
 - See [SECURITY.md](SECURITY.md) for vulnerability reporting
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
@@ -324,11 +320,11 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
-## 📜 License
+## License
 
 This project is licensed under the GPL-3.0 License — see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - [Jellyfin](https://jellyfin.org) — The Free Software Media System
 - The Jellyfin plugin development community
@@ -337,8 +333,6 @@ This project is licensed under the GPL-3.0 License — see the [LICENSE](LICENSE
 
 <div align="center">
 
-**[⬆ Back to Top](#-jellyfin-quality-gate)**
-
-Made with ❤️ for the Jellyfin community
+**[Back to Top](#jellyfin-quality-gate)**
 
 </div>
