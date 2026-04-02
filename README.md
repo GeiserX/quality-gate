@@ -320,6 +320,13 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
+## Other Jellyfin Projects by GeiserX
+
+- [smart-covers](https://github.com/GeiserX/smart-covers) — Plugin for fallback cover extraction from PDF, EPUB, and audiobooks
+- [whisper-subs](https://github.com/GeiserX/whisper-subs) — Plugin for local AI-powered subtitle generation using Whisper
+- [jellyfin-encoder](https://github.com/GeiserX/jellyfin-encoder) — Automatic 720p HEVC/AV1 transcoding service
+- [jellyfin-telegram-channel-sync](https://github.com/GeiserX/jellyfin-telegram-channel-sync) — Sync Jellyfin access with Telegram channel membership
+
 ## License
 
 This project is licensed under the GPL-3.0 License — see the [LICENSE](LICENSE) file for details.
