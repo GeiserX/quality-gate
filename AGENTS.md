@@ -106,7 +106,7 @@ Editable via **Dashboard -> Plugins -> Quality Gate**.
 
 ### Config Model Fields Not Currently Enforced
 
-`BlockedMessageHeader`, `BlockedMessageText`, `BlockedMessageTimeoutMs` -- present in config/UI for future use but not enforced server-side. The filter silently removes sources; it does not send user-facing messages.
+`BlockedMessageHeader`, `BlockedMessageText`, `BlockedMessageTimeoutMs` -- present in the config model for backward compatibility but **removed from the admin UI**. Not enforced server-side. The filter silently removes sources; it does not send user-facing messages.
 
 `IntroVideoPath` -- used by `QualityGateIntroProvider` to serve per-policy intro videos.
 

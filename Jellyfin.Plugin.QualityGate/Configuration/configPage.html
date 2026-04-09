@@ -4,209 +4,113 @@
     <meta charset="utf-8">
     <title>Quality Gate</title>
     <style>
-        .qg-policy-card {
-            background: linear-gradient(135deg, rgba(40,40,50,0.9) 0%, rgba(30,30,40,0.95) 100%);
-            border: 1px solid rgba(100,100,120,0.3);
-            border-radius: 12px;
-            padding: 1.5em;
-            margin-bottom: 1.5em;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        }
-        .qg-policy-card:hover {
-            border-color: rgba(100,149,237,0.5);
-            box-shadow: 0 6px 25px rgba(0,0,0,0.4);
-        }
-        .qg-input-group {
-            margin-bottom: 1.2em;
-        }
-        .qg-input-group label {
-            display: block;
-            margin-bottom: 0.4em;
-            font-weight: 500;
-            color: rgba(255,255,255,0.85);
-            font-size: 0.95em;
-        }
-        .qg-input-group input[type="text"],
-        .qg-input-group textarea {
-            width: 100%;
-            box-sizing: border-box;
-            background: rgba(20,20,30,0.8);
-            border: 1px solid rgba(100,100,120,0.4);
-            border-radius: 8px;
-            padding: 0.8em 1em;
-            color: #fff;
-            font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
-            font-size: 0.9em;
-            transition: all 0.2s ease;
-        }
-        .qg-input-group input[type="text"]:focus,
-        .qg-input-group textarea:focus {
-            outline: none;
-            border-color: rgba(100,149,237,0.7);
-            background: rgba(25,25,35,0.9);
-            box-shadow: 0 0 0 3px rgba(100,149,237,0.15);
-        }
-        .qg-input-group textarea {
-            min-height: 80px;
-            resize: vertical;
-            line-height: 1.5;
-        }
-        .qg-input-group .qg-hint {
-            font-size: 0.8em;
-            color: rgba(255,255,255,0.5);
-            margin-top: 0.3em;
-        }
-        .qg-two-col {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1em;
-        }
-        @media (max-width: 768px) {
-            .qg-two-col { grid-template-columns: 1fr; }
+        .qg-policy {
+            border: 1px solid rgba(255, 255, 255, .1);
+            border-radius: .25em;
+            padding: 1em;
+            margin-bottom: 1em;
         }
         .qg-policy-header {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            margin-bottom: 1em;
-            padding-bottom: 0.8em;
-            border-bottom: 1px solid rgba(100,100,120,0.2);
+            gap: .5em;
+            margin-bottom: .5em;
         }
-        .qg-policy-name-input {
-            font-size: 1.2em !important;
-            font-weight: 600 !important;
-            background: transparent !important;
-            border: 1px solid transparent !important;
-            padding: 0.4em 0.6em !important;
+        .qg-policy-header .inputContainer { flex: 1; margin: 0; }
+        .qg-paths {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1em;
         }
-        .qg-policy-name-input:hover {
-            border-color: rgba(100,100,120,0.3) !important;
+        @media (max-width: 600px) {
+            .qg-paths { grid-template-columns: 1fr; }
         }
-        .qg-policy-name-input:focus {
-            border-color: rgba(100,149,237,0.5) !important;
-            background: rgba(20,20,30,0.5) !important;
+        .qg-user-table {
+            width: 100%;
+            border-collapse: collapse;
         }
-        .qg-delete-btn {
-            background: linear-gradient(135deg, #c62828, #b71c1c) !important;
-            border: none !important;
-            padding: 0.5em 1em !important;
-            border-radius: 6px !important;
-            cursor: pointer;
-            transition: all 0.2s ease !important;
+        .qg-user-table th,
+        .qg-user-table td {
+            padding: .5em .75em;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, .05);
         }
-        .qg-delete-btn:hover {
-            background: linear-gradient(135deg, #d32f2f, #c62828) !important;
-            transform: translateY(-1px);
+        .qg-user-table th {
+            color: rgba(255, 255, 255, .6);
+            font-weight: 500;
+            font-size: .85em;
+            text-transform: uppercase;
+            letter-spacing: .05em;
         }
-        .qg-checkbox-row {
-            display: flex;
-            align-items: center;
-            gap: 0.5em;
-            margin: 1em 0;
-        }
-        .qg-section-title {
-            display: flex;
-            align-items: center;
-            gap: 0.5em;
-            margin: 1.5em 0 1em 0;
-            font-size: 1.3em;
-            font-weight: 600;
-            color: rgba(255,255,255,0.9);
-        }
-        .qg-override-item {
-            display: flex;
-            align-items: center;
-            padding: 0.8em 1em;
-            background: rgba(30,30,40,0.6);
-            border-radius: 8px;
-            margin-bottom: 0.5em;
-            border: 1px solid rgba(100,100,120,0.2);
-        }
-        .qg-override-item span {
-            flex: 1;
-        }
-        .qg-add-override-row {
-            display: flex;
-            gap: 0.8em;
-            align-items: center;
-            margin-top: 1em;
-            flex-wrap: wrap;
-        }
-        .qg-add-override-row select {
-            flex: 1;
-            min-width: 150px;
-        }
-        .qg-intro-section {
-            background: rgba(100,149,237,0.1);
-            border: 1px solid rgba(100,149,237,0.3);
-            border-radius: 8px;
-            padding: 1em;
-            margin-top: 1em;
-        }
-        .qg-intro-section label {
-            color: rgba(100,200,255,0.9) !important;
-        }
+        .qg-user-table .selectContainer { margin: 0; }
+        .qg-effective { font-size: .85em; }
+        .qg-effective-restricted { color: #f9a825; }
+        .qg-effective-full { color: #66bb6a; }
     </style>
 </head>
 <body>
     <div id="QualityGateConfigPage" data-role="page" class="page type-interior pluginConfigurationPage"
+         data-name="qualityGateConfigPage"
          data-require="emby-input,emby-button,emby-select,emby-checkbox"
          data-controller="__plugin/configPage.js">
         <div data-role="content">
             <div class="content-primary">
-                <form id="QualityGateConfigForm" class="qualityGateConfigForm">
+                <form id="QualityGateConfigForm">
                     <div class="verticalSection">
-                        <h2 class="sectionTitle">Quality Gate Configuration</h2>
-                        <p class="fieldDescription">Restrict users to specific media versions based on file paths. Each policy can have its own custom intro video.</p>
-                        <p id="loadingStatus" style="color: #888;">Loading...</p>
+                        <h2 class="sectionTitle">Quality Gate</h2>
+                        <p class="fieldDescription">
+                            Restrict users to specific media versions based on file path prefixes.
+                            Define policies with allowed and blocked paths, then assign them to users.
+                        </p>
+                        <p id="loadingStatus" class="fieldDescription">Loading configuration...</p>
                     </div>
 
                     <div class="verticalSection">
-                        <div class="qg-section-title">🌐 Global Settings</div>
+                        <h2 class="sectionTitle">Policies</h2>
+                        <p class="fieldDescription">
+                            Each policy defines which file paths are allowed or blocked.
+                            Use the resolved paths shown in Media Info, not mount point names.
+                        </p>
+                        <div id="policiesContainer"></div>
+                        <button is="emby-button" type="button" class="raised" id="btnAddPolicy">
+                            <span>Add Policy</span>
+                        </button>
+                    </div>
+
+                    <div class="verticalSection">
+                        <h2 class="sectionTitle">Default Policy</h2>
+                        <p class="fieldDescription">
+                            Applied to all users who do not have a specific override in the table below.
+                        </p>
                         <div class="selectContainer">
-                            <label class="selectLabel" for="defaultPolicySelect">Default Policy (applied to all users without override)</label>
-                            <select is="emby-select" id="defaultPolicySelect" class="emby-select-withcolor">
-                                <option value="">(No default - Full Access)</option>
+                            <label class="selectLabel" for="defaultPolicySelect">Default Policy</label>
+                            <select is="emby-select" id="defaultPolicySelect">
+                                <option value="">(No default — Full Access)</option>
                             </select>
                         </div>
-                        <div class="qg-intro-section" style="margin-top: 1em;">
-                            <div class="qg-input-group" style="margin-bottom: 0;">
-                                <label>🎬 Default Intro Video</label>
-                                <input is="emby-input" type="text" id="defaultIntroPath" 
-                                       placeholder="/media/intros/GeiserLand.mp4" />
-                                <div class="qg-hint">Intro shown to users without a policy-specific intro (full-access users)</div>
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="defaultIntroPath">
+                                Default Intro Video
+                            </label>
+                            <input is="emby-input" type="text" id="defaultIntroPath"
+                                   placeholder="/media/intros/default.mp4" />
+                            <div class="fieldDescription">
+                                Intro shown to full-access users. Leave empty to disable.
                             </div>
                         </div>
                     </div>
 
                     <div class="verticalSection">
-                        <div class="qg-section-title">📋 Policies</div>
-                        <div id="policiesContainer"></div>
-                        <button is="emby-button" type="button" class="raised button-submit" id="btnAddPolicy">
-                            <span>+ Add Policy</span>
-                        </button>
+                        <h2 class="sectionTitle">User Access</h2>
+                        <p class="fieldDescription">
+                            Assign a policy to each user. Users set to "Use Default" inherit the default policy above.
+                        </p>
+                        <div id="userAccessContainer"></div>
                     </div>
 
                     <div class="verticalSection">
-                        <div class="qg-section-title">👥 User Overrides</div>
-                        <p class="fieldDescription">Override the default policy for specific users.</p>
-                        <div id="userOverridesContainer"></div>
-                        <div class="qg-add-override-row">
-                            <select is="emby-select" id="newOverrideUser">
-                                <option value="">-- Select User --</option>
-                            </select>
-                            <select is="emby-select" id="newOverridePolicy">
-                                <option value="">-- Select Policy --</option>
-                            </select>
-                            <button is="emby-button" type="button" class="raised" id="btnAddOverride">
-                                <span>Add Override</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="verticalSection" style="margin-top: 2em;">
                         <button is="emby-button" type="submit" class="raised button-submit block">
-                            <span>💾 Save Configuration</span>
+                            <span>Save</span>
                         </button>
                     </div>
                 </form>
