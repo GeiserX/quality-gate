@@ -129,33 +129,36 @@ unzip QualityGate.zip -d ~/.local/share/jellyfin/plugins/QualityGate/
 
 ## Configuration
 
-Navigate to **Dashboard → Plugins → Quality Gate** to configure the plugin.
+Navigate to **Dashboard → Quality Gate** (or **Dashboard → Plugins → Quality Gate**) to configure the plugin.
 
 ### Step 1: Create Policies
 
-Policies define which paths are allowed or blocked. Click **"+ Add Policy"** to create one.
+Policies define which paths are allowed or blocked. Click **"Add Policy"** to create one.
 
 | Field | Description |
 |-------|-------------|
 | **Policy Name** | A descriptive name (e.g., "720p Only", "No 4K") |
 | **Allowed Path Prefixes** | Paths users CAN access. One per line. |
 | **Blocked Path Prefixes** | Paths that will be blocked. One per line. |
+| **Custom Intro Video** | Optional intro video for users under this policy |
 | **Enabled** | Toggle policy on/off |
 
 ### Step 2: Set Default Policy
 
 Choose a policy from the **Default Policy** dropdown. This applies to ALL users who don't have a specific override.
 
-- Select **(No default - Full Access)** to allow unrestricted access by default
+- Select **(No default — Full Access)** to allow unrestricted access by default
 - Select a policy to restrict all users by default
 
-### Step 3: Add User Overrides
+### Step 3: Configure User Access
 
-Override the default for specific users:
+The **User Access** table shows all Jellyfin users and their current policy. For each user, select a policy from the dropdown:
 
-1. Select a **user** from the dropdown
-2. Select a **policy** (or "Full Access" for no restrictions)
-3. Click **"Add Override"**
+- **Use Default** — inherits the default policy above
+- **Full Access** — no restrictions
+- Any named policy — applies that policy's path rules
+
+The **Effective Access** column shows what each user actually gets after considering overrides and defaults. Click **Save** to apply changes.
 
 ### Policy Logic
 

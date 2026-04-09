@@ -5,25 +5,51 @@
     <title>Quality Gate</title>
     <style>
         .qg-policy {
-            border: 1px solid rgba(255, 255, 255, .1);
-            border-radius: .25em;
-            padding: 1em;
-            margin-bottom: 1em;
+            border: 1px solid rgba(255, 255, 255, .15);
+            border-radius: .3em;
+            padding: 1em 1.2em;
+            margin-bottom: 1.2em;
         }
         .qg-policy-header {
             display: flex;
             align-items: center;
-            gap: .5em;
-            margin-bottom: .5em;
+            gap: .7em;
+            margin-bottom: .8em;
         }
-        .qg-policy-header .inputContainer { flex: 1; margin: 0; }
+        .qg-policy-header > div:first-child { flex: 1; }
         .qg-paths {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 1em;
+            margin-bottom: .8em;
         }
         @media (max-width: 600px) {
             .qg-paths { grid-template-columns: 1fr; }
+        }
+        .qg-label {
+            display: block;
+            margin-bottom: .4em;
+            color: rgba(255, 255, 255, .7);
+        }
+        .qg-textarea {
+            width: 100%;
+            box-sizing: border-box;
+            background: transparent;
+            color: inherit;
+            font-family: inherit;
+            font-size: .93em;
+            line-height: 1.6;
+            border: .07em solid currentcolor;
+            border-radius: .25em;
+            padding: .4em .6em;
+            resize: vertical;
+            min-height: 5em;
+            opacity: .7;
+        }
+        .qg-textarea:focus {
+            opacity: 1;
+            outline: none;
+            border-color: #00a4dc;
         }
         .qg-user-table {
             width: 100%;
@@ -31,14 +57,14 @@
         }
         .qg-user-table th,
         .qg-user-table td {
-            padding: .5em .75em;
+            padding: .6em .75em;
             text-align: left;
-            border-bottom: 1px solid rgba(255, 255, 255, .05);
+            border-bottom: 1px solid rgba(255, 255, 255, .06);
         }
         .qg-user-table th {
-            color: rgba(255, 255, 255, .6);
+            color: rgba(255, 255, 255, .5);
             font-weight: 500;
-            font-size: .85em;
+            font-size: .8em;
             text-transform: uppercase;
             letter-spacing: .05em;
         }
@@ -46,6 +72,7 @@
         .qg-effective { font-size: .85em; }
         .qg-effective-restricted { color: #f9a825; }
         .qg-effective-full { color: #66bb6a; }
+        .qg-effective-denied { color: #ef5350; }
     </style>
 </head>
 <body>
@@ -95,7 +122,7 @@
                             <input is="emby-input" type="text" id="defaultIntroPath"
                                    placeholder="/media/intros/default.mp4" />
                             <div class="fieldDescription">
-                                Intro shown to full-access users. Leave empty to disable.
+                                Fallback intro for users whose policy has no custom intro. Leave empty to disable.
                             </div>
                         </div>
                     </div>

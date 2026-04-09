@@ -1,6 +1,6 @@
-const PLUGIN_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
-let config = { Policies: [], UserPolicies: [], DefaultPolicyId: '', DefaultIntroVideoPath: '' };
-let users = [];
+var PLUGIN_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+var config = { Policies: [], UserPolicies: [], DefaultPolicyId: '', DefaultIntroVideoPath: '' };
+var users = [];
 
 function escapeHtml(text) {
     var div = document.createElement('div');
@@ -27,25 +27,32 @@ function getUserOverride(userId) {
     return config.UserPolicies.find(function (up) { return up.UserId === userId; });
 }
 
+function isValidOverride(policyId) {
+    if (!policyId || policyId === '__FULL_ACCESS__') {
+        return true;
+    }
+    return config.Policies.some(function (p) { return p.Id === policyId && p.Enabled; });
+}
+
 function getEffectivePolicy(userId) {
     var override = getUserOverride(userId);
     if (override) {
         if (override.PolicyId === '__FULL_ACCESS__') {
-            return { name: 'Full Access', restricted: false };
+            return { name: 'Full Access', restricted: false, denied: false };
         }
         var p = config.Policies.find(function (pol) { return pol.Id === override.PolicyId && pol.Enabled; });
         if (p) {
-            return { name: p.Name, restricted: true };
+            return { name: p.Name, restricted: true, denied: false };
         }
-        return { name: 'Denied (invalid override)', restricted: true };
+        return { name: 'DENIED (invalid policy)', restricted: true, denied: true };
     }
     if (config.DefaultPolicyId) {
         var dp = config.Policies.find(function (pol) { return pol.Id === config.DefaultPolicyId && pol.Enabled; });
         if (dp) {
-            return { name: dp.Name + ' (default)', restricted: true };
+            return { name: dp.Name + ' (default)', restricted: true, denied: false };
         }
     }
-    return { name: 'Full Access', restricted: false };
+    return { name: 'Full Access', restricted: false, denied: false };
 }
 
 // --- Rendering ---
@@ -72,27 +79,28 @@ function renderPolicies(view) {
         div.dataset.index = i;
         div.innerHTML =
             '<div class="qg-policy-header">' +
-                '<div class="inputContainer">' +
+                '<div style="flex:1;">' +
                     '<input is="emby-input" type="text" class="policy-name" ' +
-                        'value="' + escapeHtml(policy.Name || 'Unnamed Policy') + '" placeholder="Policy name" />' +
+                        'value="' + escapeHtml(policy.Name || 'Unnamed Policy') + '" ' +
+                        'placeholder="Policy name" />' +
                 '</div>' +
-                '<button is="emby-button" type="button" class="raised btnDeletePolicy" data-index="' + i + '" ' +
-                    'style="background:#c62828;flex-shrink:0;">' +
+                '<button is="emby-button" type="button" class="raised btnDeletePolicy" ' +
+                    'data-index="' + i + '" style="background:#c62828;flex-shrink:0;">' +
                     '<span>Delete</span>' +
                 '</button>' +
             '</div>' +
             '<div class="qg-paths">' +
-                '<div class="inputContainer" style="margin:0;">' +
-                    '<label class="inputLabel inputLabelUnfocused">Allowed Path Prefixes</label>' +
-                    '<textarea is="emby-input" class="policy-allowed" rows="3" ' +
+                '<div>' +
+                    '<label class="qg-label">Allowed Path Prefixes</label>' +
+                    '<textarea class="qg-textarea policy-allowed" rows="3" ' +
                         'placeholder="/path/to/allowed/&#10;/another/path/">' +
                         escapeHtml((policy.AllowedPathPrefixes || []).join('\n')) +
                     '</textarea>' +
-                    '<div class="fieldDescription">One per line. Only files under these paths are accessible. Leave empty to allow all.</div>' +
+                    '<div class="fieldDescription">One per line. Leave empty to allow all paths.</div>' +
                 '</div>' +
-                '<div class="inputContainer" style="margin:0;">' +
-                    '<label class="inputLabel inputLabelUnfocused">Blocked Path Prefixes</label>' +
-                    '<textarea is="emby-input" class="policy-blocked" rows="3" ' +
+                '<div>' +
+                    '<label class="qg-label">Blocked Path Prefixes</label>' +
+                    '<textarea class="qg-textarea policy-blocked" rows="3" ' +
                         'placeholder="/path/to/blocked/&#10;/another/path/">' +
                         escapeHtml((policy.BlockedPathPrefixes || []).join('\n')) +
                     '</textarea>' +
@@ -158,8 +166,12 @@ function renderUserAccess(view) {
     users.forEach(function (user) {
         var override = getUserOverride(user.Id);
         var overrideValue = override ? override.PolicyId : '';
+        var stale = overrideValue && !isValidOverride(overrideValue);
         var effective = getEffectivePolicy(user.Id);
-        var effectiveClass = effective.restricted ? 'qg-effective-restricted' : 'qg-effective-full';
+
+        var effectiveClass = effective.denied ? 'qg-effective-denied'
+            : effective.restricted ? 'qg-effective-restricted'
+            : 'qg-effective-full';
 
         html += '<tr>' +
             '<td><strong>' + escapeHtml(user.Name) + '</strong></td>' +
@@ -167,14 +179,19 @@ function renderUserAccess(view) {
                 '<div class="selectContainer" style="margin:0;">' +
                     '<select is="emby-select" class="user-policy-select" ' +
                         'data-userid="' + user.Id + '" ' +
-                        'data-username="' + escapeHtml(user.Name) + '">' +
-                        '<option value=""' + (overrideValue === '' ? ' selected' : '') + '>' +
-                            'Use Default (' + defaultLabel + ')' +
-                        '</option>' +
-                        '<option value="__FULL_ACCESS__"' +
-                            (overrideValue === '__FULL_ACCESS__' ? ' selected' : '') + '>' +
-                            'Full Access' +
-                        '</option>';
+                        'data-username="' + escapeHtml(user.Name) + '">';
+
+        // If stale override, render an explicit option so it stays selected and is preserved on save
+        if (stale) {
+            html += '<option value="' + escapeHtml(overrideValue) + '" selected>' +
+                'DENIED — Invalid policy (change this)</option>';
+        }
+
+        html += '<option value=""' + (!overrideValue ? ' selected' : '') + '>' +
+                    'Use Default (' + defaultLabel + ')</option>' +
+                '<option value="__FULL_ACCESS__"' +
+                    (overrideValue === '__FULL_ACCESS__' ? ' selected' : '') + '>' +
+                    'Full Access</option>';
 
         config.Policies.forEach(function (p) {
             if (p.Enabled !== false) {
@@ -186,8 +203,7 @@ function renderUserAccess(view) {
 
         html += '</select></div></td>' +
             '<td><span class="qg-effective ' + effectiveClass + '">' +
-                escapeHtml(effective.name) +
-            '</span></td></tr>';
+                escapeHtml(effective.name) + '</span></td></tr>';
     });
 
     html += '</tbody></table>';
@@ -197,7 +213,7 @@ function renderUserAccess(view) {
 // --- Data collection ---
 
 function collectFromDOM(view) {
-    // Collect policy fields (preserves model fields not shown in UI like BlockedMessage*)
+    // Update policy fields from DOM (preserves model fields not in UI like BlockedMessage*)
     view.querySelectorAll('#policiesContainer .qg-policy').forEach(function (card, i) {
         if (config.Policies[i]) {
             config.Policies[i].Name = card.querySelector('.policy-name').value;
@@ -213,7 +229,8 @@ function collectFromDOM(view) {
     config.DefaultPolicyId = view.querySelector('#defaultPolicySelect').value;
     config.DefaultIntroVideoPath = view.querySelector('#defaultIntroPath').value.trim();
 
-    // Collect user access table — only users with an explicit selection get an override
+    // Collect user access — any non-empty selection becomes an override.
+    // Stale overrides are preserved (their invalid PolicyId stays in the select value).
     config.UserPolicies = [];
     view.querySelectorAll('.user-policy-select').forEach(function (select) {
         var value = select.value;
@@ -299,7 +316,7 @@ function saveConfig(view) {
 }
 
 // --- Controller entry point ---
-// Listeners are set up once here; data loading happens on each viewshow.
+// Listeners set up once here; data reloaded on each viewshow.
 
 export default function (view) {
     view.querySelector('#btnAddPolicy').addEventListener('click', function () {
