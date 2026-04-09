@@ -4,18 +4,50 @@
     <meta charset="utf-8">
     <title>Quality Gate</title>
     <style>
+        .qg-section-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1em;
+            margin-bottom: 1em;
+        }
+
+        .qg-section-copy {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .qg-section-copy .sectionTitle,
+        .qg-section-copy .fieldDescription {
+            margin-top: 0;
+        }
+
+        .qg-section-action {
+            flex-shrink: 0;
+            min-width: 10.5em;
+        }
+
         .qg-policy {
-            margin-bottom: 1.4em;
-            padding: 1.15em 1.25em;
-            border: 1px solid rgba(127, 127, 127, .36);
-            border-left: .35em solid #00a4dc;
-            border-radius: .55em;
-            background: rgba(127, 127, 127, .08);
-            box-shadow: inset 0 0 0 1px rgba(127, 127, 127, .06);
+            margin-bottom: 1.55em;
+            padding: 1.15em 1.25em 1.25em;
+            border: 1px solid rgba(127, 127, 127, .42);
+            border-left: .42em solid #00a4dc;
+            border-radius: .7em;
+            background: linear-gradient(180deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .03));
+            box-shadow: 0 .7em 1.6em rgba(0, 0, 0, .16), inset 0 0 0 1px rgba(255, 255, 255, .02);
         }
 
         .qg-policy:last-child {
             margin-bottom: 0;
+        }
+
+        .qg-policy-kicker {
+            margin-bottom: .8em;
+            font-size: .78em;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            opacity: .72;
         }
 
         .qg-field {
@@ -27,6 +59,29 @@
             margin-bottom: .45em;
             font-weight: 600;
             opacity: .84;
+        }
+
+        .qg-path-group {
+            padding: .9em .95em;
+            border-radius: .55em;
+        }
+
+        .qg-path-group-allowed {
+            border: 1px solid rgba(102, 187, 106, .26);
+            background: rgba(102, 187, 106, .06);
+        }
+
+        .qg-path-group-blocked {
+            border: 1px solid rgba(239, 83, 80, .26);
+            background: rgba(239, 83, 80, .05);
+        }
+
+        .qg-path-group-allowed .qg-label {
+            color: #66bb6a;
+        }
+
+        .qg-path-group-blocked .qg-label {
+            color: #ef9a9a;
         }
 
         .qg-path-list {
@@ -58,11 +113,11 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            min-height: 2.35em;
-            padding: .42em .82em;
+            min-height: 2.3em;
+            padding: .42em .9em;
             border: 1px solid rgba(127, 127, 127, .35);
-            border-radius: .35em;
-            background: transparent;
+            border-radius: 999px;
+            background: rgba(127, 127, 127, .08);
             color: inherit;
             font: inherit;
             cursor: pointer;
@@ -80,7 +135,21 @@
             box-shadow: 0 0 0 .18em rgba(0, 164, 220, .15);
         }
 
+        .qg-path-add {
+            border-color: rgba(0, 164, 220, .35);
+            background: rgba(0, 164, 220, .08);
+            font-weight: 600;
+        }
+
         .qg-path-remove {
+            width: 2.2em;
+            min-width: 2.2em;
+            padding: 0;
+            border-color: rgba(239, 83, 80, .35);
+            background: rgba(239, 83, 80, .08);
+            color: #ef9a9a;
+            font-size: 1.1em;
+            line-height: 1;
             white-space: nowrap;
         }
 
@@ -106,6 +175,14 @@
             border-collapse: collapse;
         }
 
+        .qg-user-panel {
+            border: 1px solid rgba(127, 127, 127, .28);
+            border-radius: .7em;
+            background: rgba(127, 127, 127, .06);
+            overflow: hidden;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .02);
+        }
+
         .qg-user-table th,
         .qg-user-table td {
             padding: .68em .8em;
@@ -120,11 +197,19 @@
             letter-spacing: .05em;
             text-transform: uppercase;
             opacity: .72;
-            background: rgba(127, 127, 127, .08);
+            background: rgba(127, 127, 127, .12);
         }
 
         .qg-user-table tbody tr:nth-child(odd) {
             background: rgba(127, 127, 127, .04);
+        }
+
+        .qg-user-table tbody tr:hover {
+            background: rgba(0, 164, 220, .06);
+        }
+
+        .qg-user-name {
+            font-weight: 700;
         }
 
         .qg-select-wrap {
@@ -166,6 +251,11 @@
             outline: none;
             border-color: #00a4dc;
             box-shadow: 0 0 0 .18em rgba(0, 164, 220, .15);
+        }
+
+        .qg-user-select-denied {
+            border-color: rgba(239, 83, 80, .55);
+            background: rgba(239, 83, 80, .08);
         }
 
         .qg-effective {
@@ -216,6 +306,15 @@
         }
 
         @media (max-width: 700px) {
+            .qg-section-head {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .qg-section-action {
+                width: 100%;
+            }
+
             .qg-path-row {
                 flex-direction: column;
                 align-items: stretch;
@@ -247,16 +346,19 @@
                     </div>
 
                     <div class="verticalSection">
-                        <h2 class="sectionTitle">Policies</h2>
-                        <p class="fieldDescription">
-                            Each policy defines which file paths are allowed or blocked.
-                            Use the resolved paths shown in Media Info, not mount point names.
-                        </p>
+                        <div class="qg-section-head">
+                            <div class="qg-section-copy">
+                                <h2 class="sectionTitle">Policies</h2>
+                                <p class="fieldDescription">
+                                    Each policy defines which file paths are allowed or blocked.
+                                    Use the resolved paths shown in Media Info, not mount point names.
+                                </p>
+                            </div>
+                            <button is="emby-button" type="button" class="raised qg-section-action" id="btnAddPolicy">
+                                <span>Add Policy</span>
+                            </button>
+                        </div>
                         <div id="policiesContainer"></div>
-                        <button is="emby-button" type="button" class="raised" id="btnAddPolicy"
-                                style="margin-top:.5em;">
-                            <span>Add Policy</span>
-                        </button>
                     </div>
 
                     <div class="verticalSection">

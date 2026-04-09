@@ -173,6 +173,7 @@ function buildPathField(policy, policyIndex, listName) {
     var placeholder = getPathPlaceholder(listName);
     var helpText = getPathHelpText(listName);
     var addLabel = getPathAddLabel(listName);
+    var groupClass = listName === 'allowed' ? 'qg-path-group-allowed' : 'qg-path-group-blocked';
 
     var rowHtml = rows.map(function (pathValue, rowIndex) {
         var showRemove = rows.length > 1 || Boolean(pathValue);
@@ -190,19 +191,19 @@ function buildPathField(policy, policyIndex, listName) {
                     'data-list="' + listName + '" ' +
                     'data-row="' + rowIndex + '" ' +
                     'aria-label="Remove ' + escapeAttribute(label.toLowerCase()) + ' row ' + (rowIndex + 1) + '">' +
-                    'Remove</button>'
+                    '&times;</button>'
                 : '') +
         '</div>';
     }).join('');
 
-    return '<div class="qg-field">' +
+    return '<div class="qg-field qg-path-group ' + groupClass + '">' +
         '<label class="qg-label">' + label + '</label>' +
         '<div class="qg-path-list">' + rowHtml + '</div>' +
         '<div class="qg-path-actions">' +
-            '<button type="button" class="qg-path-action btnAddPath" ' +
+            '<button type="button" class="qg-path-action qg-path-add btnAddPath" ' +
                 'data-index="' + policyIndex + '" ' +
                 'data-list="' + listName + '">' +
-                addLabel +
+                '+ ' + addLabel +
             '</button>' +
         '</div>' +
         '<div class="fieldDescription">' + helpText + '</div>' +
@@ -247,6 +248,7 @@ function renderPolicies(view) {
         card.className = 'qg-policy';
         card.dataset.index = index;
         card.innerHTML =
+            '<div class="qg-policy-kicker">Policy ' + (index + 1) + '</div>' +
             '<div class="inputContainer" style="margin-bottom:.55em;">' +
                 '<label class="inputLabel inputLabelUnfocused">Policy Name</label>' +
                 '<input is="emby-input" type="text" class="policy-name" ' +
@@ -336,7 +338,7 @@ function renderUserAccess(view) {
     }
 
     var defaultLabel = escapeHtml(getDefaultPolicyLabel());
-    var html = '<table class="qg-user-table">' +
+    var html = '<div class="qg-user-panel"><table class="qg-user-table">' +
         '<thead><tr>' +
             '<th scope="col">User</th>' +
             '<th scope="col">Policy</th>' +
@@ -352,11 +354,12 @@ function renderUserAccess(view) {
             : effective.warning ? 'qg-effective-restricted'
             : effective.restricted ? 'qg-effective-restricted'
             : 'qg-effective-full';
+        var selectClass = stale ? 'qg-user-select user-policy-select qg-user-select-denied' : 'qg-user-select user-policy-select';
 
         html += '<tr>' +
-            '<td><strong>' + escapeHtml(user.Name) + '</strong></td>' +
+            '<td><span class="qg-user-name">' + escapeHtml(user.Name) + '</span></td>' +
             '<td><div class="qg-select-wrap">' +
-                '<select class="qg-user-select user-policy-select" ' +
+                '<select class="' + selectClass + '" ' +
                     'aria-label="Policy for ' + escapeAttribute(user.Name) + '" ' +
                     'data-userid="' + user.Id + '" ' +
                     'data-username="' + escapeAttribute(user.Name) + '">';
@@ -390,7 +393,7 @@ function renderUserAccess(view) {
             '</span></td></tr>';
     });
 
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
     container.innerHTML = html;
 }
 
