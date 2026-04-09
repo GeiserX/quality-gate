@@ -10,7 +10,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -45,7 +45,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -75,7 +75,7 @@ jobs:
           VERSION=${{ steps.version.outputs.VERSION }}
           CHECKSUM=$(sha256sum quality-gate.zip | awk '{print $1}')
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          
+
           cat > manifest.json << EOF
           [
             {
@@ -89,9 +89,9 @@ jobs:
               "versions": [
                 {
                   "version": "${VERSION}",
-                  "changelog": "See https://github.com/GeiserX/jellyfin-quality-gate/releases/tag/v${VERSION}",
-                  "targetAbi": "10.10.0.0",
-                  "sourceUrl": "https://github.com/GeiserX/jellyfin-quality-gate/releases/download/v${VERSION}/quality-gate.zip",
+                  "changelog": "See https://github.com/GeiserX/quality-gate/releases/tag/v${VERSION}",
+                  "targetAbi": "10.11.0.0",
+                  "sourceUrl": "https://github.com/GeiserX/quality-gate/releases/download/v${VERSION}/quality-gate.zip",
                   "checksum": "${CHECKSUM}",
                   "timestamp": "${TIMESTAMP}"
                 }

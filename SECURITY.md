@@ -4,7 +4,8 @@
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 1.x.x   | :white_check_mark: |
+| 2.x.x   | :white_check_mark: |
+| 1.x.x   | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -14,7 +15,7 @@ We take security seriously. If you discover a security vulnerability in the Qual
 
 1. **Do NOT** create a public GitHub issue for security vulnerabilities
 2. Send an email to the repository owner through GitHub's private contact feature
-3. Or create a [private security advisory](https://github.com/GeiserX/jellyfin-quality-gate/security/advisories/new)
+3. Or create a [private security advisory](https://github.com/GeiserX/quality-gate/security/advisories/new)
 
 ### What to Include
 
@@ -41,9 +42,3 @@ This plugin handles access control for media files. When deploying:
 ## Acknowledgments
 
 We appreciate responsible disclosure and will acknowledge security researchers who help improve this plugin's security.
-
-
-
-
-
-

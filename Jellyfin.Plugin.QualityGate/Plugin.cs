@@ -47,7 +47,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         _libraryManager = libraryManager;
         _logger = logger;
         _sessionManager.PlaybackStart += OnPlaybackStart;
-        _logger?.LogInformation("QualityGate: Plugin initialized, monitoring playback sessions. Middleware provides version filtering.");
+        _logger?.LogInformation("QualityGate: Plugin initialized, monitoring playback sessions. Result filter provides version filtering.");
     }
 
     private void OnPlaybackStart(object? sender, PlaybackProgressEventArgs e)

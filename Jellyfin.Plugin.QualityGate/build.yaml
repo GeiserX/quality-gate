@@ -1,6 +1,6 @@
 name: "Quality Gate"
 guid: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-version: "1.0.9.0"
+version: "2.0.0.0"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 owner: "GeiserX"
@@ -11,16 +11,15 @@ imageUrl: ""
 artifacts:
   - Jellyfin.Plugin.QualityGate.dll
 changelog: |
+  ## v2.0.0.0
+  - Replaced broken middleware with IAsyncResultFilter (fixes response compression conflict)
+  - MediaSource filtering now works correctly with all Jellyfin clients
+  - Consolidated plugin service registration
+  - Renamed repo from jellyfin-quality-gate to quality-gate
+  ## v1.0.11.0
+  - Disabled middleware filtering - does not work due to Jellyfin response compression
   ## v1.0.9.0
   - Fixed configuration UI - buttons and dropdowns now work properly
   - Added comprehensive documentation with policy examples
-  ## v1.0.0.2
-  - Fixed targetAbi for Jellyfin 10.11+
-  - Added default policy support
-  - Added user overrides with full-access option
-  - Added middleware filtering to hide blocked versions
   ## v1.0.0.0
   - Initial release
-  - Define path-based quality policies
-  - Assign policies to users
-  - Filter media sources based on user policies

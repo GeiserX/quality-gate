@@ -1,22 +1,14 @@
-<p align="center"><img src="docs/images/banner.svg" alt="Jellyfin Quality Gate banner" width="900"/></p>
+<p align="center"><img src="docs/images/banner.svg" alt="Quality Gate banner" width="900"/></p>
 
-<h1 align="center">Jellyfin Quality Gate</h1>
-
-> **DEPRECATED / NOT WORKING**
->
-> This plugin **does not work as intended**. The middleware approach to filter MediaSources from Jellyfin's API responses conflicts with Jellyfin's response compression, causing browser decoding errors.
->
-> **Recommended Alternative**: Use **separate Jellyfin libraries** for different quality tiers (e.g., `/media` for 4K/1080p, `/media-720` for 720p only), and assign users to specific libraries via Jellyfin's built-in **Library Access** settings.
->
-> The intro provider functionality works, but the core version-filtering feature does not.
+<h1 align="center">Quality Gate</h1>
 
 <p align="center">
 
-[![GitHub Release](https://img.shields.io/github/v/release/GeiserX/jellyfin-quality-gate?style=flat-square&logo=github)](https://github.com/GeiserX/jellyfin-quality-gate/releases)
+[![GitHub Release](https://img.shields.io/github/v/release/GeiserX/quality-gate?style=flat-square&logo=github)](https://github.com/GeiserX/quality-gate/releases)
 [![Jellyfin Version](https://img.shields.io/badge/Jellyfin-10.10+-00a4dc?style=flat-square&logo=jellyfin)](https://jellyfin.org)
 [![.NET](https://img.shields.io/badge/.NET-9.0-512bd4?style=flat-square&logo=dotnet)](https://dotnet.microsoft.com)
-[![License](https://img.shields.io/github/license/GeiserX/jellyfin-quality-gate?style=flat-square)](LICENSE)
-[![CI](https://img.shields.io/github/actions/workflow/status/GeiserX/jellyfin-quality-gate/build.yml?style=flat-square&logo=github-actions&logoColor=white&label=CI)](https://github.com/GeiserX/jellyfin-quality-gate/actions)
+[![License](https://img.shields.io/github/license/GeiserX/quality-gate?style=flat-square)](LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/GeiserX/quality-gate/build.yml?style=flat-square&logo=github-actions&logoColor=white&label=CI)](https://github.com/GeiserX/quality-gate/actions)
 
 </p>
 
@@ -62,7 +54,7 @@ Add this repository to your Jellyfin instance for automatic updates:
 1. Go to **Dashboard → Plugins → Repositories**
 2. Click **Add** and enter:
    - **Name**: `Quality Gate`
-   - **URL**: `https://raw.githubusercontent.com/GeiserX/jellyfin-quality-gate/main/manifest.json`
+   - **URL**: `https://raw.githubusercontent.com/GeiserX/quality-gate/main/manifest.json`
 3. Go to **Catalog** and install **Quality Gate**
 4. Restart Jellyfin
 
@@ -74,7 +66,7 @@ Add this repository to your Jellyfin instance for automatic updates:
 ```bash
 # Download the latest release
 curl -L -o QualityGate.zip \
-  https://github.com/GeiserX/jellyfin-quality-gate/releases/latest/download/quality-gate.zip
+  https://github.com/GeiserX/quality-gate/releases/latest/download/quality-gate.zip
 
 # Extract to your plugins volume
 unzip QualityGate.zip -d /path/to/jellyfin/plugins/QualityGate/
@@ -97,7 +89,7 @@ volumes:
 ```bash
 # Download the latest release
 curl -L -o QualityGate.zip \
-  https://github.com/GeiserX/jellyfin-quality-gate/releases/latest/download/quality-gate.zip
+  https://github.com/GeiserX/quality-gate/releases/latest/download/quality-gate.zip
 
 # Extract to plugins directory
 sudo unzip QualityGate.zip -d /var/lib/jellyfin/plugins/QualityGate/
@@ -114,7 +106,7 @@ sudo systemctl restart jellyfin
 <details>
 <summary><b>Windows</b></summary>
 
-1. Download the [latest release](https://github.com/GeiserX/jellyfin-quality-gate/releases/latest)
+1. Download the [latest release](https://github.com/GeiserX/quality-gate/releases/latest)
 2. Extract to `%LOCALAPPDATA%\jellyfin\plugins\QualityGate\`
 3. Restart Jellyfin from Services or the tray icon
 
@@ -126,7 +118,7 @@ sudo systemctl restart jellyfin
 ```bash
 # Download the latest release
 curl -L -o QualityGate.zip \
-  https://github.com/GeiserX/jellyfin-quality-gate/releases/latest/download/quality-gate.zip
+  https://github.com/GeiserX/quality-gate/releases/latest/download/quality-gate.zip
 
 # Extract to plugins directory
 unzip QualityGate.zip -d ~/.local/share/jellyfin/plugins/QualityGate/
@@ -258,11 +250,11 @@ Then set this as the **Default Policy** and add **Full Access** overrides for ad
 
 ## How It Works
 
-1. **Middleware Filtering**: When Jellyfin returns media sources/versions to the client, the plugin filters out blocked versions so they don't appear in the UI.
+1. **Result Filter**: The plugin uses an ASP.NET Core `IAsyncResultFilter` that intercepts API responses **before serialization**. This operates on C# objects directly, avoiding the response compression issues that broke the previous middleware approach.
 
-2. **Playback Interception**: If a user somehow attempts to play a blocked version, the plugin intercepts the playback and stops it with a custom message.
+2. **MediaSource Filtering**: When Jellyfin returns media sources/versions to the client, the filter removes blocked versions so they don't appear in the UI. This applies to both `PlaybackInfo` and item detail responses.
 
-3. **Path Matching**: The plugin matches the **full file path** of each media version against your policy prefixes.
+3. **Path Matching**: The plugin matches the **full file path** of each media version against your policy prefixes. Symlinks are resolved to check against the actual target path.
 
 ### Identifying Your Paths
 
@@ -287,8 +279,8 @@ Common path patterns:
 ### Build
 
 ```bash
-git clone https://github.com/GeiserX/jellyfin-quality-gate.git
-cd jellyfin-quality-gate/Jellyfin.Plugin.QualityGate
+git clone https://github.com/GeiserX/quality-gate.git
+cd quality-gate/Jellyfin.Plugin.QualityGate
 dotnet build -c Release
 ```
 
@@ -340,6 +332,6 @@ This project is licensed under the GPL-3.0 License — see the [LICENSE](LICENSE
 
 <div align="center">
 
-**[Back to Top](#jellyfin-quality-gate)**
+**[Back to Top](#quality-gate)**
 
 </div>
