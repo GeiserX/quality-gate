@@ -9,6 +9,14 @@
     "imageUrl": "",
     "versions": [
       {
+        "version": "2.0.3.0",
+        "changelog": "Fail-closed on invalid policy overrides, separator-aware path matching, QueryResult filtering.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/GeiserX/quality-gate/releases/download/v2.0.3.0/quality-gate.zip",
+        "checksum": "993c3a8109d1ffd478f093df4064450c",
+        "timestamp": "2026-04-09T12:00:00Z"
+      },
+      {
         "version": "2.0.2.0",
         "changelog": "Fail-closed when all sources blocked, remove dead code, align docs.",
         "targetAbi": "10.11.0.0",
