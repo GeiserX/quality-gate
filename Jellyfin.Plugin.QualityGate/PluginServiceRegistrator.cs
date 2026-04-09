@@ -30,7 +30,5 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         // Intro provider for policy-based intro selection
         serviceCollection.AddSingleton<IIntroProvider, QualityGateIntroProvider>();
 
-        // Entry point for session monitoring
-        serviceCollection.AddHostedService<QualityGateEntryPoint>();
     }
 }

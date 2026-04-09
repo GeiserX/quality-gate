@@ -82,19 +82,10 @@ public class MediaSourceResultFilter : IAsyncResultFilter
                     .Where(s => QualityGateService.IsPathAllowed(policy, s.Path))
                     .ToArray();
 
-                if (filtered.Length > 0 && filtered.Length < original.Count)
-                {
-                    _logger.LogInformation(
-                        "QualityGate: Filtered PlaybackInfo for user {User} (policy: {Policy}) - {Original} to {Filtered} sources",
-                        (object)userId, policy.Name, original.Count, filtered.Length);
-                    playbackInfo.MediaSources = filtered;
-                }
-                else if (filtered.Length == 0)
-                {
-                    _logger.LogWarning(
-                        "QualityGate: All sources blocked for user {User} (policy: {Policy}) - keeping originals",
-                        (object)userId, policy.Name);
-                }
+                _logger.LogInformation(
+                    "QualityGate: Filtered PlaybackInfo for user {User} (policy: {Policy}) - {Original} to {Filtered} sources",
+                    (object)userId, policy.Name, original.Count, filtered.Length);
+                playbackInfo.MediaSources = filtered;
 
                 break;
             }
@@ -106,19 +97,10 @@ public class MediaSourceResultFilter : IAsyncResultFilter
                     .Where(s => QualityGateService.IsPathAllowed(policy, s.Path))
                     .ToArray();
 
-                if (filtered.Length > 0 && filtered.Length < original.Count)
-                {
-                    _logger.LogInformation(
-                        "QualityGate: Filtered item sources for user {User} (policy: {Policy}) - {Original} to {Filtered} sources",
-                        (object)userId, policy.Name, original.Count, filtered.Length);
-                    itemDto.MediaSources = filtered;
-                }
-                else if (filtered.Length == 0)
-                {
-                    _logger.LogWarning(
-                        "QualityGate: All sources blocked for user {User} (policy: {Policy}) - keeping originals",
-                        (object)userId, policy.Name);
-                }
+                _logger.LogInformation(
+                    "QualityGate: Filtered item sources for user {User} (policy: {Policy}) - {Original} to {Filtered} sources",
+                    (object)userId, policy.Name, original.Count, filtered.Length);
+                itemDto.MediaSources = filtered;
 
                 break;
             }
@@ -127,6 +109,12 @@ public class MediaSourceResultFilter : IAsyncResultFilter
 
     private static Guid GetUserId(HttpContext httpContext)
     {
+        // This filter intercepts Jellyfin's OWN endpoints (PlaybackInfo, /Users/{id}/Items, etc.)
+        // where the userId is embedded in query params, route values, or the URL path by Jellyfin itself.
+        // Unlike our custom QualityGateController (which binds exclusively to JWT claims),
+        // we NEED these fallbacks because Jellyfin's internal API design passes userId this way.
+        // The [Authorize] attribute on Jellyfin's controllers already validates the caller is authenticated.
+
         // Primary: JWT/cookie claims set by Jellyfin auth
         var claim = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)
                  ?? httpContext.User.FindFirst("Jellyfin-UserId");

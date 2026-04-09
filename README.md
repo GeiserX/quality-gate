@@ -5,7 +5,7 @@
 <p align="center">
 
 [![GitHub Release](https://img.shields.io/github/v/release/GeiserX/quality-gate?style=flat-square&logo=github)](https://github.com/GeiserX/quality-gate/releases)
-[![Jellyfin Version](https://img.shields.io/badge/Jellyfin-10.10+-00a4dc?style=flat-square&logo=jellyfin)](https://jellyfin.org)
+[![Jellyfin Version](https://img.shields.io/badge/Jellyfin-10.11+-00a4dc?style=flat-square&logo=jellyfin)](https://jellyfin.org)
 [![.NET](https://img.shields.io/badge/.NET-9.0-512bd4?style=flat-square&logo=dotnet)](https://dotnet.microsoft.com)
 [![License](https://img.shields.io/github/license/GeiserX/quality-gate?style=flat-square)](LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/GeiserX/quality-gate/build.yml?style=flat-square&logo=github-actions&logoColor=white&label=CI)](https://github.com/GeiserX/quality-gate/actions)
@@ -22,7 +22,6 @@
 - **Per-User Assignments** -- Assign different policies to different users
 - **Web Configuration** -- Easy-to-use admin interface in Jellyfin dashboard
 - **Multi-Version Support** -- Seamlessly filter available media versions per user
-- **Real-Time Enforcement** -- Policies are enforced at playback time
 - **Detailed Logging** -- Full audit trail of access decisions
 
 ## Use Cases
@@ -141,7 +140,6 @@ Policies define which paths are allowed or blocked. Click **"+ Add Policy"** to 
 | **Policy Name** | A descriptive name (e.g., "720p Only", "No 4K") |
 | **Allowed Path Prefixes** | Paths users CAN access. One per line. |
 | **Blocked Path Prefixes** | Paths that will be blocked. One per line. |
-| **Blocked Message** | Custom message shown when playback is blocked |
 | **Enabled** | Toggle policy on/off |
 
 ### Step 2: Set Default Policy
@@ -223,8 +221,6 @@ Allowed Path Prefixes:
 Blocked Path Prefixes:
   /mnt/originals/
 
-Blocked Message Header: Quality Restricted
-Blocked Message Text: Please select the 720p version to play this content.
 ```
 
 Then set this as the **Default Policy** and add **Full Access** overrides for admin users.
@@ -285,16 +281,6 @@ dotnet build -c Release
 ```
 
 The compiled plugin will be in `bin/Release/net9.0/`.
-
-### Development
-
-```bash
-# Run with hot reload (for development)
-dotnet watch build -c Debug
-
-# Run tests
-dotnet test
-```
 
 ## Security
 

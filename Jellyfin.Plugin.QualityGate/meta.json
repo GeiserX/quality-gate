@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "v2.0.1.0: Fix IDOR in custom API controller, deny sources with missing paths.",
+  "changelog": "v2.0.2.0: Fail-closed when all sources blocked, remove dead code, align docs with reality.",
   "description": "Quality Gate allows Jellyfin administrators to define policies that restrict certain users to specific media versions.",
   "guid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "name": "Quality Gate",
@@ -8,5 +8,5 @@
   "owner": "GeiserX",
   "targetAbi": "10.11.0.0",
   "timestamp": "2026-04-09T12:00:00Z",
-  "version": "2.0.1.0"
+  "version": "2.0.2.0"
 }

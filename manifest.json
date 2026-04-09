@@ -9,11 +9,11 @@
     "imageUrl": "",
     "versions": [
       {
-        "version": "2.0.1.0",
-        "changelog": "Fix IDOR in custom API controller, deny sources with missing paths.",
+        "version": "2.0.2.0",
+        "changelog": "Fail-closed when all sources blocked, remove dead code, align docs.",
         "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://github.com/GeiserX/quality-gate/releases/download/v2.0.1.0/quality-gate.zip",
-        "checksum": "1dc9e11760f2c5993594800dcd07f778",
+        "sourceUrl": "https://github.com/GeiserX/quality-gate/releases/download/v2.0.2.0/quality-gate.zip",
+        "checksum": "placeholder",
         "timestamp": "2026-04-09T12:00:00Z"
       }
     ]
