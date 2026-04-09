@@ -141,8 +141,9 @@ Version in `.csproj` (`<AssemblyVersion>` + `<FileVersion>` + `<Version>`) must 
 
 ### Config Page
 
-- Jellyfin custom elements: `emby-input`, `emby-button`, `emby-select`, `emby-checkbox` (NOT on `<textarea>` -- use plain `<textarea>` with CSS class)
-- Minimal custom CSS for dynamic elements (policy cards, user table, textareas); standard Jellyfin classes for everything else
+- Jellyfin custom elements: `emby-input`, `emby-button`, `emby-select`, `emby-checkbox`
+- Allowed/blocked paths render as repeatable one-line input rows, not multi-line textareas
+- Minimal custom CSS for dynamic elements (policy cards, user table, inline chevron select wrapper, path rows); standard Jellyfin classes for everything else
 - Embedded resource -- changes require DLL rebuild
 - `EnableInMainMenu = true` -- appears in the Jellyfin sidebar, not just under Plugins
 

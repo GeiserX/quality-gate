@@ -138,8 +138,8 @@ Policies define which paths are allowed or blocked. Click **"Add Policy"** to cr
 | Field | Description |
 |-------|-------------|
 | **Policy Name** | A descriptive name (e.g., "720p Only", "No 4K") |
-| **Allowed Path Prefixes** | Paths users CAN access. One per line. |
-| **Blocked Path Prefixes** | Paths that will be blocked. One per line. |
+| **Allowed Path Prefixes** | Paths users CAN access. Each prefix gets its own row; use **Add Allowed Path** for more. |
+| **Blocked Path Prefixes** | Paths that will be blocked. Each prefix gets its own row; use **Add Blocked Path** for more. |
 | **Custom Intro Video** | Optional intro video for users under this policy |
 | **Enabled** | Toggle policy on/off |
 
@@ -159,6 +159,8 @@ The **User Access** table shows all Jellyfin users and their current policy. For
 - Any named policy — applies that policy's path rules
 
 The **Effective Access** column shows what each user actually gets after considering overrides and defaults. Click **Save** to apply changes.
+
+If an override points to a deleted or disabled policy, the dropdown stays on an explicit **DENIED** option until you choose a replacement. This preserves the server-side fail-closed behavior instead of silently widening access.
 
 ### Policy Logic
 
