@@ -1,6 +1,6 @@
 name: "Quality Gate"
 guid: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-version: "2.0.2.0"
+version: "2.0.3.0"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 owner: "GeiserX"
@@ -11,6 +11,10 @@ imageUrl: ""
 artifacts:
   - Jellyfin.Plugin.QualityGate.dll
 changelog: |
+  ## v2.0.3.0
+  - Fail-closed on invalid policy overrides: user assigned to deleted/disabled/mistyped policy is denied (was falling through to full access)
+  - Separator-aware path matching: `/media` no longer matches `/media2`
+  - Filter QueryResult<BaseItemDto> list endpoints in addition to single items and PlaybackInfo
   ## v2.0.2.0
   - Fail-closed: return empty sources when all are blocked (was keeping originals)
   - Remove dead code: OnPlaybackStart handler, FindAllowedVersion, QualityGateEntryPoint

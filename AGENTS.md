@@ -61,8 +61,9 @@ This approach was chosen because Jellyfin's response compression breaks HTTP mid
 
 1. Check `UserPolicies` for explicit user override
 2. If override is `__FULL_ACCESS__`, return null (no filtering)
-3. If no override, fall back to `DefaultPolicyId`
-4. If no default, return null (full access)
+3. If override points to a missing/disabled/deleted policy, return **deny-all sentinel** (fail-closed)
+4. If no override, fall back to `DefaultPolicyId`
+5. If no default, return null (full access)
 
 ### Path Matching
 
@@ -188,7 +189,7 @@ Things discovered during development that save time and prevent mistakes:
 - **MediaSourceInfo namespace moved**: In Jellyfin 10.11+, `MediaSourceInfo` lives in `MediaBrowser.Model.Dto`, not `MediaBrowser.Model.MediaInfo`.
 - **CI manifest workaround**: The `stefanzweifel/git-auto-commit-action` step in the release workflow fails due to branch protection. This is expected. Update manifest checksum manually after each release.
 - **Single library, not two**: For multi-version filtering to work, both HQ and LQ media paths must be in a **single** Jellyfin library. Creating separate libraries per quality tier defeats the purpose -- Jellyfin needs both versions as MediaSources on the same item.
-- **QueryResult filtering**: The filter must handle `QueryResult<BaseItemDto>` (list endpoints) in addition to single `BaseItemDto` and `PlaybackInfoResponse`. The current implementation handles the latter two; list endpoints pass through the policy check per-item.
+- **QueryResult filtering**: The filter handles `QueryResult<BaseItemDto>` (list endpoints), single `BaseItemDto`, and `PlaybackInfoResponse`. All three response shapes are filtered per-item.
 
 ## Troubleshooting
 

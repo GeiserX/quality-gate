@@ -6,6 +6,7 @@ using Jellyfin.Plugin.QualityGate.Configuration;
 using Jellyfin.Plugin.QualityGate.Services;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.MediaInfo;
+using MediaBrowser.Model.Querying;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -101,6 +102,26 @@ public class MediaSourceResultFilter : IAsyncResultFilter
                     "QualityGate: Filtered item sources for user {User} (policy: {Policy}) - {Original} to {Filtered} sources",
                     (object)userId, policy.Name, original.Count, filtered.Length);
                 itemDto.MediaSources = filtered;
+
+                break;
+            }
+
+            case QueryResult<BaseItemDto> queryResult when queryResult.Items?.Any() == true:
+            {
+                foreach (var item in queryResult.Items)
+                {
+                    if (item.MediaSources?.Any() == true)
+                    {
+                        var original = item.MediaSources.ToList();
+                        item.MediaSources = original
+                            .Where(s => QualityGateService.IsPathAllowed(policy, s.Path))
+                            .ToArray();
+
+                        _logger.LogDebug(
+                            "QualityGate: Filtered list item '{Name}' for user {User} - {Original} to {Filtered} sources",
+                            item.Name, (object)userId, original.Count, item.MediaSources.Length);
+                    }
+                }
 
                 break;
             }

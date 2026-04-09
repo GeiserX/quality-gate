@@ -13,8 +13,22 @@ namespace Jellyfin.Plugin.QualityGate.Services;
 public static class QualityGateService
 {
     /// <summary>
+    /// Sentinel policy returned when a user override references an invalid, disabled, or deleted PolicyId.
+    /// Blocks everything (fail-closed) so that admin misconfiguration cannot widen access.
+    /// </summary>
+    internal static readonly QualityPolicy DenyAllPolicy = new()
+    {
+        Id = "__DENY_ALL__",
+        Name = "Deny All (misconfigured override)",
+        Enabled = true,
+        AllowedPathPrefixes = new List<string> { "/__nonexistent__/" },
+        BlockedPathPrefixes = new List<string>(),
+    };
+
+    /// <summary>
     /// Gets the effective policy for a user.
     /// Priority: User-specific override > Default policy > No policy (full access).
+    /// If a user override points to a missing or disabled policy, access is DENIED (fail-closed).
     /// </summary>
     /// <param name="userId">The user ID.</param>
     /// <returns>The effective policy, or null if user has full access.</returns>
@@ -28,7 +42,7 @@ public static class QualityGateService
 
         // Check for user-specific override
         var userAssignment = config.UserPolicies.FirstOrDefault(up => up.UserId == userId);
-        
+
         if (userAssignment != null)
         {
             // User has a specific assignment
@@ -40,12 +54,10 @@ public static class QualityGateService
 
             if (!string.IsNullOrEmpty(userAssignment.PolicyId))
             {
-                // User has a specific policy
+                // User has a specific policy — it MUST resolve to a valid, enabled policy.
+                // If not found (deleted/mistyped/disabled), fail-closed: deny all access.
                 var policy = config.Policies.FirstOrDefault(p => p.Id == userAssignment.PolicyId && p.Enabled);
-                if (policy != null)
-                {
-                    return policy;
-                }
+                return policy ?? DenyAllPolicy;
             }
         }
 
@@ -94,6 +106,25 @@ public static class QualityGateService
     }
 
     /// <summary>
+    /// Checks whether a file path starts with the given prefix using separator-aware matching.
+    /// Prevents "/media" from matching "/media2" — the prefix must align on a directory boundary.
+    /// </summary>
+    private static bool MatchesPathPrefix(string path, string prefix)
+    {
+        if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        // Exact match, or prefix already ends with separator, or the next char in path is a separator
+        return path.Length == prefix.Length
+            || prefix[prefix.Length - 1] == Path.DirectorySeparatorChar
+            || prefix[prefix.Length - 1] == Path.AltDirectorySeparatorChar
+            || path[prefix.Length] == Path.DirectorySeparatorChar
+            || path[prefix.Length] == Path.AltDirectorySeparatorChar;
+    }
+
+    /// <summary>
     /// Checks if a file path is allowed by the given policy.
     /// Resolves symlinks to check against actual target paths.
     /// </summary>
@@ -113,9 +144,9 @@ public static class QualityGateService
         // Check blocked paths first (against both original and resolved)
         if (policy.BlockedPathPrefixes.Count > 0)
         {
-            if (policy.BlockedPathPrefixes.Any(prefix => 
-                filePath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
-                resolvedPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+            if (policy.BlockedPathPrefixes.Any(prefix =>
+                MatchesPathPrefix(filePath, prefix) ||
+                MatchesPathPrefix(resolvedPath, prefix)))
             {
                 return false;
             }
@@ -124,10 +155,10 @@ public static class QualityGateService
         // If allowed paths are specified, file must match at least one (check both original and resolved)
         if (policy.AllowedPathPrefixes.Count > 0)
         {
-            var isAllowed = policy.AllowedPathPrefixes.Any(prefix => 
-                filePath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
-                resolvedPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
-            
+            var isAllowed = policy.AllowedPathPrefixes.Any(prefix =>
+                MatchesPathPrefix(filePath, prefix) ||
+                MatchesPathPrefix(resolvedPath, prefix));
+
             if (!isAllowed)
             {
                 return false;
