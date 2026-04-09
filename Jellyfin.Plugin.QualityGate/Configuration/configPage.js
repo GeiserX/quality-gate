@@ -78,34 +78,27 @@ function renderPolicies(view) {
         div.className = 'qg-policy';
         div.dataset.index = i;
         div.innerHTML =
-            '<div class="qg-policy-header">' +
-                '<div style="flex:1;">' +
-                    '<input is="emby-input" type="text" class="policy-name" ' +
-                        'value="' + escapeHtml(policy.Name || 'Unnamed Policy') + '" ' +
-                        'placeholder="Policy name" />' +
-                '</div>' +
-                '<button is="emby-button" type="button" class="raised btnDeletePolicy" ' +
-                    'data-index="' + i + '" style="background:#c62828;flex-shrink:0;">' +
-                    '<span>Delete</span>' +
-                '</button>' +
+            '<div class="inputContainer" style="margin-bottom:.5em;">' +
+                '<label class="inputLabel inputLabelUnfocused">Policy Name</label>' +
+                '<input is="emby-input" type="text" class="policy-name" ' +
+                    'value="' + escapeHtml(policy.Name || 'Unnamed Policy') + '" ' +
+                    'placeholder="Policy name" />' +
             '</div>' +
-            '<div class="qg-paths">' +
-                '<div>' +
-                    '<label class="qg-label">Allowed Path Prefixes</label>' +
-                    '<textarea class="qg-textarea policy-allowed" rows="3" ' +
-                        'placeholder="/path/to/allowed/&#10;/another/path/">' +
-                        escapeHtml((policy.AllowedPathPrefixes || []).join('\n')) +
-                    '</textarea>' +
-                    '<div class="fieldDescription">One per line. Leave empty to allow all paths.</div>' +
-                '</div>' +
-                '<div>' +
-                    '<label class="qg-label">Blocked Path Prefixes</label>' +
-                    '<textarea class="qg-textarea policy-blocked" rows="3" ' +
-                        'placeholder="/path/to/blocked/&#10;/another/path/">' +
-                        escapeHtml((policy.BlockedPathPrefixes || []).join('\n')) +
-                    '</textarea>' +
-                    '<div class="fieldDescription">One per line. Files under these paths are always blocked.</div>' +
-                '</div>' +
+            '<div class="qg-field">' +
+                '<label class="qg-label">Allowed Path Prefixes</label>' +
+                '<textarea class="qg-textarea policy-allowed" rows="3" ' +
+                    'placeholder="/path/to/allowed/&#10;/another/path/">' +
+                    escapeHtml((policy.AllowedPathPrefixes || []).join('\n')) +
+                '</textarea>' +
+                '<div class="fieldDescription">One per line. Only files under these paths are accessible. Leave empty to allow all.</div>' +
+            '</div>' +
+            '<div class="qg-field">' +
+                '<label class="qg-label">Blocked Path Prefixes</label>' +
+                '<textarea class="qg-textarea policy-blocked" rows="3" ' +
+                    'placeholder="/path/to/blocked/&#10;/another/path/">' +
+                    escapeHtml((policy.BlockedPathPrefixes || []).join('\n')) +
+                '</textarea>' +
+                '<div class="fieldDescription">One per line. Files under these paths are always blocked.</div>' +
             '</div>' +
             '<div class="inputContainer">' +
                 '<label class="inputLabel inputLabelUnfocused">Custom Intro Video</label>' +
@@ -120,6 +113,12 @@ function renderPolicies(view) {
                         (policy.Enabled !== false ? 'checked' : '') + ' />' +
                     '<span>Enabled</span>' +
                 '</label>' +
+            '</div>' +
+            '<div class="qg-delete-row">' +
+                '<button is="emby-button" type="button" class="raised btnDeletePolicy" ' +
+                    'data-index="' + i + '" style="background:#c62828;">' +
+                    '<span>Delete Policy</span>' +
+                '</button>' +
             '</div>';
         container.appendChild(div);
     });
@@ -176,12 +175,10 @@ function renderUserAccess(view) {
         html += '<tr>' +
             '<td><strong>' + escapeHtml(user.Name) + '</strong></td>' +
             '<td>' +
-                '<div class="selectContainer" style="margin:0;">' +
-                    '<select is="emby-select" class="user-policy-select" ' +
-                        'data-userid="' + user.Id + '" ' +
-                        'data-username="' + escapeHtml(user.Name) + '">';
+                '<select class="qg-user-select user-policy-select" ' +
+                    'data-userid="' + user.Id + '" ' +
+                    'data-username="' + escapeHtml(user.Name) + '">';
 
-        // If stale override, render an explicit option so it stays selected and is preserved on save
         if (stale) {
             html += '<option value="' + escapeHtml(overrideValue) + '" selected>' +
                 'DENIED — Invalid policy (change this)</option>';
@@ -201,7 +198,7 @@ function renderUserAccess(view) {
             }
         });
 
-        html += '</select></div></td>' +
+        html += '</select></td>' +
             '<td><span class="qg-effective ' + effectiveClass + '">' +
                 escapeHtml(effective.name) + '</span></td></tr>';
     });
@@ -213,7 +210,6 @@ function renderUserAccess(view) {
 // --- Data collection ---
 
 function collectFromDOM(view) {
-    // Update policy fields from DOM (preserves model fields not in UI like BlockedMessage*)
     view.querySelectorAll('#policiesContainer .qg-policy').forEach(function (card, i) {
         if (config.Policies[i]) {
             config.Policies[i].Name = card.querySelector('.policy-name').value;
@@ -229,8 +225,6 @@ function collectFromDOM(view) {
     config.DefaultPolicyId = view.querySelector('#defaultPolicySelect').value;
     config.DefaultIntroVideoPath = view.querySelector('#defaultIntroPath').value.trim();
 
-    // Collect user access — any non-empty selection becomes an override.
-    // Stale overrides are preserved (their invalid PolicyId stays in the select value).
     config.UserPolicies = [];
     view.querySelectorAll('.user-policy-select').forEach(function (select) {
         var value = select.value;
@@ -316,7 +310,6 @@ function saveConfig(view) {
 }
 
 // --- Controller entry point ---
-// Listeners set up once here; data reloaded on each viewshow.
 
 export default function (view) {
     view.querySelector('#btnAddPolicy').addEventListener('click', function () {

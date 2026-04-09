@@ -5,26 +5,10 @@
     <title>Quality Gate</title>
     <style>
         .qg-policy {
-            border: 1px solid rgba(255, 255, 255, .15);
-            border-radius: .3em;
-            padding: 1em 1.2em;
-            margin-bottom: 1.2em;
-        }
-        .qg-policy-header {
-            display: flex;
-            align-items: center;
-            gap: .7em;
-            margin-bottom: .8em;
-        }
-        .qg-policy-header > div:first-child { flex: 1; }
-        .qg-paths {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1em;
-            margin-bottom: .8em;
-        }
-        @media (max-width: 600px) {
-            .qg-paths { grid-template-columns: 1fr; }
+            border: 1px solid rgba(255, 255, 255, .2);
+            border-radius: .4em;
+            padding: 1.2em 1.4em;
+            margin-bottom: 1.5em;
         }
         .qg-label {
             display: block;
@@ -51,6 +35,15 @@
             outline: none;
             border-color: #00a4dc;
         }
+        .qg-field {
+            margin-bottom: 1em;
+        }
+        .qg-delete-row {
+            margin-top: 1em;
+            padding-top: .8em;
+            border-top: 1px solid rgba(255, 255, 255, .08);
+            text-align: right;
+        }
         .qg-user-table {
             width: 100%;
             border-collapse: collapse;
@@ -68,7 +61,22 @@
             text-transform: uppercase;
             letter-spacing: .05em;
         }
-        .qg-user-table .selectContainer { margin: 0; }
+        .qg-user-select {
+            width: 100%;
+            box-sizing: border-box;
+            background: rgba(255, 255, 255, .08);
+            color: inherit;
+            font-family: inherit;
+            font-size: inherit;
+            border: 1px solid rgba(255, 255, 255, .15);
+            border-radius: .25em;
+            padding: .5em .7em;
+            appearance: auto;
+        }
+        .qg-user-select:focus {
+            outline: none;
+            border-color: #00a4dc;
+        }
         .qg-effective { font-size: .85em; }
         .qg-effective-restricted { color: #f9a825; }
         .qg-effective-full { color: #66bb6a; }
@@ -99,7 +107,8 @@
                             Use the resolved paths shown in Media Info, not mount point names.
                         </p>
                         <div id="policiesContainer"></div>
-                        <button is="emby-button" type="button" class="raised" id="btnAddPolicy">
+                        <button is="emby-button" type="button" class="raised" id="btnAddPolicy"
+                                style="margin-top:.5em;">
                             <span>Add Policy</span>
                         </button>
                     </div>
