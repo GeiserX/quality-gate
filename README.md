@@ -254,16 +254,23 @@ Then set this as the **Default Policy** and add **Full Access** overrides for ad
 
 ### Identifying Your Paths
 
+> **Important**: Jellyfin resolves symlinks when indexing media. If your files are symlinks, the paths stored internally will be the **resolved target paths**, not the symlink paths. Your policies must use the resolved paths shown in Media Info -- not the mount point names you configured in your library.
+
 To see what paths your files have:
 
 1. Go to a movie/show in Jellyfin
 2. Click the **⋮** menu → **Media Info**
-3. Look at the **Path** field for each version
+3. Look at the **Path** field for each version -- **use these exact paths in your policies**
 
 Common path patterns:
 - Docker: `/media/Movies/Title (2024)/Title.mkv`
 - NFS mounts: `/mnt/nfs/media/Movies/...`
-- Remote transcodes: `/mnt/remotes/server/transcodes/...`
+- SMB remotes: `/mnt/remotes/server/media/...`
+- Transcodes on separate server: `/mnt/user/ShareMedia/Movies/...`
+
+### Library Setup
+
+Both high-quality originals and lower-quality transcodes must be in the **same Jellyfin library** (with multiple path entries). Do not create separate libraries per quality tier -- Jellyfin needs all versions as MediaSources on the same merged item for the plugin to filter them.
 
 ## Building from Source
 
