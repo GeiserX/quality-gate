@@ -104,7 +104,7 @@ public static class QualityGateService
     {
         if (string.IsNullOrEmpty(filePath))
         {
-            return true; // Allow if no path (shouldn't happen)
+            return false; // Deny if path is missing — cannot validate
         }
 
         // Resolve symlinks to get actual target path
