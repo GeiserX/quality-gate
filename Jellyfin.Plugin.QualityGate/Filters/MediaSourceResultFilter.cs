@@ -33,14 +33,36 @@ public class MediaSourceResultFilter : IAsyncResultFilter
     /// <inheritdoc />
     public async Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
     {
+        var path = context.HttpContext.Request.Path.Value ?? string.Empty;
+        var isRelevant = path.Contains("/PlaybackInfo", StringComparison.OrdinalIgnoreCase)
+                      || (path.Contains("/Items/", StringComparison.OrdinalIgnoreCase)
+                          && path.Contains("/Users/", StringComparison.OrdinalIgnoreCase));
+
+        if (isRelevant)
+        {
+            _logger.LogInformation(
+                "QualityGate: ResultFilter fired for {Path}, Result type: {ResultType}",
+                path, context.Result?.GetType().Name ?? "null");
+        }
+
         if (context.Result is ObjectResult { Value: not null } objectResult)
         {
+            if (isRelevant)
+            {
+                _logger.LogInformation(
+                    "QualityGate: ObjectResult value type: {ValueType}",
+                    objectResult.Value.GetType().FullName);
+            }
+
             var userId = GetUserId(context.HttpContext);
             if (userId != Guid.Empty)
             {
                 var policy = QualityGateService.GetUserPolicy(userId);
                 if (policy != null)
                 {
+                    _logger.LogInformation(
+                        "QualityGate: Applying policy {Policy} for user {User}",
+                        policy.Name, (object)userId);
                     FilterResult(objectResult, policy, userId);
                 }
             }
@@ -108,23 +130,37 @@ public class MediaSourceResultFilter : IAsyncResultFilter
         // Primary: JWT/cookie claims set by Jellyfin auth
         var claim = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)
                  ?? httpContext.User.FindFirst("Jellyfin-UserId");
-        if (claim != null && Guid.TryParse(claim.Value, out var userId))
+        if (claim != null && Guid.TryParse(claim.Value, out var userId) && userId != Guid.Empty)
         {
             return userId;
         }
 
-        // Fallback: userId query parameter
+        // Fallback: userId query parameter (used by PlaybackInfo, etc.)
         if (httpContext.Request.Query.TryGetValue("userId", out var queryUserId)
-            && Guid.TryParse(queryUserId.FirstOrDefault(), out userId))
+            && Guid.TryParse(queryUserId.FirstOrDefault(), out userId) && userId != Guid.Empty)
         {
             return userId;
         }
 
-        // Fallback: route values
+        // Fallback: route values (used by /Users/{userId}/Items/...)
         if (httpContext.Request.RouteValues.TryGetValue("userId", out var routeUserId)
-            && Guid.TryParse(routeUserId?.ToString(), out userId))
+            && Guid.TryParse(routeUserId?.ToString(), out userId) && userId != Guid.Empty)
         {
             return userId;
+        }
+
+        // Last resort: extract from URL path /Users/{userId}/...
+        var path = httpContext.Request.Path.Value ?? string.Empty;
+        var usersIdx = path.IndexOf("/Users/", StringComparison.OrdinalIgnoreCase);
+        if (usersIdx >= 0)
+        {
+            var start = usersIdx + 7;
+            var end = path.IndexOf('/', start);
+            if (end < 0) end = path.Length;
+            if (Guid.TryParse(path.AsSpan(start, end - start), out userId) && userId != Guid.Empty)
+            {
+                return userId;
+            }
         }
 
         return Guid.Empty;
