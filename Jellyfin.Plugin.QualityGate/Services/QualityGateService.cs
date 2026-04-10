@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Jellyfin.Plugin.QualityGate.Configuration;
 using MediaBrowser.Model.Dto;
 
@@ -106,6 +107,27 @@ public static class QualityGateService
     }
 
     /// <summary>
+    /// Matches a filename against a regex pattern with a timeout to prevent ReDoS.
+    /// When <paramref name="failClosed"/> is true (used for blocked-pattern checks),
+    /// timeouts and invalid patterns return true so the file is blocked (fail-closed).
+    /// </summary>
+    private static bool MatchesFilenamePattern(string filename, string pattern, bool failClosed = false)
+    {
+        try
+        {
+            return Regex.IsMatch(filename, pattern, RegexOptions.IgnoreCase, TimeSpan.FromSeconds(1));
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return failClosed;
+        }
+        catch (ArgumentException)
+        {
+            return failClosed;
+        }
+    }
+
+    /// <summary>
     /// Checks whether a file path starts with the given prefix using separator-aware matching.
     /// Prevents "/media" from matching "/media2" — the prefix must align on a directory boundary.
     /// </summary>
@@ -141,7 +163,7 @@ public static class QualityGateService
         // Resolve symlinks to get actual target path
         var resolvedPath = ResolvePath(filePath);
 
-        // Check blocked paths first (against both original and resolved)
+        // Check blocked path prefixes first (against both original and resolved)
         if (policy.BlockedPathPrefixes.Count > 0)
         {
             if (policy.BlockedPathPrefixes.Any(prefix =>
@@ -152,7 +174,21 @@ public static class QualityGateService
             }
         }
 
-        // If allowed paths are specified, file must match at least one (check both original and resolved)
+        // Check blocked filename patterns (regex against the filename component)
+        // Check both original and resolved filenames for symlinked setups
+        if (policy.BlockedFilenamePatterns.Count > 0)
+        {
+            var originalFilename = Path.GetFileName(filePath);
+            var resolvedFilename = Path.GetFileName(resolvedPath);
+            if (policy.BlockedFilenamePatterns.Any(pattern =>
+                MatchesFilenamePattern(originalFilename, pattern, failClosed: true) ||
+                MatchesFilenamePattern(resolvedFilename, pattern, failClosed: true)))
+            {
+                return false;
+            }
+        }
+
+        // If allowed path prefixes are specified, file must match at least one
         if (policy.AllowedPathPrefixes.Count > 0)
         {
             var isAllowed = policy.AllowedPathPrefixes.Any(prefix =>
@@ -160,6 +196,20 @@ public static class QualityGateService
                 MatchesPathPrefix(resolvedPath, prefix));
 
             if (!isAllowed)
+            {
+                return false;
+            }
+        }
+
+        // If allowed filename patterns are specified, file must match at least one
+        // Check both original and resolved filenames for symlinked setups
+        if (policy.AllowedFilenamePatterns.Count > 0)
+        {
+            var originalFilename = Path.GetFileName(filePath);
+            var resolvedFilename = Path.GetFileName(resolvedPath);
+            if (!policy.AllowedFilenamePatterns.Any(pattern =>
+                MatchesFilenamePattern(originalFilename, pattern) ||
+                MatchesFilenamePattern(resolvedFilename, pattern)))
             {
                 return false;
             }

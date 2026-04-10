@@ -78,6 +78,20 @@ public class QualityPolicy
     public List<string> BlockedPathPrefixes { get; set; } = new();
 
     /// <summary>
+    /// Gets or sets regex patterns matched against filenames.
+    /// Files whose filename matches at least one pattern are allowed.
+    /// Example: ["- 720p", "- 1080p"] to only allow those versions.
+    /// </summary>
+    public List<string> AllowedFilenamePatterns { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets regex patterns matched against filenames.
+    /// Files whose filename matches any pattern are blocked.
+    /// Example: ["- 2160p", "- 4K"] to block UHD versions.
+    /// </summary>
+    public List<string> BlockedFilenamePatterns { get; set; } = new();
+
+    /// <summary>
     /// Gets or sets a value indicating whether this policy is enabled.
     /// </summary>
     public bool Enabled { get; set; } = true;
