@@ -126,11 +126,11 @@
 
         .qg-policy-section-title {
             margin: 0 0 .8rem;
-            font-size: .78em;
-            font-weight: 700;
+            font-size: .92em;
+            font-weight: 800;
             letter-spacing: .08em;
             text-transform: uppercase;
-            opacity: .72;
+            opacity: .96;
         }
 
         .qg-path-group {
@@ -151,10 +151,6 @@
         }
 
         .qg-path-group-head {
-            display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
-            gap: 1rem;
             margin-bottom: .8rem;
         }
 
@@ -168,6 +164,12 @@
             display: flex;
             flex-direction: column;
             gap: .8rem;
+        }
+
+        .qg-path-actions {
+            display: flex;
+            justify-content: flex-start;
+            margin-top: .8rem;
         }
 
         .qg-path-row {
@@ -188,9 +190,9 @@
 
         .qg-policy-footer {
             display: grid;
-            grid-template-columns: minmax(0, 1.35fr) minmax(220px, .75fr);
+            grid-template-columns: minmax(0, 1.2fr) minmax(220px, .7fr) auto;
             gap: 1rem;
-            align-items: start;
+            align-items: end;
             margin-top: 1rem;
         }
 
@@ -200,6 +202,12 @@
             border: 1px solid rgba(127, 127, 127, .22);
             border-radius: .85rem;
             background: rgba(255, 255, 255, .035);
+        }
+
+        .qg-policy-actions {
+            display: flex;
+            align-items: flex-end;
+            justify-content: flex-end;
         }
 
         .qg-policy-delete.qg-delete-btn {
@@ -214,15 +222,17 @@
         }
 
         .qg-user-access-table-wrap {
-            border: 1px solid rgba(127, 127, 127, .28);
+            border: 1px solid rgba(255, 255, 255, .08);
             border-radius: .85rem;
-            background: rgba(255, 255, 255, .03);
+            background: #171717;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, .18), inset 0 1px 0 rgba(255, 255, 255, .02);
             overflow: hidden;
         }
 
         .qg-user-access-table {
             width: 100%;
-            border-collapse: collapse;
+            border-collapse: separate;
+            border-spacing: 0;
         }
 
         .qg-user-access-table th,
@@ -230,7 +240,7 @@
             padding: .85rem .95rem;
             text-align: left;
             vertical-align: middle;
-            border-bottom: 1px solid rgba(127, 127, 127, .18);
+            border-bottom: 1px solid rgba(255, 255, 255, .06);
         }
 
         .qg-user-access-table thead th {
@@ -238,24 +248,30 @@
             font-weight: 700;
             letter-spacing: .06em;
             text-transform: uppercase;
-            opacity: .72;
-            background: rgba(255, 255, 255, .06);
+            opacity: .8;
+            background: #202020;
         }
 
-        .qg-user-access-table tbody tr:last-child td {
+        .qg-user-access-table tfoot td {
+            background: #1d1d1d;
+            border-top: 1px solid rgba(255, 255, 255, .06);
             border-bottom: 0;
         }
 
-        .qg-user-access-table tbody tr:nth-child(odd) {
-            background: rgba(255, 255, 255, .02);
+        .qg-user-access-table tbody tr:nth-child(odd) td {
+            background: #1b1b1b;
         }
 
-        .qg-user-access-table tbody tr:hover {
-            background: rgba(0, 164, 220, .05);
+        .qg-user-access-table tbody tr:nth-child(even) td {
+            background: #181818;
         }
 
-        .qg-user-access-table tbody tr.qg-user-access-row-invalid {
-            background: rgba(239, 83, 80, .07);
+        .qg-user-access-table tbody tr:hover td {
+            background: #1f2529;
+        }
+
+        .qg-user-access-table tbody tr.qg-user-access-row-invalid td {
+            background: rgba(114, 28, 28, .75);
         }
 
         .qg-user-access-main {
@@ -276,6 +292,77 @@
         .qg-user-access-select .emby-select,
         .qg-user-access-select select {
             width: 100%;
+        }
+
+        .qg-user-access-sortable {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .qg-user-access-sortable:hover,
+        .qg-user-access-sortable:focus {
+            background: rgba(255, 255, 255, .1);
+            outline: none;
+        }
+
+        .qg-user-access-sortable.is-active {
+            opacity: 1;
+        }
+
+        .qg-user-access-sort-content {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: .45rem;
+            width: 100%;
+        }
+
+        .qg-user-access-sort-icon {
+            font-size: .95em;
+            opacity: .75;
+        }
+
+        .qg-user-access-footer-cell {
+            vertical-align: middle;
+        }
+
+        .qg-user-access-table tfoot td:nth-child(2) {
+            text-align: center;
+        }
+
+        .qg-user-access-table tfoot td:nth-child(3) {
+            text-align: right;
+        }
+
+        .qg-user-access-footer-group {
+            display: flex;
+            align-items: center;
+            gap: .6rem;
+            flex-wrap: wrap;
+        }
+
+        .qg-user-access-footer-group-end {
+            justify-content: flex-end;
+        }
+
+        .qg-user-access-footer-label,
+        .qg-user-access-footer-meta {
+            font-size: .95em;
+            opacity: .72;
+            line-height: 1.4;
+        }
+
+        .qg-user-access-footer-label {
+            font-weight: 600;
+        }
+
+        .user-access-page-size {
+            width: 90px;
+            max-width: 100%;
+        }
+
+        .qg-user-access-pager-btn {
+            min-width: 88px;
         }
 
         .qg-user-access-effective {
@@ -346,14 +433,29 @@
 
         @media (max-width: 760px) {
             .qg-section-head,
-            .qg-policy-card-header,
-            .qg-path-group-head {
+            .qg-policy-card-header {
                 flex-direction: column;
                 align-items: stretch;
             }
 
             .qg-section-action {
                 width: 100%;
+            }
+
+            .qg-user-access-footer,
+            .qg-user-access-footer-group,
+            .qg-user-access-footer-group-end {
+                width: 100%;
+                margin-left: 0;
+            }
+
+            .qg-user-access-footer-group-end {
+                justify-content: flex-start;
+            }
+
+            .qg-user-access-table tfoot td:nth-child(2),
+            .qg-user-access-table tfoot td:nth-child(3) {
+                text-align: left;
             }
         }
 

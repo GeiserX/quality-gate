@@ -3,6 +3,10 @@ var FULL_ACCESS_POLICY_ID = '__FULL_ACCESS__';
 var config = { Policies: [], UserPolicies: [], DefaultPolicyId: '', DefaultIntroVideoPath: '' };
 var users = [];
 var isLoaded = false;
+var userAccessPageSize = 10;
+var userAccessPage = 0;
+var userAccessSortColumn = 'name';
+var userAccessSortDirection = 'asc';
 
 function escapeHtml(text) {
     var div = document.createElement('div');
@@ -213,7 +217,7 @@ function buildPathField(policy, policyIndex, listName) {
 
     var rowHtml = rows.map(function (pathValue, rowIndex) {
         var inputId = 'policy-' + policyIndex + '-' + listName + '-row-' + rowIndex;
-        var showRemove = rows.length > 1 || Boolean(pathValue);
+        var showRemove = rows.length > 1 && rowIndex > 0;
 
         return '<div class="qg-path-row">' +
             '<div class="inputContainer">' +
@@ -231,7 +235,7 @@ function buildPathField(policy, policyIndex, listName) {
                     'data-list="' + listName + '" ' +
                     'data-row="' + rowIndex + '" ' +
                     'aria-label="Remove ' + escapeAttribute(rowLabel.toLowerCase()) + ' ' + (rowIndex + 1) + '">' +
-                    '<span>Remove</span>' +
+                    '<span>Remove Path</span>' +
                   '</button>'
                 : '') +
         '</div>';
@@ -243,13 +247,15 @@ function buildPathField(policy, policyIndex, listName) {
                 '<h3 class="qg-path-group-title">' + title + '</h3>' +
                 '<div class="fieldDescription">' + helpText + '</div>' +
             '</div>' +
+        '</div>' +
+        '<div class="qg-path-list">' + rowHtml + '</div>' +
+        '<div class="qg-path-actions">' +
             '<button is="emby-button" type="button" class="raised btnAddPath" ' +
                 'data-index="' + policyIndex + '" ' +
                 'data-list="' + listName + '">' +
                 '<span>' + addLabel + '</span>' +
             '</button>' +
         '</div>' +
-        '<div class="qg-path-list">' + rowHtml + '</div>' +
     '</div>';
 }
 
@@ -282,6 +288,107 @@ function getEffectiveClass(effective) {
     }
 
     return 'qg-effective-full';
+}
+
+function getAssignedPolicySummary(userId) {
+    var override = getUserOverride(userId);
+    var policy;
+
+    if (!override) {
+        return 'Use Default (' + getDefaultPolicyLabel() + ')';
+    }
+
+    if (override.PolicyId === FULL_ACCESS_POLICY_ID) {
+        return 'Full Access';
+    }
+
+    policy = getEnabledPolicy(override.PolicyId);
+    if (policy) {
+        return policy.Name || 'Unnamed Policy';
+    }
+
+    return 'Denied - invalid policy';
+}
+
+function compareText(a, b) {
+    return String(a || '').localeCompare(String(b || ''), undefined, { sensitivity: 'base', numeric: true });
+}
+
+function getSortedUsers() {
+    var sorted = users.slice();
+
+    sorted.sort(function (left, right) {
+        var leftValue;
+        var rightValue;
+        var result;
+
+        if (userAccessSortColumn === 'policy') {
+            leftValue = getAssignedPolicySummary(left.Id);
+            rightValue = getAssignedPolicySummary(right.Id);
+        } else if (userAccessSortColumn === 'effective') {
+            leftValue = getEffectivePolicy(left.Id).name;
+            rightValue = getEffectivePolicy(right.Id).name;
+        } else {
+            leftValue = left.Name || '';
+            rightValue = right.Name || '';
+        }
+
+        result = compareText(leftValue, rightValue);
+        if (result === 0) {
+            result = compareText(left.Name || '', right.Name || '');
+        }
+
+        return userAccessSortDirection === 'desc' ? result * -1 : result;
+    });
+
+    return sorted;
+}
+
+function getSortIndicator(column) {
+    if (userAccessSortColumn !== column) {
+        return '↕';
+    }
+
+    return userAccessSortDirection === 'asc' ? '↑' : '↓';
+}
+
+function setUserAccessSort(column) {
+    if (userAccessSortColumn === column) {
+        userAccessSortDirection = userAccessSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+        userAccessSortColumn = column;
+        userAccessSortDirection = 'asc';
+    }
+
+    userAccessPage = 0;
+}
+
+function setUserPolicyAssignment(userId, username, policyId) {
+    config.UserPolicies = config.UserPolicies.filter(function (assignment) {
+        return assignment.UserId !== userId;
+    });
+
+    if (policyId) {
+        config.UserPolicies.push({
+            UserId: userId,
+            Username: username,
+            PolicyId: policyId
+        });
+    }
+}
+
+function getUserAccessPageCount() {
+    return Math.max(1, Math.ceil(users.length / userAccessPageSize));
+}
+
+function clampUserAccessPage() {
+    var lastPage = getUserAccessPageCount() - 1;
+    if (userAccessPage < 0) {
+        userAccessPage = 0;
+    }
+    if (userAccessPage > lastPage) {
+        userAccessPage = lastPage;
+    }
 }
 
 function renderAll(view) {
@@ -321,11 +428,6 @@ function renderPolicies(view) {
                             'placeholder="Policy name" />' +
                     '</div>' +
                 '</div>' +
-                '<button is="emby-button" type="button" class="raised qg-delete-btn btnDeletePolicy qg-policy-delete" ' +
-                    'style="background:#c62828 !important;color:#fff !important;border-color:#c62828 !important;" ' +
-                    'data-index="' + index + '">' +
-                    '<span>Delete Policy</span>' +
-                '</button>' +
             '</div>' +
             '<div class="qg-policy-section">' +
                 '<h3 class="qg-policy-section-title">Access Rules</h3>' +
@@ -351,6 +453,13 @@ function renderPolicies(view) {
                             '<span>Enabled</span>' +
                         '</label>' +
                         '<div class="fieldDescription">Disable this policy without deleting its path rules.</div>' +
+                    '</div>' +
+                    '<div class="qg-policy-actions">' +
+                        '<button is="emby-button" type="button" class="raised qg-delete-btn btnDeletePolicy qg-policy-delete" ' +
+                            'style="background:#c62828 !important;color:#fff !important;border-color:#c62828 !important;" ' +
+                            'data-index="' + index + '">' +
+                            '<span>Delete Policy</span>' +
+                        '</button>' +
                     '</div>' +
                 '</div>' +
             '</div>';
@@ -415,24 +524,53 @@ function renderDefaultPolicyDropdown(view) {
 function renderUserAccess(view) {
     var container = view.querySelector('#userAccessContainer');
     var defaultLabel;
+    var pageCount;
+    var sortedUsers;
+    var visibleUsers;
+    var startIndex;
+    var endIndex;
 
     if (users.length === 0) {
         container.innerHTML = getEmptyState('No users found.');
         return;
     }
 
+    clampUserAccessPage();
+    pageCount = getUserAccessPageCount();
+    sortedUsers = getSortedUsers();
+    startIndex = userAccessPage * userAccessPageSize;
+    endIndex = Math.min(startIndex + userAccessPageSize, sortedUsers.length);
+    visibleUsers = sortedUsers.slice(startIndex, endIndex);
     defaultLabel = escapeHtml(getDefaultPolicyLabel());
     container.innerHTML = '<div class="qg-user-access-table-wrap">' +
         '<table class="qg-user-access-table">' +
             '<thead>' +
                 '<tr>' +
-                    '<th scope="col">User</th>' +
-                    '<th scope="col">Assigned Policy</th>' +
-                    '<th scope="col">Effective Access</th>' +
+                    '<th scope="col" class="qg-user-access-sortable' + (userAccessSortColumn === 'name' ? ' is-active' : '') + '" ' +
+                        'data-sort-column="name" tabindex="0" aria-sort="' + (userAccessSortColumn === 'name' ? (userAccessSortDirection === 'asc' ? 'ascending' : 'descending') : 'none') + '">' +
+                        '<div class="qg-user-access-sort-content">' +
+                            '<span>User</span>' +
+                            '<span class="qg-user-access-sort-icon" aria-hidden="true">' + getSortIndicator('name') + '</span>' +
+                        '</div>' +
+                    '</th>' +
+                    '<th scope="col" class="qg-user-access-sortable' + (userAccessSortColumn === 'policy' ? ' is-active' : '') + '" ' +
+                        'data-sort-column="policy" tabindex="0" aria-sort="' + (userAccessSortColumn === 'policy' ? (userAccessSortDirection === 'asc' ? 'ascending' : 'descending') : 'none') + '">' +
+                        '<div class="qg-user-access-sort-content">' +
+                            '<span>Assigned Policy</span>' +
+                            '<span class="qg-user-access-sort-icon" aria-hidden="true">' + getSortIndicator('policy') + '</span>' +
+                        '</div>' +
+                    '</th>' +
+                    '<th scope="col" class="qg-user-access-sortable' + (userAccessSortColumn === 'effective' ? ' is-active' : '') + '" ' +
+                        'data-sort-column="effective" tabindex="0" aria-sort="' + (userAccessSortColumn === 'effective' ? (userAccessSortDirection === 'asc' ? 'ascending' : 'descending') : 'none') + '">' +
+                        '<div class="qg-user-access-sort-content">' +
+                            '<span>Effective Access</span>' +
+                            '<span class="qg-user-access-sort-icon" aria-hidden="true">' + getSortIndicator('effective') + '</span>' +
+                        '</div>' +
+                    '</th>' +
                 '</tr>' +
             '</thead>' +
             '<tbody>' +
-            users.map(function (user) {
+            visibleUsers.map(function (user) {
         var override = getUserOverride(user.Id);
         var overrideValue = override ? override.PolicyId : '';
         var stale = Boolean(overrideValue) && !isValidOverride(overrideValue);
@@ -500,8 +638,79 @@ function renderUserAccess(view) {
         return html;
     }).join('') +
             '</tbody>' +
+            '<tfoot>' +
+                '<tr>' +
+                    '<td class="qg-user-access-footer-cell">' +
+                        '<div class="qg-user-access-footer-meta">Showing ' + (startIndex + 1) + '-' + endIndex + ' of ' + users.length + ' users</div>' +
+                    '</td>' +
+                    '<td class="qg-user-access-footer-cell">' +
+                        '<div class="qg-user-access-footer-group">' +
+                            '<label class="qg-user-access-footer-label" for="userAccessPageSize">Rows</label>' +
+                            '<select is="emby-select" id="userAccessPageSize" class="user-access-page-size">' +
+                                '<option value="10"' + (userAccessPageSize === 10 ? ' selected' : '') + '>10</option>' +
+                                '<option value="25"' + (userAccessPageSize === 25 ? ' selected' : '') + '>25</option>' +
+                                '<option value="50"' + (userAccessPageSize === 50 ? ' selected' : '') + '>50</option>' +
+                                '<option value="100"' + (userAccessPageSize === 100 ? ' selected' : '') + '>100</option>' +
+                            '</select>' +
+                        '</div>' +
+                    '</td>' +
+                    '<td class="qg-user-access-footer-cell">' +
+                        '<div class="qg-user-access-footer-group qg-user-access-footer-group-end">' +
+                            '<button is="emby-button" type="button" class="raised qg-user-access-pager-btn" id="btnUserAccessPrev"' +
+                                (userAccessPage === 0 ? ' disabled' : '') + '>' +
+                                '<span>Previous</span>' +
+                            '</button>' +
+                            '<div class="qg-user-access-footer-meta">Page ' + (userAccessPage + 1) + ' / ' + pageCount + '</div>' +
+                            '<button is="emby-button" type="button" class="raised qg-user-access-pager-btn" id="btnUserAccessNext"' +
+                                (userAccessPage >= pageCount - 1 ? ' disabled' : '') + '>' +
+                                '<span>Next</span>' +
+                            '</button>' +
+                        '</div>' +
+                    '</td>' +
+                '</tr>' +
+            '</tfoot>' +
         '</table>' +
     '</div>';
+
+    container.querySelectorAll('.qg-user-access-sortable').forEach(function (header) {
+        header.addEventListener('click', function () {
+            setUserAccessSort(this.dataset.sortColumn);
+            renderUserAccess(view);
+            upgradeNativeWidgets(view);
+        });
+
+        header.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                setUserAccessSort(this.dataset.sortColumn);
+                renderUserAccess(view);
+                upgradeNativeWidgets(view);
+            }
+        });
+    });
+
+    container.querySelector('#userAccessPageSize').addEventListener('change', function () {
+        userAccessPageSize = parseInt(this.value, 10) || 10;
+        userAccessPage = 0;
+        renderUserAccess(view);
+        upgradeNativeWidgets(view);
+    });
+
+    container.querySelector('#btnUserAccessPrev').addEventListener('click', function () {
+        if (userAccessPage > 0) {
+            userAccessPage -= 1;
+            renderUserAccess(view);
+            upgradeNativeWidgets(view);
+        }
+    });
+
+    container.querySelector('#btnUserAccessNext').addEventListener('click', function () {
+        if (userAccessPage < pageCount - 1) {
+            userAccessPage += 1;
+            renderUserAccess(view);
+            upgradeNativeWidgets(view);
+        }
+    });
 }
 
 function collectFromDOM(view) {
@@ -530,20 +739,6 @@ function collectFromDOM(view) {
     config.DefaultPolicyId = view.querySelector('#defaultPolicySelect').value;
     config.DefaultIntroVideoPath = view.querySelector('#defaultIntroPath').value.trim();
 
-    config.UserPolicies = [];
-    view.querySelectorAll('.user-policy-select').forEach(function (select) {
-        var value = select.value;
-
-        if (!value) {
-            return;
-        }
-
-        config.UserPolicies.push({
-            UserId: select.dataset.userid,
-            Username: select.dataset.username,
-            PolicyId: value
-        });
-    });
 }
 
 function refreshComputedPreview(view) {
@@ -674,6 +869,7 @@ function removePath(view, policyIndex, listName, rowIndex) {
 
 function loadConfig(view) {
     isLoaded = false;
+    userAccessPage = 0;
     setStaticControlsEnabled(view, false);
     resetViewState(view);
     setLoadStatus(view, 'Loading configuration...');
@@ -761,7 +957,23 @@ export default function (view) {
             return;
         }
 
-        if (event.target.matches('#defaultPolicySelect, .user-policy-select, .policy-enabled, .policy-name')) {
+        if (event.target.matches('.user-access-page-size')) {
+            return;
+        }
+
+        if (event.target.matches('.user-policy-select')) {
+            setUserPolicyAssignment(
+                event.target.dataset.userid,
+                event.target.dataset.username,
+                event.target.value
+            );
+            renderUserAccess(view);
+            upgradeNativeWidgets(view);
+            markDirty(view);
+            return;
+        }
+
+        if (event.target.matches('#defaultPolicySelect, .policy-enabled, .policy-name')) {
             refreshComputedPreview(view);
         }
 
