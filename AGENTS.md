@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Description**: Jellyfin plugin that restricts users to specific media versions based on configurable path-based policies. Filters blocked MediaSources from API responses so restricted users only see allowed versions (e.g., 720p transcodes but not 4K originals).
+**Description**: Jellyfin plugin that restricts users to specific media versions based on configurable path-based policies and filename regex patterns. Filters blocked MediaSources from API responses so restricted users only see allowed versions (e.g., 720p transcodes but not 4K originals). Supports Jellyfin's multi-version naming convention.
 
 **Architecture Pattern**: Monolith - single deployable unit (Jellyfin plugin DLL)
 
@@ -26,6 +26,7 @@
 
 - Jellyfin Plugin API (10.11+): `BasePlugin<T>`, `IHasWebPages`, `IPluginServiceRegistrator`, `IAsyncResultFilter`, `IIntroProvider`
 - ASP.NET Core MVC Filters (result filtering pipeline)
+- System.Text.RegularExpressions (filename pattern matching with ReDoS timeout protection)
 
 ## Architecture
 
@@ -52,6 +53,12 @@ The plugin uses an **IAsyncResultFilter** registered via `PostConfigure<MvcOptio
 
 - `PlaybackInfoResponse` (playback endpoint)
 - `BaseItemDto` (item detail / user item endpoints)
+- `QueryResult<BaseItemDto>` (library listing endpoints)
+- `IEnumerable<BaseItemDto>` (lazy enumerables from `/Items/Latest` and similar)
+
+Items where **all** media sources are blocked are hidden entirely from listings (not just stripped of sources).
+
+The filter gates on `isRelevant` to avoid running on every request — it only processes `/PlaybackInfo`, `/Users/{id}/Items/...`, and `/Users/{id}/Items` paths (excluding `/Intros`).
 
 This approach was chosen because Jellyfin's response compression breaks HTTP middleware approaches (middleware sees compressed bytes, not JSON).
 
@@ -65,14 +72,18 @@ This approach was chosen because Jellyfin's response compression breaks HTTP mid
 4. If no override, fall back to `DefaultPolicyId`
 5. If no default, return null (full access)
 
-### Path Matching
+### Path & Filename Matching
 
 `QualityGateService.IsPathAllowed(policy, path)` checks both the original path and symlink-resolved path:
 
 1. Null/empty path -> **DENIED** (fail-closed)
-2. Matches any blocked prefix -> **DENIED**
-3. Allowed prefixes defined and no match -> **DENIED**
-4. Otherwise -> **ALLOWED**
+2. Matches any **blocked path prefix** -> **DENIED**
+3. Matches any **blocked filename regex** -> **DENIED**
+4. **Allowed path prefixes** defined and no match -> **DENIED**
+5. **Allowed filename patterns** defined and no match -> **DENIED**
+6. Otherwise -> **ALLOWED**
+
+Path prefix matching is separator-aware (`/media` won't match `/media2`). Filename regex matching uses `RegexOptions.IgnoreCase` with a 1-second timeout (ReDoS protection). Both original and symlink-resolved filenames are checked.
 
 When all sources are blocked, the filter returns an **empty array** (fail-closed). It does NOT fall back to showing originals.
 
@@ -100,15 +111,20 @@ Editable via **Dashboard -> Plugins -> Quality Gate**.
 | Field | Description |
 |-------|-------------|
 | **Policy Name** | Descriptive name (e.g., "720p Only") |
-| **Allowed Path Prefixes** | Paths users CAN access. One per line. |
-| **Blocked Path Prefixes** | Paths that will be blocked. One per line. |
+| **Allowed Path Prefixes** | Paths users CAN access. One per row. |
+| **Blocked Path Prefixes** | Paths that will be blocked. One per row. |
+| **Allowed Filename Patterns** | Regex patterns matched against filenames. Files must match at least one. |
+| **Blocked Filename Patterns** | Regex patterns matched against filenames. Matching files are always blocked. |
+| **Custom Intro Video** | Optional path to intro video for users under this policy. |
 | **Enabled** | Toggle policy on/off |
 
 ### Config Model Fields Not Currently Enforced
 
 `BlockedMessageHeader`, `BlockedMessageText`, `BlockedMessageTimeoutMs` -- present in the config model for backward compatibility but **removed from the admin UI**. Not enforced server-side. The filter silently removes sources; it does not send user-facing messages.
 
-`IntroVideoPath` -- used by `QualityGateIntroProvider` to serve per-policy intro videos.
+### Intro Video System
+
+`IntroVideoPath` (per-policy) and `DefaultIntroVideoPath` (global fallback) are actively enforced by `QualityGateIntroProvider`. The provider registers intro videos in Jellyfin's database on first use via `ILibraryManager.CreateItem()`, then returns `IntroInfo { ItemId }`. The filter skips policy enforcement for configured intro paths so intros always play regardless of user restrictions.
 
 ## Development Guidelines
 
@@ -135,14 +151,14 @@ GitHub Actions (`.github/workflows/build.yml`):
 1. **Build** (all pushes) -- Restores, builds, packages DLL + `build.yaml` into `quality-gate.zip`
 2. **Release** (tag pushes) -- Creates GitHub Release with zip artifact
 
-Manifest auto-commit fails due to branch protection. After each release: download zip, `md5sum`, update `manifest.json` checksum manually, commit and push.
+The CI workflow auto-generates `manifest.json` with version/checksum and deploys to GitHub Pages. No manual manifest updates needed.
 
-Version in `.csproj` (`<AssemblyVersion>` + `<FileVersion>` + `<Version>`) must match `build.yaml` and `meta.json`. Tags: `v2.0.2.0` format.
+Version in `.csproj` (`<AssemblyVersion>` + `<FileVersion>` + `<Version>`) must match `build.yaml`. Tags: `v3.0.0.0` format. The CI workflow auto-generates `manifest.json` with the correct checksum and deploys it to GitHub Pages.
 
 ### Config Page
 
 - Jellyfin custom elements: `emby-input`, `emby-button`, `emby-select`, `emby-checkbox`
-- Allowed/blocked paths render as repeatable one-line input rows, not multi-line textareas
+- Allowed/blocked paths and filename patterns render as repeatable one-line input rows, not multi-line textareas
 - Minimal custom CSS for dynamic elements (policy cards, user table, inline chevron select wrapper, path rows); standard Jellyfin classes for everything else
 - Embedded resource -- changes require DLL rebuild
 - `EnableInMainMenu = true` -- appears in the Jellyfin sidebar, not just under Plugins
@@ -189,9 +205,15 @@ Things discovered during development that save time and prevent mistakes:
 - **Jellyfin resolves symlinks in MediaSource paths**: When media files are symlinks, Jellyfin stores the **resolved target path** in `MediaSourceInfo.Path`, not the symlink path. Policies must target the actual disk paths (e.g., `/mnt/user/ShareMedia/Peliculas/` for transcodes, `/mnt/remotes/TOWER_ShareMedia/Peliculas/` for originals), NOT the mount point paths (`/media/hq/`, `/media/lq/`). This is the most common misconfiguration.
 - **Guid.Empty from API key auth**: Jellyfin API key authentication sets `ClaimTypes.NameIdentifier` to `Guid.Empty`. All userId extraction code must explicitly guard against this.
 - **MediaSourceInfo namespace moved**: In Jellyfin 10.11+, `MediaSourceInfo` lives in `MediaBrowser.Model.Dto`, not `MediaBrowser.Model.MediaInfo`.
-- **CI manifest workaround**: The `stefanzweifel/git-auto-commit-action` step in the release workflow fails due to branch protection. This is expected. Update manifest checksum manually after each release.
+- **CI manifest**: The workflow auto-generates `manifest.json` with version/checksum and deploys to GitHub Pages. No manual manifest updates needed.
 - **Single library, not two**: For multi-version filtering to work, both HQ and LQ media paths must be in a **single** Jellyfin library. Creating separate libraries per quality tier defeats the purpose -- Jellyfin needs both versions as MediaSources on the same item.
-- **QueryResult filtering**: The filter handles `QueryResult<BaseItemDto>` (list endpoints), single `BaseItemDto`, and `PlaybackInfoResponse`. All three response shapes are filtered per-item.
+- **QueryResult filtering**: The filter handles `QueryResult<BaseItemDto>` (list endpoints), single `BaseItemDto`, `PlaybackInfoResponse`, and `IEnumerable<BaseItemDto>` (lazy enumerables from `/Items/Latest`). All four response shapes are filtered.
+- **Lazy enumerables from `/Items/Latest`**: This endpoint returns `ListSelectIterator<T>` (implements `IEnumerable<BaseItemDto>` but doesn't match `QueryResult` or single `BaseItemDto`). Must be caught separately after the switch statement, materialized with `.ToList()`, filtered, then assigned back to `result.Value`.
+- **`isRelevant` must match paths with AND without trailing slash**: `/Users/{id}/Items` (library view, no trailing slash) and `/Users/{id}/Items/{itemId}` (item detail, has slash). Use both `path.Contains("/Items/")` and `path.EndsWith("/Items")`.
+- **MediaSources null on listing DTOs**: Library listing endpoints (`/Items`, `/Items/Latest`) don't populate `MediaSources` on DTOs unless the client requests `Fields=MediaSources`. The filter must inject `ILibraryManager` + `IMediaSourceManager` to look up actual media sources from the library when DTOs lack them.
+- **Intro videos MUST be registered in Jellyfin's database**: `IIntroProvider.GetIntros()` returns `IntroInfo`, but Jellyfin's `LibraryManager.ResolveIntro()` calls `ResolvePath()` then `GetItemById()` — if the video isn't in the DB, it silently returns null and the intro is discarded. The fix: call `ILibraryManager.ResolvePath()` + `CreateItem()` on first use to register the video, then return `IntroInfo { ItemId = video.Id }` instead of just `IntroInfo { Path = ... }`. Cache registered IDs in a `ConcurrentDictionary` to avoid redundant DB registrations.
+- **Filter must skip intro video playback**: When a client plays an intro, it calls `/Items/{introId}/PlaybackInfo`. The filter must NOT apply policy filtering to intro videos (their filenames won't match user policies). Check media source paths against configured intro paths (`DefaultIntroVideoPath` + per-policy `IntroVideoPath`) and skip filtering if matched.
+- **`ILibraryManager.GetIntros()` returns `Task<IEnumerable<Video>>`**: NOT `Task<IEnumerable<IntroInfo>>`. The conversion from IntroInfo → Video happens in `ResolveIntro()` inside `Emby.Server.Implementations.dll` (not in the NuGet packages). Decompile the server DLL to understand the actual flow.
 
 ## Troubleshooting
 
@@ -202,6 +224,11 @@ Things discovered during development that save time and prevent mistakes:
 | Admin sees filtered content | Admin not assigned `__FULL_ACCESS__` override | Add explicit override for admin user |
 | Users without override see everything | No `DefaultPolicyId` set | Set a default policy in plugin config |
 | Playback error after filtering | All sources removed, player has nothing to play | Expected behavior (fail-closed). Ensure at least one path prefix allows a version |
+| Intros not playing | Intro video not registered in Jellyfin DB | `EnsureIntroRegistered()` handles this automatically. Check logs for "Failed to register intro" |
+| Intros blocked by policy | Filter applying filename/path policy to intro playback | `IsConfiguredIntroPath()` should skip filtering. Verify intro path matches config exactly |
+| Items visible in library but not on home page | `HidePlayedInLatest` (default: true) hides played items from Latest sections | Mark items as unplayed or disable the setting |
+| Filter not catching library views | `isRelevant` check missing path format | Ensure both `/Items/` (with slash) and `/Items` (EndsWith) are matched |
+| Transcoding 500 errors | Jellyfin ffmpeg/codec issue, NOT plugin-related | Check ffmpeg availability in container; test media codec compatibility |
 
 ## Security Notice
 
