@@ -4,6 +4,7 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.QualityGate.Configuration;
 using Jellyfin.Plugin.QualityGate.Services;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.MediaInfo;
 using MediaBrowser.Model.Querying;
@@ -22,13 +23,20 @@ namespace Jellyfin.Plugin.QualityGate.Filters;
 public class MediaSourceResultFilter : IAsyncResultFilter
 {
     private readonly ILogger<MediaSourceResultFilter> _logger;
+    private readonly ILibraryManager _libraryManager;
+    private readonly IMediaSourceManager _mediaSourceManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MediaSourceResultFilter"/> class.
     /// </summary>
-    public MediaSourceResultFilter(ILogger<MediaSourceResultFilter> logger)
+    public MediaSourceResultFilter(
+        ILogger<MediaSourceResultFilter> logger,
+        ILibraryManager libraryManager,
+        IMediaSourceManager mediaSourceManager)
     {
         _logger = logger;
+        _libraryManager = libraryManager;
+        _mediaSourceManager = mediaSourceManager;
     }
 
     /// <inheritdoc />
@@ -117,26 +125,7 @@ public class MediaSourceResultFilter : IAsyncResultFilter
 
             case QueryResult<BaseItemDto> queryResult when queryResult.Items?.Any() == true:
             {
-                var itemsToRemove = new List<BaseItemDto>();
-                foreach (var item in queryResult.Items)
-                {
-                    if (item.MediaSources?.Any() == true)
-                    {
-                        var original = item.MediaSources.ToList();
-                        item.MediaSources = original
-                            .Where(s => QualityGateService.IsPathAllowed(policy, s.Path))
-                            .ToArray();
-
-                        _logger.LogDebug(
-                            "QualityGate: Filtered list item '{Name}' for user {User} - {Original} to {Filtered} sources",
-                            item.Name, (object)userId, original.Count, item.MediaSources.Length);
-
-                        if (item.MediaSources.Length == 0 && original.Count > 0)
-                        {
-                            itemsToRemove.Add(item);
-                        }
-                    }
-                }
+                var itemsToRemove = queryResult.Items.Where(item => ShouldHideItem(item, policy, userId)).ToList();
 
                 if (itemsToRemove.Count > 0)
                 {
@@ -153,35 +142,15 @@ public class MediaSourceResultFilter : IAsyncResultFilter
         }
 
         // Handle IEnumerable<BaseItemDto> — catches lazy enumerables (e.g. ListSelectIterator)
-        // from endpoints like /Items/Latest. Must materialize the sequence, filter each item's
-        // sources, remove fully-blocked items, and replace the result value.
+        // from endpoints like /Items/Latest. Must materialize the sequence, check each item
+        // against the policy, remove fully-blocked items, and replace the result value.
         if (result.Value is IEnumerable<BaseItemDto> itemEnumerable
             && result.Value is not BaseItemDto
             && result.Value is not PlaybackInfoResponse
             && result.Value is not QueryResult<BaseItemDto>)
         {
             var materialized = itemEnumerable.ToList();
-            var enumItemsToRemove = new List<BaseItemDto>();
-
-            foreach (var item in materialized)
-            {
-                if (item.MediaSources?.Any() == true)
-                {
-                    var original = item.MediaSources.ToList();
-                    item.MediaSources = original
-                        .Where(s => QualityGateService.IsPathAllowed(policy, s.Path))
-                        .ToArray();
-
-                    _logger.LogDebug(
-                        "QualityGate: Filtered enumerable item '{Name}' for user {User} - {Original} to {Filtered} sources",
-                        item.Name, (object)userId, original.Count, item.MediaSources.Length);
-
-                    if (item.MediaSources.Length == 0 && original.Count > 0)
-                    {
-                        enumItemsToRemove.Add(item);
-                    }
-                }
-            }
+            var enumItemsToRemove = materialized.Where(item => ShouldHideItem(item, policy, userId)).ToList();
 
             if (enumItemsToRemove.Count > 0)
             {
@@ -196,6 +165,60 @@ public class MediaSourceResultFilter : IAsyncResultFilter
             }
 
             result.Value = materialized;
+        }
+    }
+
+    /// <summary>
+    /// Determines if an item should be hidden from listings because all its media sources are blocked.
+    /// When MediaSources is populated on the DTO, filters them in-place and returns true if none remain.
+    /// When MediaSources is null (listing endpoints that don't request Fields=MediaSources), looks up
+    /// the actual sources from the library to make the visibility decision.
+    /// </summary>
+    private bool ShouldHideItem(BaseItemDto itemDto, QualityPolicy policy, Guid userId)
+    {
+        if (itemDto.MediaSources?.Any() == true)
+        {
+            var original = itemDto.MediaSources.ToList();
+            itemDto.MediaSources = original
+                .Where(s => QualityGateService.IsPathAllowed(policy, s.Path))
+                .ToArray();
+
+            _logger.LogDebug(
+                "QualityGate: Filtered '{Name}' for user {User} - {Original} to {Filtered} sources",
+                itemDto.Name, (object)userId, original.Count, itemDto.MediaSources.Length);
+
+            return itemDto.MediaSources.Length == 0 && original.Count > 0;
+        }
+
+        // MediaSources not populated — look up from library to decide visibility
+        try
+        {
+            var baseItem = _libraryManager.GetItemById(itemDto.Id);
+            if (baseItem == null)
+            {
+                return false;
+            }
+
+            var sources = _mediaSourceManager.GetStaticMediaSources(baseItem, false);
+            if (sources == null || sources.Count == 0)
+            {
+                return false;
+            }
+
+            var allBlocked = !sources.Any(s => QualityGateService.IsPathAllowed(policy, s.Path));
+            if (allBlocked)
+            {
+                _logger.LogDebug(
+                    "QualityGate: All {Count} sources blocked for '{Name}' (user {User}, library lookup)",
+                    sources.Count, itemDto.Name, (object)userId);
+            }
+
+            return allBlocked;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "QualityGate: Error looking up sources for '{Name}', allowing", itemDto.Name);
+            return false;
         }
     }
 
