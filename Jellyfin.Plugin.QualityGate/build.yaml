@@ -1,6 +1,6 @@
 name: "Quality Gate"
 guid: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-version: "2.0.5.0"
+version: "2.0.6.0"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 owner: "GeiserX"
@@ -11,6 +11,10 @@ imageUrl: ""
 artifacts:
   - Jellyfin.Plugin.QualityGate.dll
 changelog: |
+  ## v2.0.6.0
+  - Integrated table footer: single full-width tfoot row replacing three-cell layout
+  - Stronger zebra striping for visible row differentiation
+  - Footer layout: rows-per-page left, range center, nav buttons right
   ## v2.0.5.0
   - Sortable columns, pagination, and stronger zebra striping for the User Access table
   - Inline policy assignment updates (no collectFromDOM rebuild)

@@ -254,20 +254,20 @@
 
         .qg-user-access-table tfoot td {
             background: #1d1d1d;
-            border-top: 1px solid rgba(255, 255, 255, .06);
+            border-top: 1px solid rgba(255, 255, 255, .08);
             border-bottom: 0;
         }
 
         .qg-user-access-table tbody tr:nth-child(odd) td {
-            background: #1b1b1b;
+            background: #1f1f1f;
         }
 
         .qg-user-access-table tbody tr:nth-child(even) td {
-            background: #181818;
+            background: #171717;
         }
 
         .qg-user-access-table tbody tr:hover td {
-            background: #1f2529;
+            background: #273038;
         }
 
         .qg-user-access-table tbody tr.qg-user-access-row-invalid td {
@@ -322,31 +322,33 @@
             opacity: .75;
         }
 
-        .qg-user-access-footer-cell {
-            vertical-align: middle;
+        .qg-user-access-footerbar-cell {
+            padding-top: .75rem;
+            padding-bottom: .75rem;
         }
 
-        .qg-user-access-table tfoot td:nth-child(2) {
-            text-align: center;
-        }
-
-        .qg-user-access-table tfoot td:nth-child(3) {
-            text-align: right;
-        }
-
-        .qg-user-access-footer-group {
+        .qg-user-access-footerbar {
             display: flex;
             align-items: center;
-            gap: .6rem;
+            gap: 1rem;
             flex-wrap: wrap;
         }
 
-        .qg-user-access-footer-group-end {
-            justify-content: flex-end;
+        .qg-user-access-footer-left,
+        .qg-user-access-footer-right,
+        .qg-user-access-page-nav {
+            display: flex;
+            align-items: center;
+            gap: .7rem;
+            flex-wrap: wrap;
+        }
+
+        .qg-user-access-footer-spacer {
+            flex: 1 1 auto;
         }
 
         .qg-user-access-footer-label,
-        .qg-user-access-footer-meta {
+        .qg-user-access-footer-range {
             font-size: .95em;
             opacity: .72;
             line-height: 1.4;
@@ -357,12 +359,18 @@
         }
 
         .user-access-page-size {
-            width: 90px;
+            width: 96px;
             max-width: 100%;
         }
 
         .qg-user-access-pager-btn {
-            min-width: 88px;
+            min-width: 42px;
+        }
+
+        .qg-user-access-pager-icon {
+            padding-left: 0;
+            padding-right: 0;
+            font-size: 1.1em;
         }
 
         .qg-user-access-effective {
@@ -442,20 +450,11 @@
                 width: 100%;
             }
 
-            .qg-user-access-footer,
-            .qg-user-access-footer-group,
-            .qg-user-access-footer-group-end {
+            .qg-user-access-footerbar,
+            .qg-user-access-footer-left,
+            .qg-user-access-footer-right {
                 width: 100%;
-                margin-left: 0;
-            }
-
-            .qg-user-access-footer-group-end {
                 justify-content: flex-start;
-            }
-
-            .qg-user-access-table tfoot td:nth-child(2),
-            .qg-user-access-table tfoot td:nth-child(3) {
-                text-align: left;
             }
         }
 
