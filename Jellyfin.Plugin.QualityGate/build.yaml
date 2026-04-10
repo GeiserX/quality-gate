@@ -1,6 +1,6 @@
 name: "Quality Gate"
 guid: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-version: "2.0.4.0"
+version: "2.0.5.0"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 owner: "GeiserX"
@@ -11,6 +11,10 @@ imageUrl: ""
 artifacts:
   - Jellyfin.Plugin.QualityGate.dll
 changelog: |
+  ## v2.0.5.0
+  - Sortable columns, pagination, and stronger zebra striping for the User Access table
+  - Inline policy assignment updates (no collectFromDOM rebuild)
+  - Path actions moved below path list for clearer layout
   ## v2.0.4.0
   - Reworked the configuration page into a clearer native Jellyfin admin layout
   - Restored the user access table, stronger policy grouping, and destructive delete styling
