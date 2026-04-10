@@ -60,6 +60,17 @@ public class QualityGateIntroProvider : IIntroProvider
 
             // Check if user has a policy with custom intro
             var policy = QualityGateService.GetUserPolicy(user.Id);
+
+            // If user is restricted and the item's primary path is blocked, skip the intro
+            // to prevent double-error UX (intro fails → then content denied)
+            if (policy != null && !string.IsNullOrEmpty(item?.Path) && !QualityGateService.IsPathAllowed(policy, item.Path))
+            {
+                _logger.LogDebug(
+                    "QualityGateIntroProvider: Skipping intro — item blocked for user {UserName}",
+                    user.Username);
+                return Task.FromResult(result);
+            }
+
             if (policy != null && !string.IsNullOrWhiteSpace(policy.IntroVideoPath))
             {
                 introPath = policy.IntroVideoPath;

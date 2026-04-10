@@ -151,6 +151,52 @@ public class MediaSourceResultFilter : IAsyncResultFilter
                 break;
             }
         }
+
+        // Handle IEnumerable<BaseItemDto> — catches lazy enumerables (e.g. ListSelectIterator)
+        // from endpoints like /Items/Latest. Must materialize the sequence, filter each item's
+        // sources, remove fully-blocked items, and replace the result value.
+        if (result.Value is IEnumerable<BaseItemDto> itemEnumerable
+            && result.Value is not BaseItemDto
+            && result.Value is not PlaybackInfoResponse
+            && result.Value is not QueryResult<BaseItemDto>)
+        {
+            var materialized = itemEnumerable.ToList();
+            var enumItemsToRemove = new List<BaseItemDto>();
+
+            foreach (var item in materialized)
+            {
+                if (item.MediaSources?.Any() == true)
+                {
+                    var original = item.MediaSources.ToList();
+                    item.MediaSources = original
+                        .Where(s => QualityGateService.IsPathAllowed(policy, s.Path))
+                        .ToArray();
+
+                    _logger.LogDebug(
+                        "QualityGate: Filtered enumerable item '{Name}' for user {User} - {Original} to {Filtered} sources",
+                        item.Name, (object)userId, original.Count, item.MediaSources.Length);
+
+                    if (item.MediaSources.Length == 0 && original.Count > 0)
+                    {
+                        enumItemsToRemove.Add(item);
+                    }
+                }
+            }
+
+            if (enumItemsToRemove.Count > 0)
+            {
+                foreach (var toRemove in enumItemsToRemove)
+                {
+                    materialized.Remove(toRemove);
+                }
+
+                _logger.LogInformation(
+                    "QualityGate: Hid {Count} fully-blocked items from enumerable for user {User} (policy: {Policy})",
+                    enumItemsToRemove.Count, (object)userId, policy.Name);
+            }
+
+            result.Value = materialized;
+        }
     }
 
     private static Guid GetUserId(HttpContext httpContext)
