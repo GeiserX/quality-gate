@@ -108,8 +108,10 @@ public static class QualityGateService
 
     /// <summary>
     /// Matches a filename against a regex pattern with a timeout to prevent ReDoS.
+    /// When <paramref name="failClosed"/> is true (used for blocked-pattern checks),
+    /// timeouts and invalid patterns return true so the file is blocked (fail-closed).
     /// </summary>
-    private static bool MatchesFilenamePattern(string filename, string pattern)
+    private static bool MatchesFilenamePattern(string filename, string pattern, bool failClosed = false)
     {
         try
         {
@@ -117,12 +119,11 @@ public static class QualityGateService
         }
         catch (RegexMatchTimeoutException)
         {
-            return false;
+            return failClosed;
         }
         catch (ArgumentException)
         {
-            // Invalid regex pattern — treat as non-match
-            return false;
+            return failClosed;
         }
     }
 
@@ -174,10 +175,14 @@ public static class QualityGateService
         }
 
         // Check blocked filename patterns (regex against the filename component)
+        // Check both original and resolved filenames for symlinked setups
         if (policy.BlockedFilenamePatterns.Count > 0)
         {
-            var filename = Path.GetFileName(resolvedPath);
-            if (policy.BlockedFilenamePatterns.Any(pattern => MatchesFilenamePattern(filename, pattern)))
+            var originalFilename = Path.GetFileName(filePath);
+            var resolvedFilename = Path.GetFileName(resolvedPath);
+            if (policy.BlockedFilenamePatterns.Any(pattern =>
+                MatchesFilenamePattern(originalFilename, pattern, failClosed: true) ||
+                MatchesFilenamePattern(resolvedFilename, pattern, failClosed: true)))
             {
                 return false;
             }
@@ -197,10 +202,14 @@ public static class QualityGateService
         }
 
         // If allowed filename patterns are specified, file must match at least one
+        // Check both original and resolved filenames for symlinked setups
         if (policy.AllowedFilenamePatterns.Count > 0)
         {
-            var filename = Path.GetFileName(resolvedPath);
-            if (!policy.AllowedFilenamePatterns.Any(pattern => MatchesFilenamePattern(filename, pattern)))
+            var originalFilename = Path.GetFileName(filePath);
+            var resolvedFilename = Path.GetFileName(resolvedPath);
+            if (!policy.AllowedFilenamePatterns.Any(pattern =>
+                MatchesFilenamePattern(originalFilename, pattern) ||
+                MatchesFilenamePattern(resolvedFilename, pattern)))
             {
                 return false;
             }

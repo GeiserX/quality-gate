@@ -13,8 +13,11 @@ namespace Jellyfin.Plugin.QualityGate.Providers;
 
 /// <summary>
 /// Provides custom intro videos based on user quality policies.
-/// When a user is under a policy with a custom intro path, that intro is used
-/// instead of the default Local Intros selection.
+/// When a user is under a policy with a custom intro path, that intro is
+/// added to Jellyfin's intro list. Note: Jellyfin aggregates all registered
+/// IIntroProvider results, so if the built-in "Local Intros" plugin is also
+/// enabled its intros will play in addition to this one. Disable "Local Intros"
+/// if you only want Quality Gate intros.
 /// </summary>
 public class QualityGateIntroProvider : IIntroProvider
 {
@@ -75,11 +78,21 @@ public class QualityGateIntroProvider : IIntroProvider
                 return Task.FromResult(result);
             }
 
-            // Check if the intro file exists
+            // Check if the intro file exists; fall back to default if policy intro is missing
             if (!File.Exists(introPath))
             {
                 _logger.LogWarning("QualityGateIntroProvider: Intro file not found: {IntroPath}", introPath);
-                return Task.FromResult(result);
+                if (source != "global default" && !string.IsNullOrWhiteSpace(config.DefaultIntroVideoPath)
+                    && File.Exists(config.DefaultIntroVideoPath))
+                {
+                    introPath = config.DefaultIntroVideoPath;
+                    source = "global default (fallback)";
+                    _logger.LogInformation("QualityGateIntroProvider: Falling back to default intro: {IntroPath}", introPath);
+                }
+                else
+                {
+                    return Task.FromResult(result);
+                }
             }
 
             _logger.LogInformation(

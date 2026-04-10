@@ -38,7 +38,7 @@ This plugin is perfect for scenarios where you have:
 
 ### Example Setup
 
-```
+```text
 /media/Movies/              ← High-quality originals (4K/Remux)
 /media-transcoded/Movies/   ← Transcoded versions (1080p/720p)
 ```
@@ -64,9 +64,10 @@ Add this repository to your Jellyfin instance for automatic updates:
 <summary><b>Docker</b></summary>
 
 ```bash
-# Download the latest release
+# Download the latest release (replace VERSION with actual version, e.g. 3.0.0.0)
+VERSION="3.0.0.0"
 curl -L -o QualityGate.zip \
-  https://github.com/GeiserX/quality-gate/releases/latest/download/quality-gate.zip
+  "https://github.com/GeiserX/quality-gate/releases/download/v${VERSION}/quality-gate_${VERSION}.zip"
 
 # Extract to your plugins volume
 unzip QualityGate.zip -d /path/to/jellyfin/plugins/QualityGate/
@@ -87,9 +88,10 @@ volumes:
 <summary><b>Linux (Native)</b></summary>
 
 ```bash
-# Download the latest release
+# Download the latest release (replace VERSION with actual version, e.g. 3.0.0.0)
+VERSION="3.0.0.0"
 curl -L -o QualityGate.zip \
-  https://github.com/GeiserX/quality-gate/releases/latest/download/quality-gate.zip
+  "https://github.com/GeiserX/quality-gate/releases/download/v${VERSION}/quality-gate_${VERSION}.zip"
 
 # Extract to plugins directory
 sudo unzip QualityGate.zip -d /var/lib/jellyfin/plugins/QualityGate/
@@ -116,9 +118,10 @@ sudo systemctl restart jellyfin
 <summary><b>macOS</b></summary>
 
 ```bash
-# Download the latest release
+# Download the latest release (replace VERSION with actual version, e.g. 3.0.0.0)
+VERSION="3.0.0.0"
 curl -L -o QualityGate.zip \
-  https://github.com/GeiserX/quality-gate/releases/latest/download/quality-gate.zip
+  "https://github.com/GeiserX/quality-gate/releases/download/v${VERSION}/quality-gate_${VERSION}.zip"
 
 # Extract to plugins directory
 unzip QualityGate.zip -d ~/.local/share/jellyfin/plugins/QualityGate/
@@ -143,7 +146,7 @@ Policies define which paths are allowed or blocked. Click **"Add Policy"** to cr
 | **Blocked Path Prefixes** | Paths that will be blocked. Each prefix gets its own row; use **Add Blocked Path** for more. |
 | **Allowed Filename Patterns** | Regex patterns matched against the filename. Files must match at least one pattern. |
 | **Blocked Filename Patterns** | Regex patterns matched against the filename. Matching files are always blocked. |
-| **Custom Intro Video** | Optional intro video for users under this policy |
+| **Custom Intro Video** | Optional intro video for users under this policy. **Note:** Jellyfin aggregates all intro providers — disable the built-in "Local Intros" plugin if you only want Quality Gate intros. |
 | **Enabled** | Toggle policy on/off |
 
 ### Step 2: Set Default Policy
@@ -175,7 +178,7 @@ The plugin evaluates in this order:
 4. **Allowed Filename Patterns**: If defined and filename doesn't match any -- **BLOCKED**
 5. Otherwise -- **ALLOWED**
 
-Path prefixes and filename patterns are independent — you can use either or both in a single policy.
+Path prefixes and filename patterns can be used separately or together. When both are configured in the same policy they are evaluated cumulatively — a file must pass **all** applicable gates (blocked paths, blocked patterns, allowed paths, allowed patterns) to be allowed.
 
 | Allowed Paths | Blocked Paths | File Path | Result |
 |---------------|---------------|-----------|--------|
@@ -186,14 +189,14 @@ Path prefixes and filename patterns are independent — you can use either or bo
 | `/media/` | `/media/4K/` | `/media/Movies/Film.mkv` | Allowed |
 | `/media/` | `/media/4K/` | `/media/4K/Film.mkv` | Blocked |
 
-| Allowed Filename | Blocked Filename | File Path | Result |
+| Allowed Filename | Blocked Filename | Filename | Result |
 |------------------|------------------|-----------|--------|
 | `- 720p` | -- | `Movie (2021) - 720p.mkv` | Allowed |
 | `- 720p` | -- | `Movie (2021) - 2160p.mkv` | Blocked |
 | (empty) | `- 2160p\|- 4K` | `Movie (2021) - 1080p.mkv` | Allowed |
 | (empty) | `- 2160p\|- 4K` | `Movie (2021) - 2160p.mkv` | Blocked |
 
-> **Tip**: If no Allowed Paths/Patterns are set, all files are allowed except those explicitly blocked. Patterns are case-insensitive regex.
+> **Tip**: If no Allowed Paths/Patterns are set, all files are allowed except those explicitly blocked. Patterns are case-insensitive regex. Jellyfin also supports bracketed labels (e.g. `Movie (2021) - [1080p].mkv`), so account for brackets in your patterns if needed (e.g. `\[?1080p\]?`).
 
 ---
 
@@ -203,7 +206,7 @@ Path prefixes and filename patterns are independent — you can use either or bo
 
 **Use case**: You have originals in `/mnt/originals/` and 720p transcodes in `/mnt/transcodes/`. Restrict some users to only see transcoded versions.
 
-```
+```text
 Policy Name: 720p Only
 Allowed Path Prefixes:
   /mnt/transcodes/
@@ -217,7 +220,7 @@ Blocked Path Prefixes:
 
 **Use case**: Allow access to everything except 4K content stored in a specific folder.
 
-```
+```text
 Policy Name: No 4K
 Allowed Path Prefixes:
   (leave empty - allows all by default)
@@ -232,7 +235,7 @@ Blocked Path Prefixes:
 
 **Use case**: You use Jellyfin's [multi-version naming](https://jellyfin.org/docs/general/server/media/movies/#multiple-versions) where all versions are in the same folder:
 
-```
+```text
 movies/Movie (2021)/Movie (2021) - 2160p.mkv
 movies/Movie (2021)/Movie (2021) - 1080p.mkv
 movies/Movie (2021)/Movie (2021) - 720p.mkv
@@ -240,7 +243,7 @@ movies/Movie (2021)/Movie (2021) - 720p.mkv
 
 Since all files share the same directory, path prefixes can't distinguish them. Use filename patterns instead:
 
-```
+```text
 Policy Name: Standard Quality (No 4K)
 Blocked Filename Patterns:
   - 2160p
@@ -251,7 +254,7 @@ Blocked Filename Patterns:
 
 Or restrict to a specific resolution:
 
-```
+```text
 Policy Name: 720p Only
 Allowed Filename Patterns:
   - 720p
@@ -263,14 +266,13 @@ Allowed Filename Patterns:
 
 **Use case**: You have a Jellyfin library with multi-version support where originals and transcodes are in the same folder. Originals come from `/mnt/originals/` and transcodes come from `/mnt/transcodes/`.
 
-```
+```text
 Policy Name: Standard Quality
 Allowed Path Prefixes:
   /mnt/transcodes/
 
 Blocked Path Prefixes:
   /mnt/originals/
-
 ```
 
 Then set this as the **Default Policy** and add **Full Access** overrides for admin users.
@@ -280,7 +282,7 @@ Then set this as the **Default Policy** and add **Full Access** overrides for ad
 **Use case**: Premium users get full access, standard users get 1080p max.
 
 1. Create policy **"Standard (1080p max)"**:
-   ```
+   ```text
    Blocked Path Prefixes:
      /media/4K/
      /media/2160p/
@@ -300,7 +302,7 @@ Then set this as the **Default Policy** and add **Full Access** overrides for ad
 
 2. **MediaSource Filtering**: When Jellyfin returns media sources/versions to the client, the filter removes blocked versions so they don't appear in the UI. This applies to both `PlaybackInfo` and item detail responses.
 
-3. **Path Matching**: The plugin matches the **full file path** of each media version against your policy prefixes. Symlinks are resolved to check against the actual target path.
+3. **Path & Filename Matching**: The plugin matches each media version's **full file path** against your policy path prefixes and/or its **filename** against your regex patterns. Symlinks are resolved and both the original and resolved filenames are checked. When both path prefixes and filename patterns are configured, a file must pass all applicable gates.
 
 ### Identifying Your Paths
 

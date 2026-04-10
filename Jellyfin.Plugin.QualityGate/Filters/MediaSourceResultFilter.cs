@@ -37,7 +37,8 @@ public class MediaSourceResultFilter : IAsyncResultFilter
         var path = context.HttpContext.Request.Path.Value ?? string.Empty;
         var isRelevant = path.Contains("/PlaybackInfo", StringComparison.OrdinalIgnoreCase)
                       || (path.Contains("/Items/", StringComparison.OrdinalIgnoreCase)
-                          && path.Contains("/Users/", StringComparison.OrdinalIgnoreCase));
+                          && path.Contains("/Users/", StringComparison.OrdinalIgnoreCase)
+                          && !path.EndsWith("/Intros", StringComparison.OrdinalIgnoreCase));
 
         if (isRelevant)
         {
@@ -87,6 +88,14 @@ public class MediaSourceResultFilter : IAsyncResultFilter
                     "QualityGate: Filtered PlaybackInfo for user {User} (policy: {Policy}) - {Original} to {Filtered} sources",
                     (object)userId, policy.Name, original.Count, filtered.Length);
                 playbackInfo.MediaSources = filtered;
+
+                if (filtered.Length == 0 && original.Count > 0)
+                {
+                    playbackInfo.ErrorCode = MediaBrowser.Model.Dlna.PlaybackErrorCode.NotAllowed;
+                    _logger.LogInformation(
+                        "QualityGate: All sources blocked for user {User} (policy: {Policy}) — returning NotAllowed",
+                        (object)userId, policy.Name);
+                }
 
                 break;
             }

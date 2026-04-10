@@ -284,7 +284,7 @@ function buildPathField(policy, policyIndex, listName) {
                     'data-list="' + listName + '" ' +
                     'data-row="' + rowIndex + '" ' +
                     'aria-label="Remove ' + escapeAttribute(rowLabel.toLowerCase()) + ' ' + (rowIndex + 1) + '">' +
-                    '<span>Remove Path</span>' +
+                    '<span>' + (isPatternList(listName) ? 'Remove Pattern' : 'Remove Path') + '</span>' +
                   '</button>'
                 : '') +
         '</div>';
@@ -469,7 +469,7 @@ function renderPolicies(view) {
             '<legend class="qg-policy-legend">Policy ' + (index + 1) + '</legend>' +
             '<div class="qg-policy-card-header">' +
                 '<div class="qg-policy-heading">' +
-                    '<div class="qg-policy-kicker">Define path rules and behavior for this policy.</div>' +
+                    '<div class="qg-policy-kicker">Define access rules for this policy.</div>' +
                     '<div class="inputContainer qg-policy-name-field">' +
                         '<label class="inputLabel inputLabelUnfocused" for="' + nameId + '">Policy Name</label>' +
                         '<input type="text" id="' + nameId + '" class="emby-input policy-name" ' +
@@ -513,7 +513,7 @@ function renderPolicies(view) {
                                 (policy.Enabled !== false ? 'checked' : '') + ' />' +
                             '<span>Enabled</span>' +
                         '</label>' +
-                        '<div class="fieldDescription">Disable this policy without deleting its path rules.</div>' +
+                        '<div class="fieldDescription">Disable this policy without deleting its rules.</div>' +
                     '</div>' +
                     '<div class="qg-policy-actions">' +
                         '<button is="emby-button" type="button" class="raised qg-delete-btn btnDeletePolicy qg-policy-delete" ' +
@@ -893,14 +893,6 @@ function deletePolicy(view, index) {
     deletedId = config.Policies[index].Id;
     config.Policies.splice(index, 1);
 
-    if (config.DefaultPolicyId === deletedId) {
-        config.DefaultPolicyId = '';
-    }
-
-    config.UserPolicies = config.UserPolicies.filter(function (assignment) {
-        return assignment.PolicyId !== deletedId;
-    });
-
     renderAll(view);
     markDirty(view);
 }
@@ -1012,12 +1004,37 @@ function loadConfig(view) {
     });
 }
 
+function validateRegexPatterns() {
+    var errors = [];
+
+    (config.Policies || []).forEach(function (policy, policyIndex) {
+        var allPatterns = (policy.AllowedFilenamePatterns || []).concat(policy.BlockedFilenamePatterns || []);
+        allPatterns.forEach(function (pattern) {
+            try {
+                new RegExp(pattern, 'i');
+            } catch (e) {
+                errors.push('Policy "' + (policy.Name || 'Policy ' + (policyIndex + 1)) + '": invalid regex "' + pattern + '" — ' + e.message);
+            }
+        });
+    });
+
+    return errors;
+}
+
 function saveConfig(view) {
     if (!isLoaded) {
         return;
     }
 
     collectFromDOM(view);
+
+    var regexErrors = validateRegexPatterns();
+    if (regexErrors.length > 0) {
+        setSaveStatus(view, 'Invalid regex patterns detected.', 'error');
+        Dashboard.alert('Fix these regex patterns before saving:\n\n' + regexErrors.join('\n'));
+        return;
+    }
+
     setSaveStatus(view, 'Saving...', 'warning');
 
     ApiClient.updatePluginConfiguration(PLUGIN_ID, config).then(function () {

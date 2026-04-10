@@ -489,6 +489,7 @@
                         <p class="fieldDescription">
                             Restrict users to specific media versions based on file path prefixes or filename regex patterns.
                             Define policies with path rules and/or filename patterns, then assign them to users.
+                            When both are configured in one policy, a file must pass all gates to be allowed.
                         </p>
                         <p id="loadingStatus" class="fieldDescription">Loading configuration...</p>
                     </div>
@@ -498,8 +499,8 @@
                             <div class="qg-section-copy">
                                 <h2 class="sectionTitle">Policies</h2>
                                 <p class="fieldDescription">
-                                    Each policy defines which file paths are allowed or blocked.
-                                    Use the resolved paths shown in Media Info, not mount point names.
+                                    Each policy defines which file paths and/or filename patterns are allowed or blocked.
+                                    For path prefixes, use the resolved paths shown in Media Info, not mount point names.
                                 </p>
                             </div>
                             <button is="emby-button" type="button" class="raised qg-section-action" id="btnAddPolicy">
