@@ -1,4 +1,5 @@
 var PLUGIN_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+var FULL_ACCESS_POLICY_ID = '__FULL_ACCESS__';
 var config = { Policies: [], UserPolicies: [], DefaultPolicyId: '', DefaultIntroVideoPath: '' };
 var users = [];
 var isLoaded = false;
@@ -22,6 +23,16 @@ function generateId() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
         var r = Math.random() * 16 | 0;
         return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+}
+
+function upgradeNativeWidgets(root) {
+    if (!window.customElements || typeof window.customElements.upgrade !== 'function' || !root) {
+        return;
+    }
+
+    root.querySelectorAll('[is="emby-button"], [is="emby-select"], [is="emby-checkbox"], [is="emby-input"]').forEach(function (element) {
+        window.customElements.upgrade(element);
     });
 }
 
@@ -75,13 +86,13 @@ function setStaticControlsEnabled(view, enabled) {
 function resetViewState(view) {
     view.querySelector('#policiesContainer').innerHTML = '';
     view.querySelector('#userAccessContainer').innerHTML = '';
-    view.querySelector('#defaultPolicySelect').innerHTML = '<option value="">(No default — Full Access)</option>';
+    view.querySelector('#defaultPolicySelect').innerHTML = '<option value="">(No default - Full Access)</option>';
     view.querySelector('#defaultIntroPath').value = '';
 }
 
 function getEnabledPolicy(policyId) {
     return config.Policies.find(function (policy) {
-        return policy.Id === policyId && policy.Enabled;
+        return policy.Id === policyId && policy.Enabled !== false;
     });
 }
 
@@ -95,15 +106,17 @@ function getDefaultPolicyLabel() {
     }
 
     var policy = getEnabledPolicy(config.DefaultPolicyId);
-    return policy ? policy.Name : 'Invalid default → Full Access';
+    return policy ? (policy.Name || 'Unnamed Policy') : 'Invalid default -> Full Access';
 }
 
 function getUserOverride(userId) {
-    return config.UserPolicies.find(function (up) { return up.UserId === userId; });
+    return config.UserPolicies.find(function (assignment) {
+        return assignment.UserId === userId;
+    });
 }
 
 function isValidOverride(policyId) {
-    if (!policyId || policyId === '__FULL_ACCESS__') {
+    if (!policyId || policyId === FULL_ACCESS_POLICY_ID) {
         return true;
     }
 
@@ -112,24 +125,36 @@ function isValidOverride(policyId) {
 
 function getEffectivePolicy(userId) {
     var override = getUserOverride(userId);
+    var defaultPolicy;
+    var overridePolicy;
 
     if (override) {
-        if (override.PolicyId === '__FULL_ACCESS__') {
+        if (override.PolicyId === FULL_ACCESS_POLICY_ID) {
             return { name: 'Full Access', restricted: false, denied: false, warning: false };
         }
 
-        var overridePolicy = getEnabledPolicy(override.PolicyId);
+        overridePolicy = getEnabledPolicy(override.PolicyId);
         if (overridePolicy) {
-            return { name: overridePolicy.Name, restricted: true, denied: false, warning: false };
+            return {
+                name: (overridePolicy.Name || 'Unnamed Policy') + ' (override)',
+                restricted: true,
+                denied: false,
+                warning: false
+            };
         }
 
-        return { name: 'DENIED (invalid policy)', restricted: true, denied: true, warning: false };
+        return { name: 'Denied (invalid policy)', restricted: true, denied: true, warning: false };
     }
 
     if (config.DefaultPolicyId) {
-        var defaultPolicy = getEnabledPolicy(config.DefaultPolicyId);
+        defaultPolicy = getEnabledPolicy(config.DefaultPolicyId);
         if (defaultPolicy) {
-            return { name: defaultPolicy.Name + ' (default)', restricted: true, denied: false, warning: false };
+            return {
+                name: (defaultPolicy.Name || 'Unnamed Policy') + ' (default)',
+                restricted: true,
+                denied: false,
+                warning: false
+            };
         }
 
         return { name: 'Full Access (invalid default)', restricted: false, denied: false, warning: true };
@@ -146,8 +171,12 @@ function getPathRows(paths) {
     return paths && paths.length ? paths.slice() : [''];
 }
 
-function getPathLabel(listName) {
-    return listName === 'allowed' ? 'Allowed Path Prefixes' : 'Blocked Path Prefixes';
+function getPathTitle(listName) {
+    return listName === 'allowed' ? 'Allowed Paths' : 'Blocked Paths';
+}
+
+function getPathRowLabel(listName) {
+    return listName === 'allowed' ? 'Allowed Path' : 'Blocked Path';
 }
 
 function getPathPlaceholder(listName) {
@@ -156,57 +185,71 @@ function getPathPlaceholder(listName) {
 
 function getPathHelpText(listName) {
     if (listName === 'allowed') {
-        return 'Each prefix gets its own row. Leave the list empty to allow all.';
+        return 'Each prefix gets its own one-line field. Leave this section empty to allow all paths.';
     }
 
-    return 'Each prefix gets its own row. Matching files are always blocked.';
+    return 'Each prefix gets its own one-line field. Matching files are always blocked.';
 }
 
 function getPathAddLabel(listName) {
     return listName === 'allowed' ? 'Add Allowed Path' : 'Add Blocked Path';
 }
 
+function getEmptyState(message) {
+    return '<div class="qg-empty-state"><p class="fieldDescription" style="margin:0;font-style:italic;">' +
+        escapeHtml(message) +
+        '</p></div>';
+}
+
 function buildPathField(policy, policyIndex, listName) {
     var key = getPathKey(listName);
     var rows = getPathRows(policy[key] || []);
-    var label = getPathLabel(listName);
+    var title = getPathTitle(listName);
+    var rowLabel = getPathRowLabel(listName);
     var placeholder = getPathPlaceholder(listName);
     var helpText = getPathHelpText(listName);
     var addLabel = getPathAddLabel(listName);
     var groupClass = listName === 'allowed' ? 'qg-path-group-allowed' : 'qg-path-group-blocked';
 
     var rowHtml = rows.map(function (pathValue, rowIndex) {
+        var inputId = 'policy-' + policyIndex + '-' + listName + '-row-' + rowIndex;
         var showRemove = rows.length > 1 || Boolean(pathValue);
 
         return '<div class="qg-path-row">' +
             '<div class="inputContainer">' +
-                '<input is="emby-input" type="text" class="qg-path-input policy-' + listName + '" ' +
+                '<label class="inputLabel inputLabelUnfocused" for="' + inputId + '">' +
+                    rowLabel + ' ' + (rowIndex + 1) +
+                '</label>' +
+                '<input type="text" id="' + inputId + '" class="emby-input qg-path-input policy-' + listName + '" ' +
                     'data-row-index="' + rowIndex + '" ' +
                     'value="' + escapeAttribute(pathValue) + '" ' +
-                    'placeholder="' + placeholder + '" />' +
+                    'placeholder="' + escapeAttribute(placeholder) + '" />' +
             '</div>' +
             (showRemove
-                ? '<button type="button" class="qg-path-action qg-path-remove btnRemovePath" ' +
+                ? '<button is="emby-button" type="button" class="raised btnRemovePath qg-path-row-action" ' +
                     'data-index="' + policyIndex + '" ' +
                     'data-list="' + listName + '" ' +
                     'data-row="' + rowIndex + '" ' +
-                    'aria-label="Remove ' + escapeAttribute(label.toLowerCase()) + ' row ' + (rowIndex + 1) + '">' +
-                    '&times;</button>'
+                    'aria-label="Remove ' + escapeAttribute(rowLabel.toLowerCase()) + ' ' + (rowIndex + 1) + '">' +
+                    '<span>Remove</span>' +
+                  '</button>'
                 : '') +
         '</div>';
     }).join('');
 
-    return '<div class="qg-field qg-path-group ' + groupClass + '">' +
-        '<label class="qg-label">' + label + '</label>' +
-        '<div class="qg-path-list">' + rowHtml + '</div>' +
-        '<div class="qg-path-actions">' +
-            '<button type="button" class="qg-path-action qg-path-add btnAddPath" ' +
+    return '<div class="qg-path-group ' + groupClass + '">' +
+        '<div class="qg-path-group-head">' +
+            '<div>' +
+                '<h3 class="qg-path-group-title">' + title + '</h3>' +
+                '<div class="fieldDescription">' + helpText + '</div>' +
+            '</div>' +
+            '<button is="emby-button" type="button" class="raised btnAddPath" ' +
                 'data-index="' + policyIndex + '" ' +
                 'data-list="' + listName + '">' +
-                '+ ' + addLabel +
+                '<span>' + addLabel + '</span>' +
             '</button>' +
         '</div>' +
-        '<div class="fieldDescription">' + helpText + '</div>' +
+        '<div class="qg-path-list">' + rowHtml + '</div>' +
     '</div>';
 }
 
@@ -225,74 +268,108 @@ function focusElement(view, selector) {
     }
 }
 
-// --- Rendering ---
+function getEffectiveClass(effective) {
+    if (effective.denied) {
+        return 'qg-effective-denied';
+    }
+
+    if (effective.warning) {
+        return 'qg-effective-warning';
+    }
+
+    if (effective.restricted) {
+        return 'qg-effective-restricted';
+    }
+
+    return 'qg-effective-full';
+}
 
 function renderAll(view) {
     renderPolicies(view);
     renderDefaultPolicyDropdown(view);
     renderUserAccess(view);
     view.querySelector('#defaultIntroPath').value = config.DefaultIntroVideoPath || '';
+    upgradeNativeWidgets(view);
 }
 
 function renderPolicies(view) {
     var container = view.querySelector('#policiesContainer');
-    container.innerHTML = '';
 
+    container.innerHTML = '';
     if (config.Policies.length === 0) {
-        container.innerHTML = '<p class="fieldDescription" style="font-style:italic;">No policies defined yet.</p>';
+        container.innerHTML = getEmptyState('No policies defined yet. Click "Add Policy" to create one.');
         return;
     }
 
     config.Policies.forEach(function (policy, index) {
-        var card = document.createElement('div');
-        card.className = 'qg-policy';
+        var nameId = 'policy-name-' + index;
+        var introId = 'policy-intro-' + index;
+        var enabledId = 'policy-enabled-' + index;
+        var card = document.createElement('fieldset');
+
+        card.className = 'qg-policy-card';
         card.dataset.index = index;
         card.innerHTML =
-            '<div class="qg-policy-kicker">Policy ' + (index + 1) + '</div>' +
-            '<div class="inputContainer" style="margin-bottom:.55em;">' +
-                '<label class="inputLabel inputLabelUnfocused">Policy Name</label>' +
-                '<input is="emby-input" type="text" class="policy-name" ' +
-                    'value="' + escapeAttribute(policy.Name || 'Unnamed Policy') + '" ' +
-                    'placeholder="Policy name" />' +
-            '</div>' +
-            buildPathField(policy, index, 'allowed') +
-            buildPathField(policy, index, 'blocked') +
-            '<div class="inputContainer">' +
-                '<label class="inputLabel inputLabelUnfocused">Custom Intro Video</label>' +
-                '<input is="emby-input" type="text" class="policy-intro" ' +
-                    'value="' + escapeAttribute(policy.IntroVideoPath || '') + '" ' +
-                    'placeholder="/media/intros/policy-intro.mp4" />' +
-                '<div class="fieldDescription">Optional. Users under this policy see this intro instead of the default.</div>' +
-            '</div>' +
-            '<div class="checkboxContainer">' +
-                '<label>' +
-                    '<input is="emby-checkbox" type="checkbox" class="policy-enabled" ' +
-                        (policy.Enabled !== false ? 'checked' : '') + ' />' +
-                    '<span>Enabled</span>' +
-                '</label>' +
-            '</div>' +
-            '<div class="qg-delete-row">' +
-                '<button is="emby-button" type="button" class="raised qg-delete-btn btnDeletePolicy" ' +
+            '<legend class="qg-policy-legend">Policy ' + (index + 1) + '</legend>' +
+            '<div class="qg-policy-card-header">' +
+                '<div class="qg-policy-heading">' +
+                    '<div class="qg-policy-kicker">Define path rules and behavior for this policy.</div>' +
+                    '<div class="inputContainer qg-policy-name-field">' +
+                        '<label class="inputLabel inputLabelUnfocused" for="' + nameId + '">Policy Name</label>' +
+                        '<input type="text" id="' + nameId + '" class="emby-input policy-name" ' +
+                            'value="' + escapeAttribute(policy.Name || '') + '" ' +
+                            'placeholder="Policy name" />' +
+                    '</div>' +
+                '</div>' +
+                '<button is="emby-button" type="button" class="raised qg-delete-btn btnDeletePolicy qg-policy-delete" ' +
+                    'style="background:#c62828 !important;color:#fff !important;border-color:#c62828 !important;" ' +
                     'data-index="' + index + '">' +
                     '<span>Delete Policy</span>' +
                 '</button>' +
+            '</div>' +
+            '<div class="qg-policy-section">' +
+                '<h3 class="qg-policy-section-title">Access Rules</h3>' +
+                '<div class="qg-policy-grid">' +
+                    buildPathField(policy, index, 'allowed') +
+                    buildPathField(policy, index, 'blocked') +
+                '</div>' +
+            '</div>' +
+            '<div class="qg-policy-section">' +
+                '<h3 class="qg-policy-section-title">Playback Behavior</h3>' +
+                '<div class="qg-policy-footer">' +
+                    '<div class="inputContainer qg-policy-intro-field">' +
+                        '<label class="inputLabel inputLabelUnfocused" for="' + introId + '">Custom Intro Video</label>' +
+                        '<input type="text" id="' + introId + '" class="emby-input policy-intro" ' +
+                            'value="' + escapeAttribute(policy.IntroVideoPath || '') + '" ' +
+                            'placeholder="/media/intros/policy-intro.mp4" />' +
+                        '<div class="fieldDescription">Optional. Users under this policy see this intro instead of the default.</div>' +
+                    '</div>' +
+                    '<div class="checkboxContainer checkboxContainer-withDescription qg-policy-toggle">' +
+                        '<label>' +
+                            '<input is="emby-checkbox" type="checkbox" class="policy-enabled" id="' + enabledId + '" ' +
+                                (policy.Enabled !== false ? 'checked' : '') + ' />' +
+                            '<span>Enabled</span>' +
+                        '</label>' +
+                        '<div class="fieldDescription">Disable this policy without deleting its path rules.</div>' +
+                    '</div>' +
+                '</div>' +
             '</div>';
         container.appendChild(card);
     });
 
-    view.querySelectorAll('.btnDeletePolicy').forEach(function (button) {
+    container.querySelectorAll('.btnDeletePolicy').forEach(function (button) {
         button.addEventListener('click', function () {
             deletePolicy(view, parseInt(this.dataset.index, 10));
         });
     });
 
-    view.querySelectorAll('.btnAddPath').forEach(function (button) {
+    container.querySelectorAll('.btnAddPath').forEach(function (button) {
         button.addEventListener('click', function () {
             addPath(view, parseInt(this.dataset.index, 10), this.dataset.list);
         });
     });
 
-    view.querySelectorAll('.btnRemovePath').forEach(function (button) {
+    container.querySelectorAll('.btnRemovePath').forEach(function (button) {
         button.addEventListener('click', function () {
             removePath(
                 view,
@@ -307,117 +384,147 @@ function renderPolicies(view) {
 function renderDefaultPolicyDropdown(view) {
     var select = view.querySelector('#defaultPolicySelect');
     var current = config.DefaultPolicyId;
+
     select.innerHTML = '';
 
     if (hasInvalidDefaultPolicy()) {
         select.innerHTML += '<option value="' + escapeAttribute(current) + '" selected>' +
-            'INVALID DEFAULT — currently Full Access' +
+            'INVALID DEFAULT - currently Full Access' +
             '</option>';
     }
 
-    select.innerHTML += '<option value=""' + (!current ? ' selected' : '') + '>(No default — Full Access)</option>';
+    select.innerHTML += '<option value=""' + (!current ? ' selected' : '') + '>(No default - Full Access)</option>';
 
     config.Policies.forEach(function (policy) {
-        if (policy.Enabled !== false) {
-            var option = document.createElement('option');
-            option.value = policy.Id;
-            option.textContent = policy.Name || 'Unnamed';
-            if (current === policy.Id) {
-                option.selected = true;
-            }
-            select.appendChild(option);
+        var option;
+
+        if (policy.Enabled === false) {
+            return;
         }
+
+        option = document.createElement('option');
+        option.value = policy.Id;
+        option.textContent = policy.Name || 'Unnamed Policy';
+        if (current === policy.Id) {
+            option.selected = true;
+        }
+        select.appendChild(option);
     });
 }
 
 function renderUserAccess(view) {
     var container = view.querySelector('#userAccessContainer');
+    var defaultLabel;
+
     if (users.length === 0) {
-        container.innerHTML = '<p class="fieldDescription" style="font-style:italic;">No users found.</p>';
+        container.innerHTML = getEmptyState('No users found.');
         return;
     }
 
-    var defaultLabel = escapeHtml(getDefaultPolicyLabel());
-    var html = '<div class="qg-user-panel"><table class="qg-user-table">' +
-        '<thead><tr>' +
-            '<th scope="col">User</th>' +
-            '<th scope="col">Policy</th>' +
-            '<th scope="col">Effective Access</th>' +
-        '</tr></thead><tbody>';
-
-    users.forEach(function (user) {
+    defaultLabel = escapeHtml(getDefaultPolicyLabel());
+    container.innerHTML = '<div class="qg-user-access-table-wrap">' +
+        '<table class="qg-user-access-table">' +
+            '<thead>' +
+                '<tr>' +
+                    '<th scope="col">User</th>' +
+                    '<th scope="col">Assigned Policy</th>' +
+                    '<th scope="col">Effective Access</th>' +
+                '</tr>' +
+            '</thead>' +
+            '<tbody>' +
+            users.map(function (user) {
         var override = getUserOverride(user.Id);
         var overrideValue = override ? override.PolicyId : '';
-        var stale = overrideValue && !isValidOverride(overrideValue);
+        var stale = Boolean(overrideValue) && !isValidOverride(overrideValue);
         var effective = getEffectivePolicy(user.Id);
-        var effectiveClass = effective.denied ? 'qg-effective-denied'
-            : effective.warning ? 'qg-effective-restricted'
-            : effective.restricted ? 'qg-effective-restricted'
-            : 'qg-effective-full';
-        var selectClass = stale ? 'qg-user-select user-policy-select qg-user-select-denied' : 'qg-user-select user-policy-select';
-
-        html += '<tr>' +
-            '<td><span class="qg-user-name">' + escapeHtml(user.Name) + '</span></td>' +
-            '<td><div class="qg-select-wrap">' +
-                '<select class="' + selectClass + '" ' +
-                    'aria-label="Policy for ' + escapeAttribute(user.Name) + '" ' +
-                    'data-userid="' + user.Id + '" ' +
-                    'data-username="' + escapeAttribute(user.Name) + '">';
+        var effectiveClass = getEffectiveClass(effective);
+        var rowClass = stale ? 'qg-user-access-row-invalid' : '';
+        var selectId = 'user-policy-' + user.Id;
+        var metaText = stale
+            ? 'Invalid saved override: this user is currently fail-closed until you choose a valid policy.'
+            : '';
+        var html =
+            '<tr class="' + rowClass + '">' +
+                '<td>' +
+                    '<div class="qg-user-access-main">' +
+                    '<div class="qg-user-access-name">' + escapeHtml(user.Name) + '</div>' +
+                    (metaText
+                        ? '<div class="qg-user-access-meta">' + escapeHtml(metaText) + '</div>'
+                        : '') +
+                    '</div>' +
+                '</td>' +
+                '<td>' +
+                    '<div class="qg-user-access-select">' +
+                    '<select is="emby-select" id="' + escapeAttribute(selectId) + '" class="user-policy-select" ' +
+                        'aria-label="Assigned policy for ' + escapeAttribute(user.Name) + '" ' +
+                        'data-userid="' + escapeAttribute(user.Id) + '" ' +
+                        'data-username="' + escapeAttribute(user.Name) + '">' ;
 
         if (stale) {
             html += '<option value="' + escapeAttribute(overrideValue) + '" selected>' +
-                'DENIED — Invalid policy (change this)' +
+                'Denied - invalid policy (change this)' +
                 '</option>';
         }
 
         html += '<option value=""' + (!overrideValue ? ' selected' : '') + '>' +
-                    'Use Default (' + defaultLabel + ')' +
-                '</option>' +
-                '<option value="__FULL_ACCESS__"' +
-                    (overrideValue === '__FULL_ACCESS__' ? ' selected' : '') + '>' +
-                    'Full Access' +
-                '</option>';
+                'Use Default (' + defaultLabel + ')' +
+            '</option>' +
+            '<option value="' + FULL_ACCESS_POLICY_ID + '"' +
+                (overrideValue === FULL_ACCESS_POLICY_ID ? ' selected' : '') + '>' +
+                'Full Access' +
+            '</option>';
 
         config.Policies.forEach(function (policy) {
-            if (policy.Enabled !== false) {
-                html += '<option value="' + escapeAttribute(policy.Id) + '"' +
-                    (overrideValue === policy.Id ? ' selected' : '') + '>' +
-                    escapeHtml(policy.Name || 'Unnamed') +
-                    '</option>';
+            if (policy.Enabled === false) {
+                return;
             }
+
+            html += '<option value="' + escapeAttribute(policy.Id) + '"' +
+                (overrideValue === policy.Id ? ' selected' : '') + '>' +
+                escapeHtml(policy.Name || 'Unnamed Policy') +
+                '</option>';
         });
 
-        html += '</select></div></td>' +
-            '<td><span class="qg-effective ' + effectiveClass + '">' +
-                escapeHtml(effective.name) +
-            '</span></td></tr>';
-    });
+        html += '</select>' +
+                    '</div>' +
+                '</td>' +
+                '<td>' +
+                    '<div class="qg-user-access-effective">' +
+                    '<span class="qg-effective ' + effectiveClass + '">' +
+                        escapeHtml(effective.name) +
+                    '</span>' +
+                    '</div>' +
+                '</td>' +
+            '</tr>';
 
-    html += '</tbody></table></div>';
-    container.innerHTML = html;
+        return html;
+    }).join('') +
+            '</tbody>' +
+        '</table>' +
+    '</div>';
 }
 
-// --- Data collection ---
-
 function collectFromDOM(view) {
-    view.querySelectorAll('#policiesContainer .qg-policy').forEach(function (card, index) {
-        if (config.Policies[index]) {
-            config.Policies[index].Name = card.querySelector('.policy-name').value;
-            config.Policies[index].AllowedPathPrefixes = Array.prototype.map.call(
-                card.querySelectorAll('.policy-allowed'),
-                function (input) {
-                    return input.value.trim();
-                }
-            ).filter(Boolean);
-            config.Policies[index].BlockedPathPrefixes = Array.prototype.map.call(
-                card.querySelectorAll('.policy-blocked'),
-                function (input) {
-                    return input.value.trim();
-                }
-            ).filter(Boolean);
-            config.Policies[index].IntroVideoPath = card.querySelector('.policy-intro').value.trim();
-            config.Policies[index].Enabled = card.querySelector('.policy-enabled').checked;
+    view.querySelectorAll('#policiesContainer .qg-policy-card').forEach(function (card, index) {
+        if (!config.Policies[index]) {
+            return;
         }
+
+        config.Policies[index].Name = card.querySelector('.policy-name').value.trim();
+        config.Policies[index].AllowedPathPrefixes = Array.prototype.map.call(
+            card.querySelectorAll('.policy-allowed'),
+            function (input) {
+                return input.value.trim();
+            }
+        ).filter(Boolean);
+        config.Policies[index].BlockedPathPrefixes = Array.prototype.map.call(
+            card.querySelectorAll('.policy-blocked'),
+            function (input) {
+                return input.value.trim();
+            }
+        ).filter(Boolean);
+        config.Policies[index].IntroVideoPath = card.querySelector('.policy-intro').value.trim();
+        config.Policies[index].Enabled = card.querySelector('.policy-enabled').checked;
     });
 
     config.DefaultPolicyId = view.querySelector('#defaultPolicySelect').value;
@@ -426,17 +533,29 @@ function collectFromDOM(view) {
     config.UserPolicies = [];
     view.querySelectorAll('.user-policy-select').forEach(function (select) {
         var value = select.value;
-        if (value) {
-            config.UserPolicies.push({
-                UserId: select.dataset.userid,
-                Username: select.dataset.username,
-                PolicyId: value
-            });
+
+        if (!value) {
+            return;
         }
+
+        config.UserPolicies.push({
+            UserId: select.dataset.userid,
+            Username: select.dataset.username,
+            PolicyId: value
+        });
     });
 }
 
-// --- Actions ---
+function refreshComputedPreview(view) {
+    if (!isLoaded) {
+        return;
+    }
+
+    collectFromDOM(view);
+    renderDefaultPolicyDropdown(view);
+    renderUserAccess(view);
+    upgradeNativeWidgets(view);
+}
 
 function addPolicy(view) {
     var newIndex;
@@ -462,39 +581,40 @@ function addPolicy(view) {
 
     renderAll(view);
     markDirty(view);
-    focusElement(view, '.qg-policy[data-index="' + newIndex + '"] .policy-name');
+    focusElement(view, '.qg-policy-card[data-index="' + newIndex + '"] .policy-name');
 }
 
 function deletePolicy(view, index) {
-    if (!isLoaded) {
+    var deletedId;
+
+    if (!isLoaded || !config.Policies[index]) {
         return;
     }
 
-    if (!config.Policies[index]) {
+    if (!confirm('Delete policy "' + (config.Policies[index].Name || 'Unnamed Policy') + '"?')) {
         return;
     }
 
-    if (confirm('Delete policy "' + (config.Policies[index].Name || 'Unnamed') + '"?')) {
-        collectFromDOM(view);
+    collectFromDOM(view);
+    deletedId = config.Policies[index].Id;
+    config.Policies.splice(index, 1);
 
-        var deletedId = config.Policies[index].Id;
-        config.Policies.splice(index, 1);
-
-        if (config.DefaultPolicyId === deletedId) {
-            config.DefaultPolicyId = '';
-        }
-
-        config.UserPolicies = config.UserPolicies.filter(function (assignment) {
-            return assignment.PolicyId !== deletedId;
-        });
-
-        renderAll(view);
-        markDirty(view);
+    if (config.DefaultPolicyId === deletedId) {
+        config.DefaultPolicyId = '';
     }
+
+    config.UserPolicies = config.UserPolicies.filter(function (assignment) {
+        return assignment.PolicyId !== deletedId;
+    });
+
+    renderAll(view);
+    markDirty(view);
 }
 
 function addPath(view, policyIndex, listName) {
-    var card = view.querySelector('.qg-policy[data-index="' + policyIndex + '"]');
+    var card = view.querySelector('.qg-policy-card[data-index="' + policyIndex + '"]');
+    var key;
+    var paths;
 
     if (!isLoaded) {
         return;
@@ -505,8 +625,8 @@ function addPath(view, policyIndex, listName) {
         return;
     }
 
-    var key = getPathKey(listName);
-    var paths = config.Policies[policyIndex][key] || [];
+    key = getPathKey(listName);
+    paths = config.Policies[policyIndex][key] || [];
     padPathRows(card, listName, paths);
     paths.push('');
     config.Policies[policyIndex][key] = paths;
@@ -514,14 +634,16 @@ function addPath(view, policyIndex, listName) {
     renderAll(view);
     markDirty(view);
 
-    var inputs = view.querySelectorAll('.qg-policy[data-index="' + policyIndex + '"] .policy-' + listName);
+    var inputs = view.querySelectorAll('.qg-policy-card[data-index="' + policyIndex + '"] .policy-' + listName);
     if (inputs.length) {
         inputs[inputs.length - 1].focus();
     }
 }
 
 function removePath(view, policyIndex, listName, rowIndex) {
-    var card = view.querySelector('.qg-policy[data-index="' + policyIndex + '"]');
+    var card = view.querySelector('.qg-policy-card[data-index="' + policyIndex + '"]');
+    var key;
+    var paths;
 
     if (!isLoaded) {
         return;
@@ -532,8 +654,8 @@ function removePath(view, policyIndex, listName, rowIndex) {
         return;
     }
 
-    var key = getPathKey(listName);
-    var paths = config.Policies[policyIndex][key] || [];
+    key = getPathKey(listName);
+    paths = config.Policies[policyIndex][key] || [];
     padPathRows(card, listName, paths);
 
     if (rowIndex >= 0 && rowIndex < paths.length) {
@@ -544,7 +666,7 @@ function removePath(view, policyIndex, listName, rowIndex) {
     renderAll(view);
     markDirty(view);
 
-    var remainingInputs = view.querySelectorAll('.qg-policy[data-index="' + policyIndex + '"] .policy-' + listName);
+    var remainingInputs = view.querySelectorAll('.qg-policy-card[data-index="' + policyIndex + '"] .policy-' + listName);
     if (remainingInputs.length) {
         remainingInputs[Math.max(0, rowIndex - 1)].focus();
     }
@@ -607,8 +729,6 @@ function saveConfig(view) {
     });
 }
 
-// --- Controller entry point ---
-
 export default function (view) {
     var form;
 
@@ -629,10 +749,22 @@ export default function (view) {
     });
 
     form.addEventListener('input', function () {
+        if (!isLoaded) {
+            return;
+        }
+
         markDirty(view);
     });
 
-    form.addEventListener('change', function () {
+    form.addEventListener('change', function (event) {
+        if (!isLoaded) {
+            return;
+        }
+
+        if (event.target.matches('#defaultPolicySelect, .user-policy-select, .policy-enabled, .policy-name')) {
+            refreshComputedPreview(view);
+        }
+
         markDirty(view);
     });
 

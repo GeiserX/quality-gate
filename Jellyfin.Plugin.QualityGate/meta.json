@@ -1,12 +1,12 @@
 {
   "category": "General",
-  "changelog": "v2.0.3.0: Fail-closed on invalid policy overrides, separator-aware path matching, QueryResult filtering.",
+  "changelog": "v2.0.4.0: Reworked the config UI with stronger policy grouping, restored the user access table, and improved destructive actions.",
   "description": "Quality Gate allows Jellyfin administrators to define policies that restrict certain users to specific media versions.",
   "guid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "name": "Quality Gate",
   "overview": "Restrict users to specific media versions based on configurable path-based policies.",
   "owner": "GeiserX",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-04-09T12:00:00Z",
-  "version": "2.0.3.0"
+  "timestamp": "2026-04-10T12:00:00Z",
+  "version": "2.0.4.0"
 }

@@ -8,8 +8,8 @@
             display: flex;
             align-items: flex-start;
             justify-content: space-between;
-            gap: 1em;
-            margin-bottom: 1em;
+            gap: 1rem;
+            margin-bottom: 1rem;
         }
 
         .qg-section-copy {
@@ -24,25 +24,108 @@
 
         .qg-section-action {
             flex-shrink: 0;
-            min-width: 10.5em;
+            min-width: 11rem;
         }
 
-        .qg-policy {
-            margin-bottom: 1.55em;
-            padding: 1.15em 1.25em 1.25em;
-            border: 1px solid rgba(127, 127, 127, .42);
-            border-left: .42em solid #00a4dc;
-            border-radius: .7em;
-            background: linear-gradient(180deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .03));
-            box-shadow: 0 .7em 1.6em rgba(0, 0, 0, .16), inset 0 0 0 1px rgba(255, 255, 255, .02);
+        .qg-policy-list,
+        .qg-user-access-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1.35rem;
         }
 
-        .qg-policy:last-child {
-            margin-bottom: 0;
+        .qg-empty-state {
+            padding: 1rem 1.1rem;
+            border: 1px dashed rgba(127, 127, 127, .35);
+            border-radius: .8rem;
+            background: rgba(255, 255, 255, .02);
+        }
+
+        .qg-policy-card {
+            min-width: 0;
+            margin: 0;
+            padding: 0 1.25rem 1.25rem;
+            border: 1px solid rgba(127, 127, 127, .4);
+            border-left: .45rem solid #00a4dc;
+            border-radius: 1rem;
+            background: rgba(255, 255, 255, .045);
+            box-shadow: 0 .9rem 1.8rem rgba(0, 0, 0, .16);
+        }
+
+        .qg-policy-card legend {
+            padding: 0;
+        }
+
+        .qg-policy-legend {
+            display: inline-flex;
+            align-items: center;
+            min-height: 2rem;
+            margin-left: .85rem;
+            padding: 0 .78rem;
+            font-size: .78em;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            color: #d5f1ff;
+            border: 1px solid rgba(0, 164, 220, .35);
+            border-radius: 999px;
+            background: rgba(0, 164, 220, .14);
+        }
+
+        .qg-policy-card-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+            margin: .85rem -1.25rem 1rem;
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid rgba(0, 164, 220, .18);
+            border-radius: .8rem .8rem 0 0;
+            background: linear-gradient(180deg, rgba(0, 164, 220, .12), rgba(0, 164, 220, .04));
+        }
+
+        .qg-policy-heading {
+            flex: 1;
+            min-width: 0;
         }
 
         .qg-policy-kicker {
-            margin-bottom: .8em;
+            margin-bottom: .5rem;
+            font-size: .82em;
+            font-weight: 600;
+            letter-spacing: .04em;
+            opacity: .82;
+        }
+
+        .qg-policy-name-field,
+        .qg-policy-delete,
+        .qg-policy-toggle,
+        .qg-policy-intro-field,
+        .qg-user-access-select {
+            margin: 0;
+        }
+
+        .qg-policy-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1rem;
+            align-items: start;
+        }
+
+        .qg-policy-section {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(127, 127, 127, .16);
+        }
+
+        .qg-policy-section:first-of-type {
+            margin-top: 0;
+            padding-top: 0;
+            border-top: 0;
+        }
+
+        .qg-policy-section-title {
+            margin: 0 0 .8rem;
             font-size: .78em;
             font-weight: 700;
             letter-spacing: .08em;
@@ -50,50 +133,47 @@
             opacity: .72;
         }
 
-        .qg-field {
-            margin-bottom: 1em;
-        }
-
-        .qg-label {
-            display: block;
-            margin-bottom: .45em;
-            font-weight: 600;
-            opacity: .84;
-        }
-
         .qg-path-group {
-            padding: .9em .95em;
-            border-radius: .55em;
+            padding: 1rem;
+            border: 1px solid rgba(127, 127, 127, .22);
+            border-radius: .85rem;
+            background: rgba(255, 255, 255, .04);
         }
 
         .qg-path-group-allowed {
-            border: 1px solid rgba(102, 187, 106, .26);
-            background: rgba(102, 187, 106, .06);
+            border-color: rgba(102, 187, 106, .3);
+            background: rgba(102, 187, 106, .05);
         }
 
         .qg-path-group-blocked {
-            border: 1px solid rgba(239, 83, 80, .26);
+            border-color: rgba(239, 83, 80, .3);
             background: rgba(239, 83, 80, .05);
         }
 
-        .qg-path-group-allowed .qg-label {
-            color: #66bb6a;
+        .qg-path-group-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: .8rem;
         }
 
-        .qg-path-group-blocked .qg-label {
-            color: #ef9a9a;
+        .qg-path-group-title {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 600;
         }
 
         .qg-path-list {
             display: flex;
             flex-direction: column;
-            gap: .6em;
+            gap: .8rem;
         }
 
         .qg-path-row {
             display: flex;
-            align-items: center;
-            gap: .6em;
+            align-items: flex-end;
+            gap: .75rem;
         }
 
         .qg-path-row .inputContainer {
@@ -101,172 +181,119 @@
             margin: 0;
         }
 
-        .qg-path-input {
-            width: 100%;
-        }
-
-        .qg-path-actions {
-            margin-top: .55em;
-        }
-
-        .qg-path-action {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 2.3em;
-            padding: .42em .9em;
-            border: 1px solid rgba(127, 127, 127, .35);
-            border-radius: 999px;
-            background: rgba(127, 127, 127, .08);
-            color: inherit;
-            font: inherit;
-            cursor: pointer;
-            transition: background-color .15s ease, border-color .15s ease;
-        }
-
-        .qg-path-action:hover {
-            background: rgba(127, 127, 127, .12);
-            border-color: rgba(127, 127, 127, .5);
-        }
-
-        .qg-path-action:focus-visible {
-            outline: none;
-            border-color: #00a4dc;
-            box-shadow: 0 0 0 .18em rgba(0, 164, 220, .15);
-        }
-
-        .qg-path-add {
-            border-color: rgba(0, 164, 220, .35);
-            background: rgba(0, 164, 220, .08);
-            font-weight: 600;
-        }
-
-        .qg-path-remove {
-            width: 2.2em;
-            min-width: 2.2em;
-            padding: 0;
-            border-color: rgba(239, 83, 80, .35);
-            background: rgba(239, 83, 80, .08);
-            color: #ef9a9a;
-            font-size: 1.1em;
-            line-height: 1;
+        .qg-path-row-action {
+            flex-shrink: 0;
             white-space: nowrap;
         }
 
-        .qg-delete-row {
-            display: flex;
-            justify-content: flex-end;
-            margin-top: 1.1em;
-            padding-top: .85em;
-            border-top: 1px solid rgba(127, 127, 127, .28);
+        .qg-policy-footer {
+            display: grid;
+            grid-template-columns: minmax(0, 1.35fr) minmax(220px, .75fr);
+            gap: 1rem;
+            align-items: start;
+            margin-top: 1rem;
         }
 
-        .qg-delete-btn {
+        .qg-policy-footer > .inputContainer,
+        .qg-policy-footer > .checkboxContainer {
+            padding: 1rem;
+            border: 1px solid rgba(127, 127, 127, .22);
+            border-radius: .85rem;
+            background: rgba(255, 255, 255, .035);
+        }
+
+        .qg-policy-delete.qg-delete-btn {
             background: #c62828 !important;
+            color: #fff !important;
+            border-color: #c62828 !important;
         }
 
-        .qg-delete-btn:hover {
+        .qg-policy-delete.qg-delete-btn:hover {
             background: #b71c1c !important;
+            border-color: #b71c1c !important;
         }
 
-        .qg-user-table {
+        .qg-user-access-table-wrap {
+            border: 1px solid rgba(127, 127, 127, .28);
+            border-radius: .85rem;
+            background: rgba(255, 255, 255, .03);
+            overflow: hidden;
+        }
+
+        .qg-user-access-table {
             width: 100%;
-            margin-top: .4em;
             border-collapse: collapse;
         }
 
-        .qg-user-panel {
-            border: 1px solid rgba(127, 127, 127, .28);
-            border-radius: .7em;
-            background: rgba(127, 127, 127, .06);
-            overflow: hidden;
-            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .02);
-        }
-
-        .qg-user-table th,
-        .qg-user-table td {
-            padding: .68em .8em;
+        .qg-user-access-table th,
+        .qg-user-access-table td {
+            padding: .85rem .95rem;
             text-align: left;
             vertical-align: middle;
-            border-bottom: 1px solid rgba(127, 127, 127, .2);
+            border-bottom: 1px solid rgba(127, 127, 127, .18);
         }
 
-        .qg-user-table thead th {
-            font-size: .8em;
+        .qg-user-access-table thead th {
+            font-size: .78em;
             font-weight: 700;
-            letter-spacing: .05em;
+            letter-spacing: .06em;
             text-transform: uppercase;
             opacity: .72;
-            background: rgba(127, 127, 127, .12);
+            background: rgba(255, 255, 255, .06);
         }
 
-        .qg-user-table tbody tr:nth-child(odd) {
-            background: rgba(127, 127, 127, .04);
+        .qg-user-access-table tbody tr:last-child td {
+            border-bottom: 0;
         }
 
-        .qg-user-table tbody tr:hover {
-            background: rgba(0, 164, 220, .06);
+        .qg-user-access-table tbody tr:nth-child(odd) {
+            background: rgba(255, 255, 255, .02);
         }
 
-        .qg-user-name {
-            font-weight: 700;
+        .qg-user-access-table tbody tr:hover {
+            background: rgba(0, 164, 220, .05);
         }
 
-        .qg-select-wrap {
-            position: relative;
+        .qg-user-access-table tbody tr.qg-user-access-row-invalid {
+            background: rgba(239, 83, 80, .07);
+        }
+
+        .qg-user-access-main {
             min-width: 0;
         }
 
-        .qg-select-wrap::after {
-            content: "";
-            position: absolute;
-            top: 50%;
-            right: .95em;
-            width: .5em;
-            height: .5em;
-            border-right: 2px solid currentColor;
-            border-bottom: 2px solid currentColor;
-            transform: translateY(-70%) rotate(45deg);
-            opacity: .58;
-            pointer-events: none;
+        .qg-user-access-name {
+            font-weight: 700;
+            line-height: 1.3;
         }
 
-        .qg-user-select {
+        .qg-user-access-meta {
+            margin-top: .3rem;
+            font-size: .92em;
+            opacity: .72;
+        }
+
+        .qg-user-access-select .emby-select,
+        .qg-user-access-select select {
             width: 100%;
-            box-sizing: border-box;
-            min-height: 2.45em;
-            padding: .55em 2.4em .55em .8em;
-            border: 1px solid rgba(127, 127, 127, .35);
-            border-radius: .35em;
-            background: rgba(127, 127, 127, .08);
-            color: inherit;
-            font: inherit;
-            appearance: none;
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            cursor: pointer;
         }
 
-        .qg-user-select:focus {
-            outline: none;
-            border-color: #00a4dc;
-            box-shadow: 0 0 0 .18em rgba(0, 164, 220, .15);
-        }
-
-        .qg-user-select-denied {
-            border-color: rgba(239, 83, 80, .55);
-            background: rgba(239, 83, 80, .08);
+        .qg-user-access-effective {
+            display: flex;
+            align-items: flex-start;
         }
 
         .qg-effective {
             display: inline-flex;
             align-items: center;
-            padding: .2em .65em;
+            min-height: 2.35rem;
+            padding: .25rem .75rem;
             border: 1px solid currentColor;
             border-radius: 999px;
             font-size: .82em;
             font-weight: 600;
             line-height: 1.3;
+            white-space: nowrap;
         }
 
         .qg-effective-restricted {
@@ -282,6 +309,11 @@
         .qg-effective-denied {
             color: #c62828;
             background: rgba(239, 83, 80, .12);
+        }
+
+        .qg-effective-warning {
+            color: #c77900;
+            background: rgba(255, 193, 7, .12);
         }
 
         .qg-save-area {
@@ -305,8 +337,17 @@
             color: #c62828;
         }
 
-        @media (max-width: 700px) {
-            .qg-section-head {
+        @media (max-width: 960px) {
+            .qg-policy-grid,
+            .qg-policy-footer {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 760px) {
+            .qg-section-head,
+            .qg-policy-card-header,
+            .qg-path-group-head {
                 flex-direction: column;
                 align-items: stretch;
             }
@@ -314,16 +355,12 @@
             .qg-section-action {
                 width: 100%;
             }
+        }
 
+        @media (max-width: 520px) {
             .qg-path-row {
                 flex-direction: column;
                 align-items: stretch;
-            }
-
-            .qg-user-table th,
-            .qg-user-table td {
-                padding-left: .55em;
-                padding-right: .55em;
             }
         }
     </style>
@@ -358,7 +395,7 @@
                                 <span>Add Policy</span>
                             </button>
                         </div>
-                        <div id="policiesContainer"></div>
+                        <div id="policiesContainer" class="qg-policy-list"></div>
                     </div>
 
                     <div class="verticalSection">
@@ -376,7 +413,7 @@
                             <label class="inputLabel inputLabelUnfocused" for="defaultIntroPath">
                                 Default Intro Video
                             </label>
-                            <input is="emby-input" type="text" id="defaultIntroPath"
+                            <input type="text" id="defaultIntroPath" class="emby-input"
                                    placeholder="/media/intros/default.mp4" />
                             <div class="fieldDescription">
                                 Fallback intro for users whose policy has no custom intro. Leave empty to disable.
@@ -389,7 +426,7 @@
                         <p class="fieldDescription">
                             Assign a policy to each user. Users set to "Use Default" inherit the default policy above.
                         </p>
-                        <div id="userAccessContainer"></div>
+                        <div id="userAccessContainer" class="qg-user-access-list"></div>
                     </div>
 
                     <div class="verticalSection qg-save-area">
