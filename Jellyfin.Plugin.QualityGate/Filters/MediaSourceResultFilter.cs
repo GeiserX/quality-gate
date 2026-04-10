@@ -117,6 +117,7 @@ public class MediaSourceResultFilter : IAsyncResultFilter
 
             case QueryResult<BaseItemDto> queryResult when queryResult.Items?.Any() == true:
             {
+                var itemsToRemove = new List<BaseItemDto>();
                 foreach (var item in queryResult.Items)
                 {
                     if (item.MediaSources?.Any() == true)
@@ -129,7 +130,22 @@ public class MediaSourceResultFilter : IAsyncResultFilter
                         _logger.LogDebug(
                             "QualityGate: Filtered list item '{Name}' for user {User} - {Original} to {Filtered} sources",
                             item.Name, (object)userId, original.Count, item.MediaSources.Length);
+
+                        if (item.MediaSources.Length == 0 && original.Count > 0)
+                        {
+                            itemsToRemove.Add(item);
+                        }
                     }
+                }
+
+                if (itemsToRemove.Count > 0)
+                {
+                    var filtered = queryResult.Items.Except(itemsToRemove).ToArray();
+                    _logger.LogInformation(
+                        "QualityGate: Hid {Count} fully-blocked items from list for user {User} (policy: {Policy})",
+                        itemsToRemove.Count, (object)userId, policy.Name);
+                    queryResult.Items = filtered;
+                    queryResult.TotalRecordCount -= itemsToRemove.Count;
                 }
 
                 break;
