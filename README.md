@@ -19,6 +19,7 @@
 ## Features
 
 - **Path-Based Policies** -- Define granular access rules based on file path prefixes
+- **Filename Regex Patterns** -- Match against filenames with regex for [Jellyfin multi-version](https://jellyfin.org/docs/general/server/media/movies/#multiple-versions) setups
 - **Per-User Assignments** -- Assign different policies to different users
 - **Web Configuration** -- Easy-to-use admin interface in Jellyfin dashboard
 - **Multi-Version Support** -- Seamlessly filter available media versions per user
@@ -140,6 +141,8 @@ Policies define which paths are allowed or blocked. Click **"Add Policy"** to cr
 | **Policy Name** | A descriptive name (e.g., "720p Only", "No 4K") |
 | **Allowed Path Prefixes** | Paths users CAN access. Each prefix gets its own row; use **Add Allowed Path** for more. |
 | **Blocked Path Prefixes** | Paths that will be blocked. Each prefix gets its own row; use **Add Blocked Path** for more. |
+| **Allowed Filename Patterns** | Regex patterns matched against the filename. Files must match at least one pattern. |
+| **Blocked Filename Patterns** | Regex patterns matched against the filename. Matching files are always blocked. |
 | **Custom Intro Video** | Optional intro video for users under this policy |
 | **Enabled** | Toggle policy on/off |
 
@@ -164,11 +167,15 @@ If an override points to a deleted or disabled policy, the dropdown stays on an 
 
 ### Policy Logic
 
-The plugin evaluates paths in this order:
+The plugin evaluates in this order:
 
-1. **Blocked Paths**: If file path starts with any blocked prefix -- **BLOCKED**
-2. **Allowed Paths**: If allowed paths are defined and file doesn't match any -- **BLOCKED**
-3. Otherwise -- **ALLOWED**
+1. **Blocked Path Prefixes**: If file path starts with any blocked prefix -- **BLOCKED**
+2. **Blocked Filename Patterns**: If filename matches any blocked regex -- **BLOCKED**
+3. **Allowed Path Prefixes**: If defined and file doesn't match any -- **BLOCKED**
+4. **Allowed Filename Patterns**: If defined and filename doesn't match any -- **BLOCKED**
+5. Otherwise -- **ALLOWED**
+
+Path prefixes and filename patterns are independent — you can use either or both in a single policy.
 
 | Allowed Paths | Blocked Paths | File Path | Result |
 |---------------|---------------|-----------|--------|
@@ -179,7 +186,14 @@ The plugin evaluates paths in this order:
 | `/media/` | `/media/4K/` | `/media/Movies/Film.mkv` | Allowed |
 | `/media/` | `/media/4K/` | `/media/4K/Film.mkv` | Blocked |
 
-> **Tip**: If no Allowed Paths are set, all paths are allowed except those explicitly blocked.
+| Allowed Filename | Blocked Filename | File Path | Result |
+|------------------|------------------|-----------|--------|
+| `- 720p` | -- | `Movie (2021) - 720p.mkv` | Allowed |
+| `- 720p` | -- | `Movie (2021) - 2160p.mkv` | Blocked |
+| (empty) | `- 2160p\|- 4K` | `Movie (2021) - 1080p.mkv` | Allowed |
+| (empty) | `- 2160p\|- 4K` | `Movie (2021) - 2160p.mkv` | Blocked |
+
+> **Tip**: If no Allowed Paths/Patterns are set, all files are allowed except those explicitly blocked. Patterns are case-insensitive regex.
 
 ---
 
@@ -214,7 +228,38 @@ Blocked Path Prefixes:
   /mnt/storage/4K/
 ```
 
-### Example 3: Multi-Version Setup (Recommended)
+### Example 3: Multi-Version Filename Patterns (Recommended)
+
+**Use case**: You use Jellyfin's [multi-version naming](https://jellyfin.org/docs/general/server/media/movies/#multiple-versions) where all versions are in the same folder:
+
+```
+movies/Movie (2021)/Movie (2021) - 2160p.mkv
+movies/Movie (2021)/Movie (2021) - 1080p.mkv
+movies/Movie (2021)/Movie (2021) - 720p.mkv
+```
+
+Since all files share the same directory, path prefixes can't distinguish them. Use filename patterns instead:
+
+```
+Policy Name: Standard Quality (No 4K)
+Blocked Filename Patterns:
+  - 2160p
+  - 4K
+
+(Leave all other fields empty)
+```
+
+Or restrict to a specific resolution:
+
+```
+Policy Name: 720p Only
+Allowed Filename Patterns:
+  - 720p
+
+(Leave all other fields empty)
+```
+
+### Example 4: Multi-Version Path Setup
 
 **Use case**: You have a Jellyfin library with multi-version support where originals and transcodes are in the same folder. Originals come from `/mnt/originals/` and transcodes come from `/mnt/transcodes/`.
 
@@ -230,7 +275,7 @@ Blocked Path Prefixes:
 
 Then set this as the **Default Policy** and add **Full Access** overrides for admin users.
 
-### Example 4: Tiered Access
+### Example 5: Tiered Access
 
 **Use case**: Premium users get full access, standard users get 1080p max.
 

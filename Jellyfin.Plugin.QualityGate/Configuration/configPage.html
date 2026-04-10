@@ -150,6 +150,16 @@
             background: rgba(239, 83, 80, .05);
         }
 
+        .qg-path-group-fn-allowed {
+            border-color: rgba(129, 199, 132, .3);
+            background: rgba(129, 199, 132, .05);
+        }
+
+        .qg-path-group-fn-blocked {
+            border-color: rgba(229, 115, 115, .3);
+            background: rgba(229, 115, 115, .05);
+        }
+
         .qg-path-group-head {
             margin-bottom: .8rem;
         }
@@ -477,8 +487,8 @@
                     <div class="verticalSection">
                         <h2 class="sectionTitle">Quality Gate</h2>
                         <p class="fieldDescription">
-                            Restrict users to specific media versions based on file path prefixes.
-                            Define policies with allowed and blocked paths, then assign them to users.
+                            Restrict users to specific media versions based on file path prefixes or filename regex patterns.
+                            Define policies with path rules and/or filename patterns, then assign them to users.
                         </p>
                         <p id="loadingStatus" class="fieldDescription">Loading configuration...</p>
                     </div>
