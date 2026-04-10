@@ -640,31 +640,39 @@ function renderUserAccess(view) {
             '</tbody>' +
             '<tfoot>' +
                 '<tr>' +
-                    '<td class="qg-user-access-footer-cell">' +
-                        '<div class="qg-user-access-footer-meta">Showing ' + (startIndex + 1) + '-' + endIndex + ' of ' + users.length + ' users</div>' +
-                    '</td>' +
-                    '<td class="qg-user-access-footer-cell">' +
-                        '<div class="qg-user-access-footer-group">' +
-                            '<label class="qg-user-access-footer-label" for="userAccessPageSize">Rows</label>' +
-                            '<select is="emby-select" id="userAccessPageSize" class="user-access-page-size">' +
-                                '<option value="10"' + (userAccessPageSize === 10 ? ' selected' : '') + '>10</option>' +
-                                '<option value="25"' + (userAccessPageSize === 25 ? ' selected' : '') + '>25</option>' +
-                                '<option value="50"' + (userAccessPageSize === 50 ? ' selected' : '') + '>50</option>' +
-                                '<option value="100"' + (userAccessPageSize === 100 ? ' selected' : '') + '>100</option>' +
-                            '</select>' +
-                        '</div>' +
-                    '</td>' +
-                    '<td class="qg-user-access-footer-cell">' +
-                        '<div class="qg-user-access-footer-group qg-user-access-footer-group-end">' +
-                            '<button is="emby-button" type="button" class="raised qg-user-access-pager-btn" id="btnUserAccessPrev"' +
-                                (userAccessPage === 0 ? ' disabled' : '') + '>' +
-                                '<span>Previous</span>' +
-                            '</button>' +
-                            '<div class="qg-user-access-footer-meta">Page ' + (userAccessPage + 1) + ' / ' + pageCount + '</div>' +
-                            '<button is="emby-button" type="button" class="raised qg-user-access-pager-btn" id="btnUserAccessNext"' +
-                                (userAccessPage >= pageCount - 1 ? ' disabled' : '') + '>' +
-                                '<span>Next</span>' +
-                            '</button>' +
+                    '<td colspan="3" class="qg-user-access-footerbar-cell">' +
+                        '<div class="qg-user-access-footerbar">' +
+                            '<div class="qg-user-access-footer-left">' +
+                                '<label class="qg-user-access-footer-label" for="userAccessPageSize">Rows per page</label>' +
+                                '<select is="emby-select" id="userAccessPageSize" class="user-access-page-size">' +
+                                    '<option value="10"' + (userAccessPageSize === 10 ? ' selected' : '') + '>10</option>' +
+                                    '<option value="25"' + (userAccessPageSize === 25 ? ' selected' : '') + '>25</option>' +
+                                    '<option value="50"' + (userAccessPageSize === 50 ? ' selected' : '') + '>50</option>' +
+                                    '<option value="100"' + (userAccessPageSize === 100 ? ' selected' : '') + '>100</option>' +
+                                '</select>' +
+                            '</div>' +
+                            '<div class="qg-user-access-footer-spacer"></div>' +
+                            '<div class="qg-user-access-footer-right">' +
+                                '<div class="qg-user-access-footer-range">' + (startIndex + 1) + '-' + endIndex + ' of ' + users.length + '</div>' +
+                                '<div class="qg-user-access-page-nav">' +
+                                    '<button is="emby-button" type="button" class="raised qg-user-access-pager-btn qg-user-access-pager-icon" id="btnUserAccessFirst"' +
+                                        (userAccessPage === 0 ? ' disabled' : '') + ' aria-label="First page">' +
+                                        '<span aria-hidden="true">&laquo;</span>' +
+                                    '</button>' +
+                                    '<button is="emby-button" type="button" class="raised qg-user-access-pager-btn qg-user-access-pager-icon" id="btnUserAccessPrev"' +
+                                        (userAccessPage === 0 ? ' disabled' : '') + ' aria-label="Previous page">' +
+                                        '<span aria-hidden="true">&lsaquo;</span>' +
+                                    '</button>' +
+                                    '<button is="emby-button" type="button" class="raised qg-user-access-pager-btn qg-user-access-pager-icon" id="btnUserAccessNext"' +
+                                        (userAccessPage >= pageCount - 1 ? ' disabled' : '') + ' aria-label="Next page">' +
+                                        '<span aria-hidden="true">&rsaquo;</span>' +
+                                    '</button>' +
+                                    '<button is="emby-button" type="button" class="raised qg-user-access-pager-btn qg-user-access-pager-icon" id="btnUserAccessLast"' +
+                                        (userAccessPage >= pageCount - 1 ? ' disabled' : '') + ' aria-label="Last page">' +
+                                        '<span aria-hidden="true">&raquo;</span>' +
+                                    '</button>' +
+                                '</div>' +
+                            '</div>' +
                         '</div>' +
                     '</td>' +
                 '</tr>' +
@@ -696,6 +704,14 @@ function renderUserAccess(view) {
         upgradeNativeWidgets(view);
     });
 
+    container.querySelector('#btnUserAccessFirst').addEventListener('click', function () {
+        if (userAccessPage > 0) {
+            userAccessPage = 0;
+            renderUserAccess(view);
+            upgradeNativeWidgets(view);
+        }
+    });
+
     container.querySelector('#btnUserAccessPrev').addEventListener('click', function () {
         if (userAccessPage > 0) {
             userAccessPage -= 1;
@@ -707,6 +723,14 @@ function renderUserAccess(view) {
     container.querySelector('#btnUserAccessNext').addEventListener('click', function () {
         if (userAccessPage < pageCount - 1) {
             userAccessPage += 1;
+            renderUserAccess(view);
+            upgradeNativeWidgets(view);
+        }
+    });
+
+    container.querySelector('#btnUserAccessLast').addEventListener('click', function () {
+        if (userAccessPage < pageCount - 1) {
+            userAccessPage = pageCount - 1;
             renderUserAccess(view);
             upgradeNativeWidgets(view);
         }
