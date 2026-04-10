@@ -9,6 +9,22 @@
     "imageUrl": "",
     "versions": [
       {
+        "version": "2.0.6.0",
+        "changelog": "Integrated table footer, stronger zebra striping, UI polish.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/GeiserX/quality-gate/releases/download/v2.0.6.0/quality-gate.zip",
+        "checksum": "5da1d087e7e2852d31d50729dcce2b15",
+        "timestamp": "2026-04-10T12:00:00Z"
+      },
+      {
+        "version": "2.0.5.0",
+        "changelog": "Sortable columns, pagination, inline policy updates, path actions layout.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/GeiserX/quality-gate/releases/download/v2.0.5.0/quality-gate.zip",
+        "checksum": "13f9fc3362b18b439c0bde4c1e0954b8",
+        "timestamp": "2026-04-10T12:00:00Z"
+      },
+      {
         "version": "2.0.4.0",
         "changelog": "Polished config UI with repeatable path rows, integrated user table, pagination state fix.",
         "targetAbi": "10.11.0.0",
