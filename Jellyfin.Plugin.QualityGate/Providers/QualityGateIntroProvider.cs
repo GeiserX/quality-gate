@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -7,26 +8,55 @@ using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Plugin.QualityGate.Services;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.IO;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.QualityGate.Providers;
 
 /// <summary>
 /// Provides custom intro videos based on user quality policies.
-/// When a user is under a policy with a custom intro path, that intro is used
-/// instead of the default Local Intros selection.
+/// When a user is under a policy with a custom intro path, that intro is
+/// added to Jellyfin's intro list. Note: Jellyfin aggregates all registered
+/// IIntroProvider results, so if the built-in "Local Intros" plugin is also
+/// enabled its intros will play in addition to this one. Disable "Local Intros"
+/// if you only want Quality Gate intros.
 /// </summary>
 public class QualityGateIntroProvider : IIntroProvider
 {
     private readonly ILogger<QualityGateIntroProvider> _logger;
+    private readonly ILibraryManager _libraryManager;
+    private readonly IFileSystem _fileSystem;
+    private readonly IMediaSourceManager _mediaSourceManager;
+
+    /// <summary>
+    /// Cache of intro paths → DB item IDs to avoid redundant lookups/registrations.
+    /// Also used by the result filter to skip filtering for intro video playback.
+    /// </summary>
+    private static readonly ConcurrentDictionary<string, Guid> _introIdCache = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Checks whether an item ID belongs to a registered intro video.
+    /// Used by <see cref="Filters.MediaSourceResultFilter"/> to skip policy
+    /// filtering on intro playback requests.
+    /// </summary>
+    public static bool IsRegisteredIntro(Guid itemId)
+    {
+        return _introIdCache.Values.Contains(itemId);
+    }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="QualityGateIntroProvider"/> class.
     /// </summary>
-    /// <param name="loggerFactory">Logger factory instance.</param>
-    public QualityGateIntroProvider(ILoggerFactory loggerFactory)
+    public QualityGateIntroProvider(
+        ILoggerFactory loggerFactory,
+        ILibraryManager libraryManager,
+        IFileSystem fileSystem,
+        IMediaSourceManager mediaSourceManager)
     {
         _logger = loggerFactory.CreateLogger<QualityGateIntroProvider>();
+        _libraryManager = libraryManager;
+        _fileSystem = fileSystem;
+        _mediaSourceManager = mediaSourceManager;
     }
 
     /// <inheritdoc />
@@ -57,6 +87,28 @@ public class QualityGateIntroProvider : IIntroProvider
 
             // Check if user has a policy with custom intro
             var policy = QualityGateService.GetUserPolicy(user.Id);
+
+            // If user is restricted and ALL sources for this item are blocked, skip the intro
+            // to prevent double-error UX (intro plays → then content denied)
+            if (policy != null && item != null)
+            {
+                try
+                {
+                    var sources = _mediaSourceManager.GetStaticMediaSources(item, false);
+                    if (sources.Count > 0 && !sources.Any(s => QualityGateService.IsPathAllowed(policy, s.Path)))
+                    {
+                        _logger.LogDebug(
+                            "QualityGateIntroProvider: Skipping intro — all sources blocked for user {UserName}",
+                            user.Username);
+                        return Task.FromResult(result);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "QualityGateIntroProvider: Error checking sources, proceeding with intro");
+                }
+            }
+
             if (policy != null && !string.IsNullOrWhiteSpace(policy.IntroVideoPath))
             {
                 introPath = policy.IntroVideoPath;
@@ -75,20 +127,40 @@ public class QualityGateIntroProvider : IIntroProvider
                 return Task.FromResult(result);
             }
 
-            // Check if the intro file exists
+            // Check if the intro file exists; fall back to default if policy intro is missing
             if (!File.Exists(introPath))
             {
                 _logger.LogWarning("QualityGateIntroProvider: Intro file not found: {IntroPath}", introPath);
-                return Task.FromResult(result);
+                if (source != "global default" && !string.IsNullOrWhiteSpace(config.DefaultIntroVideoPath)
+                    && File.Exists(config.DefaultIntroVideoPath))
+                {
+                    introPath = config.DefaultIntroVideoPath;
+                    source = "global default (fallback)";
+                    _logger.LogInformation("QualityGateIntroProvider: Falling back to default intro: {IntroPath}", introPath);
+                }
+                else
+                {
+                    return Task.FromResult(result);
+                }
             }
 
             _logger.LogInformation(
                 "QualityGateIntroProvider: User {UserName} gets intro from {Source}: {IntroPath}",
                 user.Username, source, introPath);
 
+            // Jellyfin's ResolveIntro requires the video to exist in the database.
+            // It calls ResolvePath → GetItemById, and returns null if not found.
+            // We must register the intro video in the DB on first use.
+            var videoId = EnsureIntroRegistered(introPath);
+            if (videoId == null)
+            {
+                _logger.LogWarning("QualityGateIntroProvider: Failed to register intro in DB: {IntroPath}", introPath);
+                return Task.FromResult(result);
+            }
+
             return Task.FromResult<IEnumerable<IntroInfo>>(new[]
             {
-                new IntroInfo { Path = introPath }
+                new IntroInfo { ItemId = videoId.Value }
             });
         }
         catch (Exception ex)
@@ -97,6 +169,50 @@ public class QualityGateIntroProvider : IIntroProvider
         }
 
         return Task.FromResult(result);
+    }
+
+    /// <summary>
+    /// Ensures an intro video file is registered in Jellyfin's database.
+    /// Jellyfin's ResolveIntro calls ResolvePath then GetItemById — if the video
+    /// isn't in the DB, it silently discards the intro. We mirror that flow and
+    /// call CreateItem when the video is missing.
+    /// </summary>
+    private Guid? EnsureIntroRegistered(string introPath)
+    {
+        // Check cache first
+        if (_introIdCache.TryGetValue(introPath, out var cachedId))
+        {
+            return cachedId;
+        }
+
+        try
+        {
+            var fileInfo = _fileSystem.GetFileSystemInfo(introPath);
+            var resolved = _libraryManager.ResolvePath(fileInfo);
+            if (resolved is not Video video)
+            {
+                _logger.LogWarning("QualityGateIntroProvider: ResolvePath did not return a Video for {Path}", introPath);
+                return null;
+            }
+
+            var existing = _libraryManager.GetItemById(video.Id);
+            if (existing is Video)
+            {
+                _introIdCache[introPath] = video.Id;
+                return video.Id;
+            }
+
+            // Not in DB — register it
+            _libraryManager.CreateItem(video, null);
+            _introIdCache[introPath] = video.Id;
+            _logger.LogInformation("QualityGateIntroProvider: Registered intro video in DB: {Path} (Id: {Id})", introPath, video.Id);
+            return video.Id;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "QualityGateIntroProvider: Error registering intro {Path}", introPath);
+            return null;
+        }
     }
 }
 

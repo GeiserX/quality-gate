@@ -171,32 +171,75 @@ function getPathKey(listName) {
     return listName === 'allowed' ? 'AllowedPathPrefixes' : 'BlockedPathPrefixes';
 }
 
+function getPatternKey(listName) {
+    return listName === 'fn-allowed' ? 'AllowedFilenamePatterns' : 'BlockedFilenamePatterns';
+}
+
+function isPatternList(listName) {
+    return listName === 'fn-allowed' || listName === 'fn-blocked';
+}
+
+function getFieldKey(listName) {
+    return isPatternList(listName) ? getPatternKey(listName) : getPathKey(listName);
+}
+
 function getPathRows(paths) {
     return paths && paths.length ? paths.slice() : [''];
 }
 
 function getPathTitle(listName) {
-    return listName === 'allowed' ? 'Allowed Paths' : 'Blocked Paths';
+    switch (listName) {
+        case 'allowed': return 'Allowed Paths';
+        case 'blocked': return 'Blocked Paths';
+        case 'fn-allowed': return 'Allowed Filename Patterns';
+        case 'fn-blocked': return 'Blocked Filename Patterns';
+        default: return '';
+    }
 }
 
 function getPathRowLabel(listName) {
-    return listName === 'allowed' ? 'Allowed Path' : 'Blocked Path';
+    switch (listName) {
+        case 'allowed': return 'Allowed Path';
+        case 'blocked': return 'Blocked Path';
+        case 'fn-allowed': return 'Allowed Pattern';
+        case 'fn-blocked': return 'Blocked Pattern';
+        default: return '';
+    }
 }
 
 function getPathPlaceholder(listName) {
-    return listName === 'allowed' ? '/path/to/allowed/' : '/path/to/blocked/';
+    switch (listName) {
+        case 'allowed': return '/path/to/allowed/';
+        case 'blocked': return '/path/to/blocked/';
+        case 'fn-allowed': return '- 720p|- 1080p';
+        case 'fn-blocked': return '- 2160p|- 4K';
+        default: return '';
+    }
 }
 
 function getPathHelpText(listName) {
-    if (listName === 'allowed') {
-        return 'Each prefix gets its own one-line field. Leave this section empty to allow all paths.';
+    switch (listName) {
+        case 'allowed':
+            return 'Each prefix gets its own one-line field. Leave this section empty to allow all paths.';
+        case 'blocked':
+            return 'Each prefix gets its own one-line field. Matching files are always blocked.';
+        case 'fn-allowed':
+            return 'Regex matched against the filename (not full path). Leave empty to allow all filenames.';
+        case 'fn-blocked':
+            return 'Regex matched against the filename (not full path). Matching files are always blocked.';
+        default:
+            return '';
     }
-
-    return 'Each prefix gets its own one-line field. Matching files are always blocked.';
 }
 
 function getPathAddLabel(listName) {
-    return listName === 'allowed' ? 'Add Allowed Path' : 'Add Blocked Path';
+    switch (listName) {
+        case 'allowed': return 'Add Allowed Path';
+        case 'blocked': return 'Add Blocked Path';
+        case 'fn-allowed': return 'Add Allowed Pattern';
+        case 'fn-blocked': return 'Add Blocked Pattern';
+        default: return '';
+    }
 }
 
 function getEmptyState(message) {
@@ -206,14 +249,20 @@ function getEmptyState(message) {
 }
 
 function buildPathField(policy, policyIndex, listName) {
-    var key = getPathKey(listName);
+    var key = getFieldKey(listName);
     var rows = getPathRows(policy[key] || []);
     var title = getPathTitle(listName);
     var rowLabel = getPathRowLabel(listName);
     var placeholder = getPathPlaceholder(listName);
     var helpText = getPathHelpText(listName);
     var addLabel = getPathAddLabel(listName);
-    var groupClass = listName === 'allowed' ? 'qg-path-group-allowed' : 'qg-path-group-blocked';
+    var groupClassMap = {
+        'allowed': 'qg-path-group-allowed',
+        'blocked': 'qg-path-group-blocked',
+        'fn-allowed': 'qg-path-group-fn-allowed',
+        'fn-blocked': 'qg-path-group-fn-blocked'
+    };
+    var groupClass = groupClassMap[listName] || 'qg-path-group-allowed';
 
     var rowHtml = rows.map(function (pathValue, rowIndex) {
         var inputId = 'policy-' + policyIndex + '-' + listName + '-row-' + rowIndex;
@@ -235,7 +284,7 @@ function buildPathField(policy, policyIndex, listName) {
                     'data-list="' + listName + '" ' +
                     'data-row="' + rowIndex + '" ' +
                     'aria-label="Remove ' + escapeAttribute(rowLabel.toLowerCase()) + ' ' + (rowIndex + 1) + '">' +
-                    '<span>Remove Path</span>' +
+                    '<span>' + (isPatternList(listName) ? 'Remove Pattern' : 'Remove Path') + '</span>' +
                   '</button>'
                 : '') +
         '</div>';
@@ -420,7 +469,7 @@ function renderPolicies(view) {
             '<legend class="qg-policy-legend">Policy ' + (index + 1) + '</legend>' +
             '<div class="qg-policy-card-header">' +
                 '<div class="qg-policy-heading">' +
-                    '<div class="qg-policy-kicker">Define path rules and behavior for this policy.</div>' +
+                    '<div class="qg-policy-kicker">Define access rules for this policy.</div>' +
                     '<div class="inputContainer qg-policy-name-field">' +
                         '<label class="inputLabel inputLabelUnfocused" for="' + nameId + '">Policy Name</label>' +
                         '<input type="text" id="' + nameId + '" class="emby-input policy-name" ' +
@@ -430,10 +479,22 @@ function renderPolicies(view) {
                 '</div>' +
             '</div>' +
             '<div class="qg-policy-section">' +
-                '<h3 class="qg-policy-section-title">Access Rules</h3>' +
+                '<h3 class="qg-policy-section-title">Path Prefix Rules</h3>' +
                 '<div class="qg-policy-grid">' +
                     buildPathField(policy, index, 'allowed') +
                     buildPathField(policy, index, 'blocked') +
+                '</div>' +
+            '</div>' +
+            '<div class="qg-policy-section">' +
+                '<h3 class="qg-policy-section-title">Filename Pattern Rules (Regex)</h3>' +
+                '<div class="fieldDescription" style="margin-bottom:.8rem">' +
+                    'Match against the filename only (e.g. <code>Movie (2021) - 1080p.mp4</code>). ' +
+                    'Supports <a href="https://jellyfin.org/docs/general/server/media/movies/#multiple-versions" target="_blank" rel="noopener">Jellyfin multi-version naming</a>. ' +
+                    'Patterns are case-insensitive regex.' +
+                '</div>' +
+                '<div class="qg-policy-grid">' +
+                    buildPathField(policy, index, 'fn-allowed') +
+                    buildPathField(policy, index, 'fn-blocked') +
                 '</div>' +
             '</div>' +
             '<div class="qg-policy-section">' +
@@ -452,7 +513,7 @@ function renderPolicies(view) {
                                 (policy.Enabled !== false ? 'checked' : '') + ' />' +
                             '<span>Enabled</span>' +
                         '</label>' +
-                        '<div class="fieldDescription">Disable this policy without deleting its path rules.</div>' +
+                        '<div class="fieldDescription">Disable this policy without deleting its rules.</div>' +
                     '</div>' +
                     '<div class="qg-policy-actions">' +
                         '<button is="emby-button" type="button" class="raised qg-delete-btn btnDeletePolicy qg-policy-delete" ' +
@@ -756,6 +817,18 @@ function collectFromDOM(view) {
                 return input.value.trim();
             }
         ).filter(Boolean);
+        config.Policies[index].AllowedFilenamePatterns = Array.prototype.map.call(
+            card.querySelectorAll('.policy-fn-allowed'),
+            function (input) {
+                return input.value.trim();
+            }
+        ).filter(Boolean);
+        config.Policies[index].BlockedFilenamePatterns = Array.prototype.map.call(
+            card.querySelectorAll('.policy-fn-blocked'),
+            function (input) {
+                return input.value.trim();
+            }
+        ).filter(Boolean);
         config.Policies[index].IntroVideoPath = card.querySelector('.policy-intro').value.trim();
         config.Policies[index].Enabled = card.querySelector('.policy-enabled').checked;
     });
@@ -791,6 +864,8 @@ function addPolicy(view) {
         Name: 'New Policy',
         AllowedPathPrefixes: [],
         BlockedPathPrefixes: [],
+        AllowedFilenamePatterns: [],
+        BlockedFilenamePatterns: [],
         Enabled: true,
         BlockedMessageHeader: 'Quality Restricted',
         BlockedMessageText: 'This quality version is not available for your account.',
@@ -818,14 +893,6 @@ function deletePolicy(view, index) {
     deletedId = config.Policies[index].Id;
     config.Policies.splice(index, 1);
 
-    if (config.DefaultPolicyId === deletedId) {
-        config.DefaultPolicyId = '';
-    }
-
-    config.UserPolicies = config.UserPolicies.filter(function (assignment) {
-        return assignment.PolicyId !== deletedId;
-    });
-
     renderAll(view);
     markDirty(view);
 }
@@ -844,7 +911,7 @@ function addPath(view, policyIndex, listName) {
         return;
     }
 
-    key = getPathKey(listName);
+    key = getFieldKey(listName);
     paths = config.Policies[policyIndex][key] || [];
     padPathRows(card, listName, paths);
     paths.push('');
@@ -873,7 +940,7 @@ function removePath(view, policyIndex, listName, rowIndex) {
         return;
     }
 
-    key = getPathKey(listName);
+    key = getFieldKey(listName);
     paths = config.Policies[policyIndex][key] || [];
     padPathRows(card, listName, paths);
 
@@ -905,6 +972,11 @@ function loadConfig(view) {
         config.UserPolicies = config.UserPolicies || [];
         config.DefaultPolicyId = config.DefaultPolicyId || '';
         config.DefaultIntroVideoPath = config.DefaultIntroVideoPath || '';
+        // Ensure filename pattern fields exist on each policy (upgrade from v2)
+        config.Policies.forEach(function (policy) {
+            policy.AllowedFilenamePatterns = policy.AllowedFilenamePatterns || [];
+            policy.BlockedFilenamePatterns = policy.BlockedFilenamePatterns || [];
+        });
         return ApiClient.getUsers();
     }).then(function (userList) {
         var enabledPolicies;
@@ -932,12 +1004,37 @@ function loadConfig(view) {
     });
 }
 
+function validateRegexPatterns() {
+    var errors = [];
+
+    (config.Policies || []).forEach(function (policy, policyIndex) {
+        var allPatterns = (policy.AllowedFilenamePatterns || []).concat(policy.BlockedFilenamePatterns || []);
+        allPatterns.forEach(function (pattern) {
+            try {
+                new RegExp(pattern, 'i');
+            } catch (e) {
+                errors.push('Policy "' + (policy.Name || 'Policy ' + (policyIndex + 1)) + '": invalid regex "' + pattern + '" — ' + e.message);
+            }
+        });
+    });
+
+    return errors;
+}
+
 function saveConfig(view) {
     if (!isLoaded) {
         return;
     }
 
     collectFromDOM(view);
+
+    var regexErrors = validateRegexPatterns();
+    if (regexErrors.length > 0) {
+        setSaveStatus(view, 'Invalid regex patterns detected.', 'error');
+        Dashboard.alert('Fix these regex patterns before saving:\n\n' + regexErrors.join('\n'));
+        return;
+    }
+
     setSaveStatus(view, 'Saving...', 'warning');
 
     ApiClient.updatePluginConfiguration(PLUGIN_ID, config).then(function () {
