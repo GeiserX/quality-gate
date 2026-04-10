@@ -3,6 +3,7 @@ using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.QualityGate.Configuration;
+using Jellyfin.Plugin.QualityGate.Providers;
 using Jellyfin.Plugin.QualityGate.Services;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Dto;
@@ -43,8 +44,10 @@ public class MediaSourceResultFilter : IAsyncResultFilter
     public async Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
     {
         var path = context.HttpContext.Request.Path.Value ?? string.Empty;
+        var hasItems = path.Contains("/Items/", StringComparison.OrdinalIgnoreCase)
+                    || path.EndsWith("/Items", StringComparison.OrdinalIgnoreCase);
         var isRelevant = path.Contains("/PlaybackInfo", StringComparison.OrdinalIgnoreCase)
-                      || (path.Contains("/Items/", StringComparison.OrdinalIgnoreCase)
+                      || (hasItems
                           && path.Contains("/Users/", StringComparison.OrdinalIgnoreCase)
                           && !path.EndsWith("/Intros", StringComparison.OrdinalIgnoreCase));
 
@@ -55,22 +58,15 @@ public class MediaSourceResultFilter : IAsyncResultFilter
                 path, context.Result?.GetType().Name ?? "null");
         }
 
-        if (context.Result is ObjectResult { Value: not null } objectResult)
+        if (isRelevant && context.Result is ObjectResult { Value: not null } objectResult)
         {
-            if (isRelevant)
-            {
-                _logger.LogInformation(
-                    "QualityGate: ObjectResult value type: {ValueType}",
-                    objectResult.Value.GetType().FullName);
-            }
-
             var userId = GetUserId(context.HttpContext);
             if (userId != Guid.Empty)
             {
                 var policy = QualityGateService.GetUserPolicy(userId);
                 if (policy != null)
                 {
-                    _logger.LogInformation(
+                    _logger.LogDebug(
                         "QualityGate: Applying policy {Policy} for user {User}",
                         policy.Name, (object)userId);
                     FilterResult(objectResult, policy, userId);
@@ -87,6 +83,13 @@ public class MediaSourceResultFilter : IAsyncResultFilter
         {
             case PlaybackInfoResponse playbackInfo when playbackInfo.MediaSources?.Any() == true:
             {
+                // Skip filtering for intro videos — they must always be playable
+                if (playbackInfo.MediaSources.Any(s => IsConfiguredIntroPath(s.Path)))
+                {
+                    _logger.LogDebug("QualityGate: Skipping filter for intro video playback");
+                    break;
+                }
+
                 var original = playbackInfo.MediaSources.ToList();
                 var filtered = original
                     .Where(s => QualityGateService.IsPathAllowed(policy, s.Path))
@@ -220,6 +223,34 @@ public class MediaSourceResultFilter : IAsyncResultFilter
             _logger.LogDebug(ex, "QualityGate: Error looking up sources for '{Name}', allowing", itemDto.Name);
             return false;
         }
+    }
+
+    /// <summary>
+    /// Checks if a file path is a configured intro video (policy or default).
+    /// Intro videos must always be playable regardless of user policy.
+    /// </summary>
+    private static bool IsConfiguredIntroPath(string? path)
+    {
+        if (string.IsNullOrEmpty(path))
+        {
+            return false;
+        }
+
+        var config = Plugin.Instance?.Configuration;
+        if (config == null)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(config.DefaultIntroVideoPath)
+            && path.Equals(config.DefaultIntroVideoPath, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return config.Policies.Any(p =>
+            !string.IsNullOrWhiteSpace(p.IntroVideoPath)
+            && path.Equals(p.IntroVideoPath, StringComparison.OrdinalIgnoreCase));
     }
 
     private static Guid GetUserId(HttpContext httpContext)
