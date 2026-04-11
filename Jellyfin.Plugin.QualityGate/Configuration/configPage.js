@@ -479,13 +479,6 @@ function renderPolicies(view) {
                 '</div>' +
             '</div>' +
             '<div class="qg-policy-section">' +
-                '<h3 class="qg-policy-section-title">Path Prefix Rules</h3>' +
-                '<div class="qg-policy-grid">' +
-                    buildPathField(policy, index, 'allowed') +
-                    buildPathField(policy, index, 'blocked') +
-                '</div>' +
-            '</div>' +
-            '<div class="qg-policy-section">' +
                 '<h3 class="qg-policy-section-title">Filename Pattern Rules (Regex)</h3>' +
                 '<div class="fieldDescription" style="margin-bottom:.8rem">' +
                     'Match against the filename only (e.g. <code>Movie (2021) - 1080p.mp4</code>). ' +
