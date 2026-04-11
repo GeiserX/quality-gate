@@ -92,7 +92,7 @@ public class MediaSourceResultFilter : IAsyncResultFilter
 
                 var original = playbackInfo.MediaSources.ToList();
                 var filtered = original
-                    .Where(s => QualityGateService.IsPathAllowed(policy, s.Path))
+                    .Where(s => QualityGateService.IsSourcePlayable(policy, s.Path))
                     .ToArray();
 
                 _logger.LogInformation(
@@ -115,7 +115,7 @@ public class MediaSourceResultFilter : IAsyncResultFilter
             {
                 var original = itemDto.MediaSources.ToList();
                 var filtered = original
-                    .Where(s => QualityGateService.IsPathAllowed(policy, s.Path))
+                    .Where(s => QualityGateService.IsSourcePlayable(policy, s.Path))
                     .ToArray();
 
                 _logger.LogInformation(
@@ -183,7 +183,7 @@ public class MediaSourceResultFilter : IAsyncResultFilter
         {
             var original = itemDto.MediaSources.ToList();
             itemDto.MediaSources = original
-                .Where(s => QualityGateService.IsPathAllowed(policy, s.Path))
+                .Where(s => QualityGateService.IsSourcePlayable(policy, s.Path))
                 .ToArray();
 
             _logger.LogDebug(
@@ -208,7 +208,7 @@ public class MediaSourceResultFilter : IAsyncResultFilter
                 return false;
             }
 
-            var allBlocked = !sources.Any(s => QualityGateService.IsPathAllowed(policy, s.Path));
+            var allBlocked = !sources.Any(s => QualityGateService.IsSourcePlayable(policy, s.Path));
             if (allBlocked)
             {
                 _logger.LogDebug(

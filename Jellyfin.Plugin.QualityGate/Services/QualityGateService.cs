@@ -219,6 +219,30 @@ public static class QualityGateService
     }
 
     /// <summary>
+    /// Checks whether a media source is allowed by policy AND actually exists on disk.
+    /// Dangling symlinks (e.g. pre-created 720p transcodes not yet finished) are treated as blocked.
+    /// This is the single source of truth for "can this source be played" — used by the
+    /// result filter, API controller, and intro provider.
+    /// </summary>
+    /// <param name="policy">The quality policy.</param>
+    /// <param name="path">The file path to check.</param>
+    /// <returns>True if allowed by policy and file exists.</returns>
+    public static bool IsSourcePlayable(QualityPolicy policy, string? path)
+    {
+        if (!IsPathAllowed(policy, path))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrEmpty(path) && !File.Exists(path))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// Filters media sources based on user policy.
     /// </summary>
     /// <param name="userId">The user ID.</param>
@@ -229,11 +253,10 @@ public static class QualityGateService
         var policy = GetUserPolicy(userId);
         if (policy == null)
         {
-            // No policy, return all sources
             return mediaSources;
         }
 
-        return mediaSources.Where(source => IsPathAllowed(policy, source.Path));
+        return mediaSources.Where(source => IsSourcePlayable(policy, source.Path));
     }
 
     /// <summary>
@@ -247,10 +270,10 @@ public static class QualityGateService
         var policy = GetUserPolicy(userId);
         if (policy == null)
         {
-            return true; // No policy, full access
+            return true;
         }
 
-        return IsPathAllowed(policy, path);
+        return IsSourcePlayable(policy, path);
     }
 
     /// <summary>
