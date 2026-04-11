@@ -110,7 +110,7 @@ function getDefaultPolicyLabel() {
     }
 
     var policy = getEnabledPolicy(config.DefaultPolicyId);
-    return policy ? (policy.Name || 'Unnamed Policy') : 'Invalid default -> Full Access';
+    return policy ? (policy.Name || 'Unnamed Policy') : 'DENIED (invalid default)';
 }
 
 function getUserOverride(userId) {
@@ -161,7 +161,7 @@ function getEffectivePolicy(userId) {
             };
         }
 
-        return { name: 'Full Access (invalid default)', restricted: false, denied: false, warning: true };
+        return { name: 'DENIED (invalid default)', restricted: true, denied: true, warning: true };
     }
 
     return { name: 'Full Access', restricted: false, denied: false, warning: false };
