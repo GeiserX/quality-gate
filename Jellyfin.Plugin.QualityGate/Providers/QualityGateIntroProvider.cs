@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Plugin.QualityGate.Services;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.IO;
 using Microsoft.Extensions.Logging;
@@ -27,12 +28,20 @@ public class QualityGateIntroProvider : IIntroProvider
     private readonly ILibraryManager _libraryManager;
     private readonly IFileSystem _fileSystem;
     private readonly IMediaSourceManager _mediaSourceManager;
+    private readonly IUserDataManager _userDataManager;
 
     /// <summary>
     /// Cache of intro paths → DB item IDs to avoid redundant lookups/registrations.
     /// Also used by the result filter to skip filtering for intro video playback.
     /// </summary>
     private static readonly ConcurrentDictionary<string, Guid> _introIdCache = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Tracks which (userId, seriesId) pairs have already seen the intro this session.
+    /// For shows, the intro plays only on the first episode; this cache ensures subsequent
+    /// episodes skip it even before Jellyfin's UserData is updated.
+    /// </summary>
+    private static readonly ConcurrentDictionary<string, bool> _seriesIntroShown = new();
 
     /// <summary>
     /// Checks whether an item ID belongs to a registered intro video.
@@ -51,12 +60,14 @@ public class QualityGateIntroProvider : IIntroProvider
         ILoggerFactory loggerFactory,
         ILibraryManager libraryManager,
         IFileSystem fileSystem,
-        IMediaSourceManager mediaSourceManager)
+        IMediaSourceManager mediaSourceManager,
+        IUserDataManager userDataManager)
     {
         _logger = loggerFactory.CreateLogger<QualityGateIntroProvider>();
         _libraryManager = libraryManager;
         _fileSystem = fileSystem;
         _mediaSourceManager = mediaSourceManager;
+        _userDataManager = userDataManager;
     }
 
     /// <inheritdoc />
@@ -107,6 +118,12 @@ public class QualityGateIntroProvider : IIntroProvider
                 {
                     _logger.LogDebug(ex, "QualityGateIntroProvider: Error checking sources, proceeding with intro");
                 }
+            }
+
+            // Skip intro if user is resuming or has already seen it for this show
+            if (item != null && ShouldSkipIntro(item, user))
+            {
+                return Task.FromResult(result);
             }
 
             if (policy != null && !string.IsNullOrWhiteSpace(policy.IntroVideoPath))
@@ -169,6 +186,66 @@ public class QualityGateIntroProvider : IIntroProvider
         }
 
         return Task.FromResult(result);
+    }
+
+    /// <summary>
+    /// Determines whether the intro should be skipped for this playback.
+    /// Movies: skip if user is resuming (has playback progress).
+    /// Episodes: skip if user has already watched any episode of the series.
+    /// </summary>
+    private bool ShouldSkipIntro(BaseItem item, User user)
+    {
+        try
+        {
+            // Skip if user is resuming this item (movie or episode)
+            var userData = _userDataManager.GetUserData(user, item);
+            if (userData?.PlaybackPositionTicks > 0)
+            {
+                _logger.LogDebug(
+                    "QualityGateIntroProvider: Skipping intro — user {UserName} is resuming {ItemName}",
+                    user.Username, item.Name);
+                return true;
+            }
+
+            // For episodes: only show the intro once per entire series
+            if (item is Episode episode)
+            {
+                var seriesId = episode.SeriesId;
+                var cacheKey = $"{user.Id}:{seriesId}";
+
+                // Check session cache first (covers the gap before Jellyfin updates UserData)
+                if (_seriesIntroShown.ContainsKey(cacheKey))
+                {
+                    _logger.LogDebug(
+                        "QualityGateIntroProvider: Skipping intro — user {UserName} already saw intro for series {SeriesId} this session",
+                        user.Username, (object)seriesId);
+                    return true;
+                }
+
+                // Check persistent state: has the user ever played anything in this series?
+                if (episode.Series != null)
+                {
+                    var seriesData = _userDataManager.GetUserData(user, episode.Series);
+                    if (seriesData?.LastPlayedDate != null)
+                    {
+                        _seriesIntroShown.TryAdd(cacheKey, true);
+                        _logger.LogDebug(
+                            "QualityGateIntroProvider: Skipping intro — user {UserName} has play history for series {SeriesName}",
+                            user.Username, episode.Series.Name);
+                        return true;
+                    }
+                }
+
+                // First time watching this series — show intro, mark in session cache
+                _seriesIntroShown.TryAdd(cacheKey, true);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "QualityGateIntroProvider: Error checking skip state, showing intro");
+        }
+
+        return false;
     }
 
     /// <summary>
