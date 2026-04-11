@@ -60,8 +60,8 @@ jobs:
             {
               "guid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
               "name": "Quality Gate",
-              "overview": "Restrict users to specific media versions based on path prefixes or filename regex patterns.",
-              "description": "Quality Gate allows Jellyfin administrators to define policies that restrict certain users to specific media versions via path prefixes or filename regex patterns. Supports Jellyfin multi-version naming (e.g. 'Movie (2021) - 1080p.mkv'). Useful for bandwidth management, tiered access, and device optimization.",
+              "overview": "Restrict users to specific media versions based on filename regex patterns.",
+              "description": "Quality Gate allows Jellyfin administrators to restrict users to specific media versions via filename regex patterns. Designed for Jellyfin multi-version naming (e.g. 'Movie (2021) - 1080p.mkv'). Useful for bandwidth management, tiered access, and device optimization.",
               "owner": "GeiserX",
               "category": "General",
               "versions": [
