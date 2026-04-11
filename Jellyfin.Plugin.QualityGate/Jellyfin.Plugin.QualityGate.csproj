@@ -31,5 +31,9 @@
     </None>
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Jellyfin.Plugin.QualityGate.Tests" />
+  </ItemGroup>
+
 </Project>
 
