@@ -64,11 +64,10 @@ public static class QualityGateService
         // No user-specific override, check for default policy
         if (!string.IsNullOrEmpty(config.DefaultPolicyId))
         {
+            // Default policy MUST resolve to a valid, enabled policy.
+            // If not found (deleted/mistyped/disabled), fail-closed: deny all access.
             var defaultPolicy = config.Policies.FirstOrDefault(p => p.Id == config.DefaultPolicyId && p.Enabled);
-            if (defaultPolicy != null)
-            {
-                return defaultPolicy;
-            }
+            return defaultPolicy ?? DenyAllPolicy;
         }
 
         // No policy applies - full access
