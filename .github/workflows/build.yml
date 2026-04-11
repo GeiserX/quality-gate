@@ -27,8 +27,8 @@ jobs:
       - name: Build
         run: dotnet build -c Release --no-restore
 
-      - name: Test
-        run: dotnet test Jellyfin.Plugin.QualityGate.Tests/Jellyfin.Plugin.QualityGate.Tests.csproj --configuration Release --no-restore --verbosity normal
+      - name: Run tests
+        run: dotnet test --no-build -c Release --verbosity normal
 
       - name: Get version from csproj
         id: version
