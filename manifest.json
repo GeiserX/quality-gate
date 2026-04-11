@@ -9,6 +9,22 @@
     "imageUrl": "",
     "versions": [
       {
+        "version": "3.2.0.0",
+        "changelog": "Fail-closed default policy, filename-only regex matching, dangling symlink protection.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/GeiserX/quality-gate/releases/download/v3.2.0.0/quality-gate_3.2.0.0.zip",
+        "checksum": "",
+        "timestamp": "2026-04-11T17:07:59Z"
+      },
+      {
+        "version": "3.1.0.0",
+        "changelog": "Remove path-prefix matching, filename patterns only.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/GeiserX/quality-gate/releases/download/v3.1.0.0/quality-gate_3.1.0.0.zip",
+        "checksum": "",
+        "timestamp": "2026-04-11T07:44:50Z"
+      },
+      {
         "version": "3.0.0.0",
         "changelog": "Filename regex pattern matching for Jellyfin multi-version support. New UI for allowed/blocked filename patterns.",
         "targetAbi": "10.11.0.0",
