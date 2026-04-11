@@ -55,28 +55,33 @@ jobs:
           CHECKSUM="${{ steps.checksum.outputs.checksum }}"
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-          cat > manifest.json << EOF
-          [
-            {
-              "guid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-              "name": "Quality Gate",
-              "overview": "Restrict users to specific media versions based on filename regex patterns.",
-              "description": "Quality Gate allows Jellyfin administrators to restrict users to specific media versions via filename regex patterns. Designed for Jellyfin multi-version naming (e.g. 'Movie (2021) - 1080p.mkv'). Useful for bandwidth management, tiered access, and device optimization.",
-              "owner": "GeiserX",
-              "category": "General",
-              "versions": [
-                {
-                  "version": "${VERSION}",
-                  "changelog": "See https://github.com/GeiserX/quality-gate/releases",
-                  "targetAbi": "10.11.0.0",
-                  "sourceUrl": "https://github.com/GeiserX/quality-gate/releases/download/v${VERSION}/quality-gate_${VERSION}.zip",
-                  "checksum": "${CHECKSUM}",
-                  "timestamp": "${TIMESTAMP}"
-                }
-              ]
-            }
-          ]
-          EOF
+          # Build new version entry
+          NEW_ENTRY=$(cat <<ENTRY
+          {
+            "version": "${VERSION}",
+            "changelog": "See https://github.com/GeiserX/quality-gate/releases",
+            "targetAbi": "10.11.0.0",
+            "sourceUrl": "https://github.com/GeiserX/quality-gate/releases/download/v${VERSION}/quality-gate_${VERSION}.zip",
+            "checksum": "${CHECKSUM}",
+            "timestamp": "${TIMESTAMP}"
+          }
+          ENTRY
+          )
+
+          # Merge into existing manifest: prepend new version, remove duplicates
+          python3 -c "
+          import json, sys
+          with open('manifest.json') as f:
+              manifest = json.load(f)
+          new_entry = json.loads('''${NEW_ENTRY}''')
+          versions = manifest[0].get('versions', [])
+          versions = [v for v in versions if v['version'] != new_entry['version']]
+          versions.insert(0, new_entry)
+          manifest[0]['versions'] = versions
+          with open('manifest.json', 'w') as f:
+              json.dump(manifest, f, indent=2, ensure_ascii=False)
+              f.write('\n')
+          "
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
