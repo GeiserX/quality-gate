@@ -64,20 +64,6 @@ public class QualityPolicy
     public string Description { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets the list of allowed path prefixes.
-    /// Files must match at least one of these prefixes to be accessible.
-    /// Example: ["/media-transcoded/"] to only allow transcoded files.
-    /// </summary>
-    public List<string> AllowedPathPrefixes { get; set; } = new();
-
-    /// <summary>
-    /// Gets or sets the list of blocked path prefixes.
-    /// Files matching these prefixes will be blocked.
-    /// Example: ["/media/"] to block original high-quality files.
-    /// </summary>
-    public List<string> BlockedPathPrefixes { get; set; } = new();
-
-    /// <summary>
     /// Gets or sets regex patterns matched against filenames.
     /// Files whose filename matches at least one pattern are allowed.
     /// Example: ["- 720p", "- 1080p"] to only allow those versions.

@@ -22,8 +22,7 @@ public static class QualityGateService
         Id = "__DENY_ALL__",
         Name = "Deny All (misconfigured override)",
         Enabled = true,
-        AllowedPathPrefixes = new List<string> { "/__nonexistent__/" },
-        BlockedPathPrefixes = new List<string>(),
+        AllowedFilenamePatterns = new List<string> { "^$" },
     };
 
     /// <summary>
@@ -128,27 +127,8 @@ public static class QualityGateService
     }
 
     /// <summary>
-    /// Checks whether a file path starts with the given prefix using separator-aware matching.
-    /// Prevents "/media" from matching "/media2" — the prefix must align on a directory boundary.
-    /// </summary>
-    private static bool MatchesPathPrefix(string path, string prefix)
-    {
-        if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        // Exact match, or prefix already ends with separator, or the next char in path is a separator
-        return path.Length == prefix.Length
-            || prefix[prefix.Length - 1] == Path.DirectorySeparatorChar
-            || prefix[prefix.Length - 1] == Path.AltDirectorySeparatorChar
-            || path[prefix.Length] == Path.DirectorySeparatorChar
-            || path[prefix.Length] == Path.AltDirectorySeparatorChar;
-    }
-
-    /// <summary>
     /// Checks if a file path is allowed by the given policy.
-    /// Resolves symlinks to check against actual target paths.
+    /// Resolves symlinks to check both original and resolved filenames.
     /// </summary>
     /// <param name="policy">The quality policy.</param>
     /// <param name="filePath">The file path to check.</param>
@@ -163,17 +143,6 @@ public static class QualityGateService
         // Resolve symlinks to get actual target path
         var resolvedPath = ResolvePath(filePath);
 
-        // Check blocked path prefixes first (against both original and resolved)
-        if (policy.BlockedPathPrefixes.Count > 0)
-        {
-            if (policy.BlockedPathPrefixes.Any(prefix =>
-                MatchesPathPrefix(filePath, prefix) ||
-                MatchesPathPrefix(resolvedPath, prefix)))
-            {
-                return false;
-            }
-        }
-
         // Check blocked filename patterns (regex against the filename component)
         // Check both original and resolved filenames for symlinked setups
         if (policy.BlockedFilenamePatterns.Count > 0)
@@ -183,19 +152,6 @@ public static class QualityGateService
             if (policy.BlockedFilenamePatterns.Any(pattern =>
                 MatchesFilenamePattern(originalFilename, pattern, failClosed: true) ||
                 MatchesFilenamePattern(resolvedFilename, pattern, failClosed: true)))
-            {
-                return false;
-            }
-        }
-
-        // If allowed path prefixes are specified, file must match at least one
-        if (policy.AllowedPathPrefixes.Count > 0)
-        {
-            var isAllowed = policy.AllowedPathPrefixes.Any(prefix =>
-                MatchesPathPrefix(filePath, prefix) ||
-                MatchesPathPrefix(resolvedPath, prefix));
-
-            if (!isAllowed)
             {
                 return false;
             }
