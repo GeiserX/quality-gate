@@ -145,7 +145,7 @@ The **User Access** table shows all Jellyfin users and their current policy:
 - **Full Access** -- no restrictions
 - Any named policy -- applies that policy's rules
 
-If an override points to a deleted or disabled policy, the dropdown shows **DENIED** until you choose a replacement (fail-closed).
+If an override or the default policy points to a deleted or disabled policy, the dropdown shows **DENIED** until you choose a replacement (fail-closed). This applies to both per-user overrides and the default policy.
 
 ### Policy Logic
 
@@ -220,7 +220,7 @@ Blocked Filename Patterns:
 
 ### Library Setup
 
-All quality versions must be in the **same Jellyfin library** using Jellyfin's [multi-version naming](https://jellyfin.org/docs/general/server/media/movies/#multiple-versions). Each version needs a ` - label` suffix (space-hyphen-space-label):
+All quality versions must be in the **same Jellyfin library** using Jellyfin's [multi-version naming](https://jellyfin.org/docs/general/server/media/movies/#multiple-versions). Each version needs a ` - label` suffix (space, hyphen, space, label):
 
 ```text
 movies/
