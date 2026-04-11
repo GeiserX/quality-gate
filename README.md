@@ -4,11 +4,11 @@
 
 <p align="center">
 
-[![GitHub Release](https://img.shields.io/github/v/release/GeiserX/quality-gate?style=flat-square&logo=github)](https://github.com/GeiserX/quality-gate/releases)
-[![Jellyfin Version](https://img.shields.io/badge/Jellyfin-10.11+-00a4dc?style=flat-square&logo=jellyfin)](https://jellyfin.org)
-[![.NET](https://img.shields.io/badge/.NET-9.0-512bd4?style=flat-square&logo=dotnet)](https://dotnet.microsoft.com)
-[![License](https://img.shields.io/github/license/GeiserX/quality-gate?style=flat-square)](LICENSE)
-[![CI](https://img.shields.io/github/actions/workflow/status/GeiserX/quality-gate/build.yml?style=flat-square&logo=github-actions&logoColor=white&label=CI)](https://github.com/GeiserX/quality-gate/actions)
+  <a href="https://github.com/GeiserX/quality-gate/releases"><img src="https://img.shields.io/github/v/release/GeiserX/quality-gate?style=flat-square&logo=github" alt="GitHub Release"></a>
+  <a href="https://jellyfin.org"><img src="https://img.shields.io/badge/Jellyfin-10.11+-00a4dc?style=flat-square&logo=jellyfin" alt="Jellyfin Version"></a>
+  <a href="https://dotnet.microsoft.com"><img src="https://img.shields.io/badge/.NET-9.0-512bd4?style=flat-square&logo=dotnet" alt=".NET"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/GeiserX/quality-gate?style=flat-square" alt="License"></a>
+  <a href="https://github.com/GeiserX/quality-gate/actions"><img src="https://img.shields.io/github/actions/workflow/status/GeiserX/quality-gate/build.yml?style=flat-square&logo=github-actions&logoColor=white&label=CI" alt="CI"></a>
 
 </p>
 
@@ -54,7 +54,7 @@ Add this repository to your Jellyfin instance for automatic updates:
 1. Go to **Dashboard → Plugins → Repositories**
 2. Click **Add** and enter:
    - **Name**: `Quality Gate`
-   - **URL**: `https://raw.githubusercontent.com/GeiserX/quality-gate/main/manifest.json`
+   - **URL**: `https://geiserx.github.io/quality-gate/manifest.json`
 3. Go to **Catalog** and install **Quality Gate**
 4. Restart Jellyfin
 
