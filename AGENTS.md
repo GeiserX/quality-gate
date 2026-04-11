@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Description**: Jellyfin plugin that restricts users to specific media versions based on configurable path-based policies and filename regex patterns. Filters blocked MediaSources from API responses so restricted users only see allowed versions (e.g., 720p transcodes but not 4K originals). Supports Jellyfin's multi-version naming convention.
+**Description**: Jellyfin plugin that restricts users to specific media versions based on filename regex patterns. Filters blocked MediaSources from API responses so restricted users only see allowed versions (e.g., 720p transcodes but not 4K originals). Designed for Jellyfin's multi-version naming convention (`Movie (2021) - 720p.mkv`).
 
 **Architecture Pattern**: Monolith - single deployable unit (Jellyfin plugin DLL)
 
@@ -70,20 +70,21 @@ This approach was chosen because Jellyfin's response compression breaks HTTP mid
 2. If override is `__FULL_ACCESS__`, return null (no filtering)
 3. If override points to a missing/disabled/deleted policy, return **deny-all sentinel** (fail-closed)
 4. If no override, fall back to `DefaultPolicyId`
-5. If no default, return null (full access)
+5. If `DefaultPolicyId` is set but policy not found/disabled, return **deny-all sentinel** (fail-closed)
+6. If no default, return null (full access)
 
-### Path & Filename Matching
+### Filename Matching
 
 `QualityGateService.IsPathAllowed(policy, path)` checks both the original path and symlink-resolved path:
 
 1. Null/empty path -> **DENIED** (fail-closed)
-2. Matches any **blocked path prefix** -> **DENIED**
-3. Matches any **blocked filename regex** -> **DENIED**
-4. **Allowed path prefixes** defined and no match -> **DENIED**
-5. **Allowed filename patterns** defined and no match -> **DENIED**
-6. Otherwise -> **ALLOWED**
+2. Matches any **blocked filename regex** -> **DENIED**
+3. **Allowed filename patterns** defined and no match -> **DENIED**
+4. Otherwise -> **ALLOWED**
 
-Path prefix matching is separator-aware (`/media` won't match `/media2`). Filename regex matching uses `RegexOptions.IgnoreCase` with a 1-second timeout (ReDoS protection). Both original and symlink-resolved filenames are checked.
+Filename regex matching uses `RegexOptions.IgnoreCase` with a 1-second timeout (ReDoS protection). Both original and symlink-resolved filenames are checked.
+
+`IsSourcePlayable(policy, path)` additionally checks `File.Exists()` to filter out dangling symlinks.
 
 When all sources are blocked, the filter returns an **empty array** (fail-closed). It does NOT fall back to showing originals.
 
@@ -111,8 +112,6 @@ Editable via **Dashboard -> Plugins -> Quality Gate**.
 | Field | Description |
 |-------|-------------|
 | **Policy Name** | Descriptive name (e.g., "720p Only") |
-| **Allowed Path Prefixes** | Paths users CAN access. One per row. |
-| **Blocked Path Prefixes** | Paths that will be blocked. One per row. |
 | **Allowed Filename Patterns** | Regex patterns matched against filenames. Files must match at least one. |
 | **Blocked Filename Patterns** | Regex patterns matched against filenames. Matching files are always blocked. |
 | **Custom Intro Video** | Optional path to intro video for users under this policy. |
@@ -141,7 +140,7 @@ dotnet build -c Release
 Copy DLL + `meta.json` to `<jellyfin-config>/plugins/QualityGate/` and restart Jellyfin. Or install from plugin catalog:
 
 ```
-https://raw.githubusercontent.com/GeiserX/quality-gate/main/manifest.json
+https://geiserx.github.io/quality-gate/manifest.json
 ```
 
 ### CI/CD
@@ -158,7 +157,7 @@ Version in `.csproj` (`<AssemblyVersion>` + `<FileVersion>` + `<Version>`) must 
 ### Config Page
 
 - Jellyfin custom elements: `emby-input`, `emby-button`, `emby-select`, `emby-checkbox`
-- Allowed/blocked paths and filename patterns render as repeatable one-line input rows, not multi-line textareas
+- Allowed/blocked filename patterns render as repeatable one-line input rows, not multi-line textareas
 - Minimal custom CSS for dynamic elements (policy cards, user table, inline chevron select wrapper, path rows); standard Jellyfin classes for everything else
 - Embedded resource -- changes require DLL rebuild
 - `EnableInMainMenu = true` -- appears in the Jellyfin sidebar, not just under Plugins
@@ -202,7 +201,7 @@ Things discovered during development that save time and prevent mistakes:
 
 - **PostConfigure, not Configure**: Plugin filter registration MUST use `PostConfigure<MvcOptions>` in `IPluginServiceRegistrator`. Plain `Configure` runs too early and the filter gets overwritten by Jellyfin's own MVC setup.
 - **Middleware does NOT work**: Jellyfin enables response compression. HTTP middleware sees gzipped bytes, not JSON. The `IAsyncResultFilter` approach operates on C# objects before serialization, completely bypassing compression.
-- **Jellyfin resolves symlinks in MediaSource paths**: When media files are symlinks, Jellyfin stores the **resolved target path** in `MediaSourceInfo.Path`, not the symlink path. Policies must target the actual disk paths (e.g., `/mnt/user/ShareMedia/Peliculas/` for transcodes, `/mnt/remotes/TOWER_ShareMedia/Peliculas/` for originals), NOT the mount point paths (`/media/hq/`, `/media/lq/`). This is the most common misconfiguration.
+- **Jellyfin resolves symlinks in MediaSource paths**: When media files are symlinks, Jellyfin stores the **resolved target path** in `MediaSourceInfo.Path`, not the symlink path. The plugin checks both the original and symlink-resolved filenames against patterns.
 - **Guid.Empty from API key auth**: Jellyfin API key authentication sets `ClaimTypes.NameIdentifier` to `Guid.Empty`. All userId extraction code must explicitly guard against this.
 - **MediaSourceInfo namespace moved**: In Jellyfin 10.11+, `MediaSourceInfo` lives in `MediaBrowser.Model.Dto`, not `MediaBrowser.Model.MediaInfo`.
 - **CI manifest**: The workflow auto-generates `manifest.json` with version/checksum and deploys to GitHub Pages. No manual manifest updates needed.
@@ -219,11 +218,11 @@ Things discovered during development that save time and prevent mistakes:
 
 | Problem | Cause | Fix |
 |---------|-------|-----|
-| All sources blocked for restricted user | Policies use mount paths instead of resolved paths | Check `MediaInfo -> Path` in Jellyfin UI; use those paths in policies |
+| All sources blocked for restricted user | Filename patterns don't match any version | Check filenames in Jellyfin UI; ensure patterns match the ` - label` suffix |
 | Filter not running | Registration issue | Verify `PostConfigure<MvcOptions>` in `PluginServiceRegistrator` |
 | Admin sees filtered content | Admin not assigned `__FULL_ACCESS__` override | Add explicit override for admin user |
 | Users without override see everything | No `DefaultPolicyId` set | Set a default policy in plugin config |
-| Playback error after filtering | All sources removed, player has nothing to play | Expected behavior (fail-closed). Ensure at least one path prefix allows a version |
+| Playback error after filtering | All sources removed, player has nothing to play | Expected behavior (fail-closed). Ensure at least one filename pattern allows a version |
 | Intros not playing | Intro video not registered in Jellyfin DB | `EnsureIntroRegistered()` handles this automatically. Check logs for "Failed to register intro" |
 | Intros blocked by policy | Filter applying filename/path policy to intro playback | `IsConfiguredIntroPath()` should skip filtering. Verify intro path matches config exactly |
 | Items visible in library but not on home page | `HidePlayedInLatest` (default: true) hides played items from Latest sections | Mark items as unplayed or disable the setting |

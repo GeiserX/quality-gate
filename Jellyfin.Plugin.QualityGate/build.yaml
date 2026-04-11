@@ -1,27 +1,29 @@
 name: "Quality Gate"
 guid: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-version: "3.1.0.0"
+version: "3.2.0.0"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 owner: "GeiserX"
 overview: "Restrict users to specific media versions based on filename regex patterns."
-description: "Quality Gate allows Jellyfin administrators to define policies that restrict certain users to specific media versions via filename regex patterns. Supports Jellyfin multi-version naming (e.g. 'Movie (2021) - 1080p.mkv'). Useful for bandwidth management, tiered access, and device optimization."
+description: "Quality Gate allows Jellyfin administrators to restrict users to specific media versions via filename regex patterns. Designed for Jellyfin multi-version naming (e.g. 'Movie (2021) - 1080p.mkv'). Useful for bandwidth management, tiered access, and device optimization."
 category: "General"
 imageUrl: ""
 artifacts:
   - Jellyfin.Plugin.QualityGate.dll
 changelog: |
+  ## v3.2.0.0
+  - BREAKING: removed path-prefix support entirely (filename regex patterns only)
+  - Fail-closed default policy: broken/disabled DefaultPolicyId now denies instead of granting full access
+  - Dangling symlink protection: File.Exists() check applied consistently across all code paths
+  - Added unit test suite (IsPathAllowed + IsSourcePlayable)
+  - Updated DenyAllPolicy sentinel to use filename pattern matching
   ## v3.1.0.0
   - Skip intro on resume: intros no longer play when resuming a movie mid-playback
   - Skip intro on rewatch: for TV shows, intro plays only on the first episode of a series
   - Trimmed config UI: removed path prefix fields, keeping only filename pattern rules
-  - Backend path-prefix logic unchanged for backward compatibility
   ## v3.0.0.0
-  - Filename regex pattern matching: restrict by filename instead of (or in addition to) path prefixes
-  - Supports Jellyfin multi-version naming convention (e.g. `Movie (2021) - 1080p.mkv`)
-  - New UI sections for allowed/blocked filename patterns with regex input
+  - Filename regex pattern matching for Jellyfin multi-version naming
   - Case-insensitive regex with 1-second timeout to prevent ReDoS
-  - Backward compatible: existing path-prefix-only policies continue to work unchanged
   ## v2.0.6.0
   - Integrated table footer: single full-width tfoot row replacing three-cell layout
   - Stronger zebra striping for visible row differentiation
