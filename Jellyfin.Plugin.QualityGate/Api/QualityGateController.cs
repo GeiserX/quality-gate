@@ -86,7 +86,7 @@ public class QualityGateController : ControllerBase
         }
 
         var filteredSources = sourceList
-            .Where(source => QualityGateService.IsPathAllowed(policy, source.Path))
+            .Where(source => QualityGateService.IsSourcePlayable(policy, source.Path))
             .ToList();
 
         _logger.LogInformation(
