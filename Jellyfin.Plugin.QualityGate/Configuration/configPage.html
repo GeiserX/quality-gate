@@ -487,9 +487,9 @@
                     <div class="verticalSection">
                         <h2 class="sectionTitle">Quality Gate</h2>
                         <p class="fieldDescription">
-                            Restrict users to specific media versions based on file path prefixes or filename regex patterns.
-                            Define policies with path rules and/or filename patterns, then assign them to users.
-                            When both are configured in one policy, a file must pass all gates to be allowed.
+                            Restrict users to specific media versions based on filename regex patterns.
+                            Define policies with filename rules, then assign them to users.
+                            Supports <a href="https://jellyfin.org/docs/general/server/media/movies/#multiple-versions" target="_blank" rel="noopener">Jellyfin multi-version naming</a>.
                         </p>
                         <p id="loadingStatus" class="fieldDescription">Loading configuration...</p>
                     </div>
@@ -499,8 +499,8 @@
                             <div class="qg-section-copy">
                                 <h2 class="sectionTitle">Policies</h2>
                                 <p class="fieldDescription">
-                                    Each policy defines which file paths and/or filename patterns are allowed or blocked.
-                                    For path prefixes, use the resolved paths shown in Media Info, not mount point names.
+                                    Each policy defines which filename patterns are allowed or blocked.
+                                    Patterns are case-insensitive regex matched against the filename (not the full path).
                                 </p>
                             </div>
                             <button is="emby-button" type="button" class="raised qg-section-action" id="btnAddPolicy">
