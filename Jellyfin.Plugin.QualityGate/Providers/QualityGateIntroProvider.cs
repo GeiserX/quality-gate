@@ -198,12 +198,20 @@ public class QualityGateIntroProvider : IIntroProvider
     {
         try
         {
-            // Skip if user is resuming this item (movie or episode)
+            // Skip if user has already watched or is resuming this item
             var userData = _userDataManager.GetUserData(user, item);
             if (userData?.PlaybackPositionTicks > 0)
             {
                 _logger.LogDebug(
                     "QualityGateIntroProvider: Skipping intro — user {UserName} is resuming {ItemName}",
+                    user.Username, item.Name);
+                return true;
+            }
+
+            if (userData?.Played == true)
+            {
+                _logger.LogDebug(
+                    "QualityGateIntroProvider: Skipping intro — user {UserName} already watched {ItemName}",
                     user.Username, item.Name);
                 return true;
             }
