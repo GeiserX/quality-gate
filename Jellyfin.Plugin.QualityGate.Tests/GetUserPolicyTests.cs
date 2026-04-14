@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Jellyfin.Plugin.QualityGate.Configuration;
 using Jellyfin.Plugin.QualityGate.Services;
@@ -12,11 +13,15 @@ namespace Jellyfin.Plugin.QualityGate.Tests;
 public class GetUserPolicyTests : IDisposable
 {
     private readonly Plugin _plugin;
+    private readonly string _tempDir;
 
     public GetUserPolicyTests()
     {
+        _tempDir = Path.Combine(Path.GetTempPath(), "qg-up-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(_tempDir);
+
         var appPaths = new Mock<IApplicationPaths>();
-        appPaths.SetReturnsDefault<string>(Path.GetTempPath());
+        appPaths.SetReturnsDefault<string>(_tempDir);
         var xmlSerializer = new Mock<IXmlSerializer>();
         xmlSerializer.Setup(x => x.DeserializeFromFile(It.IsAny<Type>(), It.IsAny<string>()))
             .Returns(new PluginConfiguration());
@@ -25,6 +30,11 @@ public class GetUserPolicyTests : IDisposable
 
     public void Dispose()
     {
+        if (Directory.Exists(_tempDir))
+        {
+            Directory.Delete(_tempDir, true);
+        }
+
         GC.SuppressFinalize(this);
     }
 
