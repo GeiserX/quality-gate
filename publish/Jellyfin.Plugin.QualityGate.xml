@@ -1,0 +1,425 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Jellyfin.Plugin.QualityGate</name>
+    </assembly>
+    <members>
+        <member name="T:Jellyfin.Plugin.QualityGate.Api.QualityGateController">
+            <summary>
+            API controller for Quality Gate filtered playback info.
+            Uses the authenticated caller's identity — no caller-supplied userId.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Api.QualityGateController.#ctor(MediaBrowser.Controller.Library.ILibraryManager,MediaBrowser.Controller.Library.IMediaSourceManager,Microsoft.Extensions.Logging.ILogger{Jellyfin.Plugin.QualityGate.Api.QualityGateController})">
+            <summary>
+            Initializes a new instance of the <see cref="T:Jellyfin.Plugin.QualityGate.Api.QualityGateController"/> class.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Api.QualityGateController.GetFilteredMediaSources(System.Guid)">
+            <summary>
+            Gets filtered media sources for an item based on the authenticated caller's quality policy.
+            </summary>
+            <param name="itemId">The item ID.</param>
+            <returns>Filtered list of media sources.</returns>
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Api.QualityGateController.GetDefaultSource(System.Guid)">
+            <summary>
+            Gets the default (preferred) media source for an item based on the caller's policy.
+            Returns the first allowed source.
+            </summary>
+        </member>
+        <member name="T:Jellyfin.Plugin.QualityGate.Configuration.PluginConfiguration">
+            <summary>
+            Plugin configuration.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Configuration.PluginConfiguration.#ctor">
+            <summary>
+            Initializes a new instance of the <see cref="T:Jellyfin.Plugin.QualityGate.Configuration.PluginConfiguration"/> class.
+            </summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.QualityGate.Configuration.PluginConfiguration.Policies">
+            <summary>
+            Gets or sets the list of quality policies.
+            </summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.QualityGate.Configuration.PluginConfiguration.UserPolicies">
+            <summary>
+            Gets or sets the user-to-policy assignments (overrides).
+            </summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.QualityGate.Configuration.PluginConfiguration.DefaultPolicyId">
+            <summary>
+            Gets or sets the default policy ID applied to all users.
+            Users with specific assignments in UserPolicies override this.
+            Empty string means no default policy (full access for all).
+            </summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.QualityGate.Configuration.PluginConfiguration.DefaultIntroVideoPath">
+            <summary>
+            Gets or sets the default intro video path for users without a policy-specific intro.
+            Example: "/media/intros/GeiserLand.mp4"
+            </summary>
+        </member>
+        <member name="T:Jellyfin.Plugin.QualityGate.Configuration.QualityPolicy">
+            <summary>
+            Defines a quality restriction policy.
+            </summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.QualityGate.Configuration.QualityPolicy.Id">
+            <summary>
+            Gets or sets the unique policy identifier.
+            </summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.QualityGate.Configuration.QualityPolicy.Name">
+            <summary>
+            Gets or sets the policy name (e.g., "Low Bitrate Only", "Transcoded Files").
+            </summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.QualityGate.Configuration.QualityPolicy.Description">
+            <summary>
+            Gets or sets the description of the policy.
+            </summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.QualityGate.Configuration.QualityPolicy.AllowedFilenamePatterns">
+            <summary>
+            Gets or sets regex patterns matched against filenames.
+            Files whose filename matches at least one pattern are allowed.
+            Example: ["- 720p", "- 1080p"] to only allow those versions.
+            </summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.QualityGate.Configuration.QualityPolicy.BlockedFilenamePatterns">
+            <summary>
+            Gets or sets regex patterns matched against filenames.
+            Files whose filename matches any pattern are blocked.
+            Example: ["- 2160p", "- 4K"] to block UHD versions.
+            </summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.QualityGate.Configuration.QualityPolicy.Enabled">
+            <summary>
+            Gets or sets a value indicating whether this policy is enabled.
+            </summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.QualityGate.Configuration.QualityPolicy.BlockedMessageHeader">
+            <summary>
+            Gets or sets the header text shown when playback is blocked.
+            </summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.QualityGate.Configuration.QualityPolicy.BlockedMessageText">
+            <summary>
+            Gets or sets the message shown when playback is blocked.
+            </summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.QualityGate.Configuration.QualityPolicy.BlockedMessageTimeoutMs">
+            <summary>
+            Gets or sets the timeout in milliseconds for the blocked message.
+            </summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.QualityGate.Configuration.QualityPolicy.IntroVideoPath">
+            <summary>
+            Gets or sets the path to a custom intro video for users under this policy.
+            If empty, uses Jellyfin's default intro video (if configured in plugin intros).
+            Example: "/media/intros/720p-intro.mp4"
+            </summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.QualityGate.Configuration.QualityPolicy.FallbackTranscode">
+            <summary>
+            Gets or sets a value indicating whether to fall back to server-side transcoding
+            when no media source matches the allowed filename patterns.
+            When enabled, instead of blocking playback, the original file is served
+            with direct play/stream disabled, forcing Jellyfin to transcode.
+            </summary>
+        </member>
+        <member name="T:Jellyfin.Plugin.QualityGate.Configuration.UserPolicyAssignment">
+            <summary>
+            Assigns a policy to a user (overrides the default policy).
+            </summary>
+        </member>
+        <member name="F:Jellyfin.Plugin.QualityGate.Configuration.UserPolicyAssignment.FullAccessPolicyId">
+            <summary>
+            Special policy ID that indicates full access (no restrictions).
+            </summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.QualityGate.Configuration.UserPolicyAssignment.UserId">
+            <summary>
+            Gets or sets the Jellyfin user ID.
+            </summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.QualityGate.Configuration.UserPolicyAssignment.Username">
+            <summary>
+            Gets or sets the username (for display purposes).
+            </summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.QualityGate.Configuration.UserPolicyAssignment.PolicyId">
+            <summary>
+            Gets or sets the policy ID assigned to this user.
+            Use "__FULL_ACCESS__" to give unrestricted access.
+            Empty string means use the default policy.
+            </summary>
+        </member>
+        <member name="T:Jellyfin.Plugin.QualityGate.Filters.MediaSourceResultFilter">
+             <summary>
+             Two-phase MVC filter that forces Jellyfin's transcoding pipeline to build proper
+             TranscodingUrls when fallback-transcode is needed, and removes blocked MediaSources
+             from API responses before serialization.
+            
+             Phase 1 (IAsyncResourceFilter): runs BEFORE model binding. For PlaybackInfo requests
+             where fallback is needed, modifies the query string to set enableDirectPlay=false and
+             enableDirectStream=false. Jellyfin's StreamBuilder then chooses Transcode and builds
+             proper TranscodingUrls — simply flipping flags on the result doesn't work because
+             TranscodingUrl remains null when StreamBuilder originally chose DirectPlay.
+            
+             Phase 2 (IAsyncResultFilter): runs BEFORE serialization. Filters blocked sources from
+             responses, hides fully-blocked items from listings, and skips filtering for PlaybackInfo
+             requests where the pipeline was already forced into transcode mode.
+             </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Filters.MediaSourceResultFilter.#ctor(Microsoft.Extensions.Logging.ILogger{Jellyfin.Plugin.QualityGate.Filters.MediaSourceResultFilter},MediaBrowser.Controller.Library.ILibraryManager,MediaBrowser.Controller.Library.IMediaSourceManager)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Jellyfin.Plugin.QualityGate.Filters.MediaSourceResultFilter"/> class.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Filters.MediaSourceResultFilter.OnResourceExecutionAsync(Microsoft.AspNetCore.Mvc.Filters.ResourceExecutingContext,Microsoft.AspNetCore.Mvc.Filters.ResourceExecutionDelegate)">
+             <summary>
+             Phase 1: Resource filter — runs BEFORE model binding.
+             For PlaybackInfo POST requests where all sources are blocked by the user's policy
+             and FallbackTranscode is enabled, modifies the request body to strip
+             DirectPlayProfiles from the DeviceProfile. This forces Jellyfin's StreamBuilder
+             to choose Transcode and build proper TranscodingUrls.
+            
+             In Jellyfin 10.11+ the enableDirectPlay/enableDirectStream query parameters are
+             obsolete and ignored — the DeviceProfile in the POST body is the sole driver of
+             the direct-play vs transcode decision.
+             </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Filters.MediaSourceResultFilter.OnResultExecutionAsync(Microsoft.AspNetCore.Mvc.Filters.ResultExecutingContext,Microsoft.AspNetCore.Mvc.Filters.ResultExecutionDelegate)">
+            <summary>
+            Phase 2: Result filter — runs BEFORE response serialization.
+            Filters blocked sources, hides fully-blocked items, and skips filtering for
+            PlaybackInfo requests where the pipeline was already forced into transcode mode.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Filters.MediaSourceResultFilter.TryForceTranscodeBodyAsync(Microsoft.AspNetCore.Http.HttpContext,System.String)">
+             <summary>
+             Checks if the current PlaybackInfo POST request needs fallback transcoding, and if so,
+             modifies the request body to strip DirectPlayProfiles from the DeviceProfile.
+             This runs BEFORE model binding, so Jellyfin's StreamBuilder receives a DeviceProfile
+             with no DirectPlay options and is forced to choose Transcode, building proper
+             TranscodingUrls that the client needs to initiate server-side transcoding.
+            
+             In Jellyfin 10.11+ the enableDirectPlay query parameter is obsolete and ignored —
+             the DeviceProfile in the POST body is the sole driver of the playback decision.
+             </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Filters.MediaSourceResultFilter.BuildDefaultTranscodingProfiles">
+            <summary>
+            Builds a default set of TranscodingProfiles for the fallback DeviceProfile.
+            Covers HLS video (h264/aac) and audio-only (aac) which are universally supported.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Filters.MediaSourceResultFilter.ExtractItemIdFromPath(System.String)">
+            <summary>
+            Extracts the item GUID from a URL path like /Items/{guid}/PlaybackInfo.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Filters.MediaSourceResultFilter.ShouldHideItem(MediaBrowser.Model.Dto.BaseItemDto,Jellyfin.Plugin.QualityGate.Configuration.QualityPolicy,System.Guid)">
+            <summary>
+            Determines if an item should be hidden from listings because all its media sources are blocked.
+            When MediaSources is populated on the DTO, filters them in-place and returns true if none remain.
+            When MediaSources is null (listing endpoints that don't request Fields=MediaSources), looks up
+            the actual sources from the library to make the visibility decision.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Filters.MediaSourceResultFilter.IsConfiguredIntroPath(System.String)">
+            <summary>
+            Checks if a file path is a configured intro video (policy or default).
+            Intro videos must always be playable regardless of user policy.
+            </summary>
+        </member>
+        <member name="T:Jellyfin.Plugin.QualityGate.Plugin">
+            <summary>
+            Quality Gate plugin for Jellyfin.
+            Restricts users to specific media versions based on policies.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Plugin.#ctor(MediaBrowser.Common.Configuration.IApplicationPaths,MediaBrowser.Model.Serialization.IXmlSerializer)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Jellyfin.Plugin.QualityGate.Plugin"/> class.
+            </summary>
+            <param name="applicationPaths">Instance of the <see cref="T:MediaBrowser.Common.Configuration.IApplicationPaths"/> interface.</param>
+            <param name="xmlSerializer">Instance of the <see cref="T:MediaBrowser.Model.Serialization.IXmlSerializer"/> interface.</param>
+        </member>
+        <member name="P:Jellyfin.Plugin.QualityGate.Plugin.Name">
+            <inheritdoc />
+        </member>
+        <member name="P:Jellyfin.Plugin.QualityGate.Plugin.Id">
+            <inheritdoc />
+        </member>
+        <member name="P:Jellyfin.Plugin.QualityGate.Plugin.Description">
+            <inheritdoc />
+        </member>
+        <member name="P:Jellyfin.Plugin.QualityGate.Plugin.Instance">
+            <summary>
+            Gets the current plugin instance.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Plugin.GetPages">
+            <inheritdoc />
+        </member>
+        <member name="T:Jellyfin.Plugin.QualityGate.PluginServiceRegistrator">
+            <summary>
+            Registers plugin services with the dependency injection container.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.PluginServiceRegistrator.RegisterServices(Microsoft.Extensions.DependencyInjection.IServiceCollection,MediaBrowser.Controller.IServerApplicationHost)">
+            <inheritdoc />
+        </member>
+        <member name="T:Jellyfin.Plugin.QualityGate.Providers.QualityGateIntroProvider">
+            <summary>
+            Provides custom intro videos based on user quality policies.
+            When a user is under a policy with a custom intro path, that intro is
+            added to Jellyfin's intro list. Note: Jellyfin aggregates all registered
+            IIntroProvider results, so if the built-in "Local Intros" plugin is also
+            enabled its intros will play in addition to this one. Disable "Local Intros"
+            if you only want Quality Gate intros.
+            </summary>
+        </member>
+        <member name="F:Jellyfin.Plugin.QualityGate.Providers.QualityGateIntroProvider._introIdCache">
+            <summary>
+            Cache of intro paths → DB item IDs to avoid redundant lookups/registrations.
+            Also used by the result filter to skip filtering for intro video playback.
+            </summary>
+        </member>
+        <member name="F:Jellyfin.Plugin.QualityGate.Providers.QualityGateIntroProvider._seriesIntroShown">
+            <summary>
+            Tracks which (userId, seriesId) pairs have already seen the intro this session.
+            For shows, the intro plays only on the first episode; this cache ensures subsequent
+            episodes skip it even before Jellyfin's UserData is updated.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Providers.QualityGateIntroProvider.IsRegisteredIntro(System.Guid)">
+            <summary>
+            Checks whether an item ID belongs to a registered intro video.
+            Used by <see cref="T:Jellyfin.Plugin.QualityGate.Filters.MediaSourceResultFilter"/> to skip policy
+            filtering on intro playback requests.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Providers.QualityGateIntroProvider.#ctor(Microsoft.Extensions.Logging.ILoggerFactory,MediaBrowser.Controller.Library.ILibraryManager,MediaBrowser.Model.IO.IFileSystem,MediaBrowser.Controller.Library.IMediaSourceManager,MediaBrowser.Controller.Library.IUserDataManager)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Jellyfin.Plugin.QualityGate.Providers.QualityGateIntroProvider"/> class.
+            </summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.QualityGate.Providers.QualityGateIntroProvider.Name">
+            <inheritdoc />
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Providers.QualityGateIntroProvider.GetIntros(MediaBrowser.Controller.Entities.BaseItem,Jellyfin.Database.Implementations.Entities.User)">
+            <inheritdoc />
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Providers.QualityGateIntroProvider.ShouldSkipIntro(MediaBrowser.Controller.Entities.BaseItem,Jellyfin.Database.Implementations.Entities.User)">
+            <summary>
+            Determines whether the intro should be skipped for this playback.
+            Movies: skip if user is resuming (has playback progress).
+            Episodes: skip if user has already watched any episode of the series.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Providers.QualityGateIntroProvider.EnsureIntroRegistered(System.String)">
+            <summary>
+            Ensures an intro video file is registered in Jellyfin's database.
+            Jellyfin's ResolveIntro calls ResolvePath then GetItemById — if the video
+            isn't in the DB, it silently discards the intro. We mirror that flow and
+            call CreateItem when the video is missing.
+            </summary>
+        </member>
+        <member name="T:Jellyfin.Plugin.QualityGate.Services.QualityGateService">
+            <summary>
+            Service for applying quality gate policies to media access.
+            </summary>
+        </member>
+        <member name="F:Jellyfin.Plugin.QualityGate.Services.QualityGateService.DenyAllPolicy">
+            <summary>
+            Sentinel policy returned when a user override references an invalid, disabled, or deleted PolicyId.
+            Blocks everything (fail-closed) so that admin misconfiguration cannot widen access.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Services.QualityGateService.GetUserPolicy(System.Guid)">
+            <summary>
+            Gets the effective policy for a user.
+            Priority: User-specific override > Default policy > No policy (full access).
+            If a user override points to a missing or disabled policy, access is DENIED (fail-closed).
+            </summary>
+            <param name="userId">The user ID.</param>
+            <returns>The effective policy, or null if user has full access.</returns>
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Services.QualityGateService.ResolvePath(System.String)">
+            <summary>
+            Resolves a path, following symlinks to get the actual target path.
+            </summary>
+            <param name="path">The path to resolve.</param>
+            <returns>The resolved path (symlink target), or original path if not a symlink.</returns>
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Services.QualityGateService.MatchesFilenamePattern(System.String,System.String,System.Boolean)">
+            <summary>
+            Matches a filename against a regex pattern with a timeout to prevent ReDoS.
+            When <paramref name="failClosed"/> is true (used for blocked-pattern checks),
+            timeouts and invalid patterns return true so the file is blocked (fail-closed).
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Services.QualityGateService.IsPathAllowed(Jellyfin.Plugin.QualityGate.Configuration.QualityPolicy,System.String)">
+            <summary>
+            Checks if a file path is allowed by the given policy.
+            Resolves symlinks to check both original and resolved filenames.
+            </summary>
+            <param name="policy">The quality policy.</param>
+            <param name="filePath">The file path to check.</param>
+            <returns>True if allowed, false if blocked.</returns>
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Services.QualityGateService.IsSourcePlayable(Jellyfin.Plugin.QualityGate.Configuration.QualityPolicy,System.String)">
+            <summary>
+            Checks whether a media source is allowed by policy AND actually exists on disk.
+            Dangling symlinks (e.g. pre-created 720p transcodes not yet finished) are treated as blocked.
+            This is the single source of truth for "can this source be played" — used by the
+            result filter, API controller, and intro provider.
+            </summary>
+            <param name="policy">The quality policy.</param>
+            <param name="path">The file path to check.</param>
+            <returns>True if allowed by policy and file exists.</returns>
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Services.QualityGateService.ShouldFallbackTranscode(Jellyfin.Plugin.QualityGate.Configuration.QualityPolicy,System.Collections.Generic.IEnumerable{MediaBrowser.Model.Dto.MediaSourceInfo})">
+            <summary>
+            Determines whether fallback transcoding should be used for the given policy and sources.
+            Returns true only when the policy has FallbackTranscode enabled, the policy is not
+            the DenyAllPolicy sentinel (misconfiguration must stay fail-closed), there are sources
+            to play, and none of them pass the policy filter.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Services.QualityGateService.ApplyFallbackTranscode(System.Collections.Generic.IEnumerable{MediaBrowser.Model.Dto.MediaSourceInfo})">
+            <summary>
+            Returns a copy of the sources with direct play and direct stream disabled,
+            forcing Jellyfin to transcode server-side.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Services.QualityGateService.FilterMediaSources(System.Guid,System.Collections.Generic.IEnumerable{MediaBrowser.Model.Dto.MediaSourceInfo})">
+            <summary>
+            Filters media sources based on user policy.
+            </summary>
+            <param name="userId">The user ID.</param>
+            <param name="mediaSources">The available media sources.</param>
+            <returns>Filtered list of media sources.</returns>
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Services.QualityGateService.CanAccessPath(System.Guid,System.String)">
+            <summary>
+            Checks if a user can access a specific file path.
+            </summary>
+            <param name="userId">The user ID.</param>
+            <param name="path">The file path.</param>
+            <returns>True if access is allowed.</returns>
+        </member>
+        <member name="M:Jellyfin.Plugin.QualityGate.Services.QualityGateService.HasFullAccess(System.Guid)">
+            <summary>
+            Checks if a user has full access (no restrictions).
+            </summary>
+            <param name="userId">The user ID.</param>
+            <returns>True if user has full access.</returns>
+        </member>
+    </members>
+</doc>

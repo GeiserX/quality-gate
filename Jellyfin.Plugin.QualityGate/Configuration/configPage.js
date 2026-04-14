@@ -462,6 +462,12 @@ function renderPolicies(view) {
                         '</select>' +
                         '<div class="fieldDescription">When no file matches the allowed patterns, transcode at the selected resolution instead of blocking.</div>' +
                     '</div>' +
+                    '<div class="inputContainer qg-policy-bitrate-field">' +
+                        '<label class="inputLabel inputLabelUnfocused" for="policy-bitrate-' + index + '">Max Bitrate (Mbps)</label>' +
+                        '<input type="number" id="policy-bitrate-' + index + '" class="emby-input policy-fallback-bitrate" ' +
+                            'value="' + (policy.FallbackMaxBitrateMbps || 0) + '" min="0" step="1" />' +
+                        '<div class="fieldDescription">Override transcode bitrate in Mbps (e.g. 4). 0 = auto from resolution.</div>' +
+                    '</div>' +
                     '<div class="checkboxContainer checkboxContainer-withDescription qg-policy-toggle">' +
                         '<label>' +
                             '<input is="emby-checkbox" type="checkbox" class="policy-enabled" id="' + enabledId + '" ' +
@@ -776,6 +782,7 @@ function collectFromDOM(view) {
         var fallbackVal = card.querySelector('.policy-fallback-mode').value;
         config.Policies[index].FallbackTranscode = fallbackVal !== 'off';
         config.Policies[index].FallbackMaxHeight = fallbackVal !== 'off' ? parseInt(fallbackVal, 10) : 0;
+        config.Policies[index].FallbackMaxBitrateMbps = parseInt(card.querySelector('.policy-fallback-bitrate').value, 10) || 0;
         config.Policies[index].Enabled = card.querySelector('.policy-enabled').checked;
     });
 
@@ -813,6 +820,7 @@ function addPolicy(view) {
         Enabled: true,
         FallbackTranscode: false,
         FallbackMaxHeight: 0,
+        FallbackMaxBitrateMbps: 0,
         BlockedMessageHeader: 'Quality Restricted',
         BlockedMessageText: 'This quality version is not available for your account.',
         BlockedMessageTimeoutMs: 8000,
@@ -924,6 +932,7 @@ function loadConfig(view) {
             policy.BlockedFilenamePatterns = policy.BlockedFilenamePatterns || [];
             policy.FallbackTranscode = policy.FallbackTranscode || false;
             policy.FallbackMaxHeight = policy.FallbackMaxHeight || 0;
+            policy.FallbackMaxBitrateMbps = policy.FallbackMaxBitrateMbps || 0;
         });
         return ApiClient.getUsers();
     }).then(function (userList) {

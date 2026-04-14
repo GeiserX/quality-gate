@@ -235,7 +235,9 @@ public class MediaSourceResultFilter : IAsyncResourceFilter, IAsyncResultFilter
             {
                 var maxHeight = policy.FallbackMaxHeight;
                 var maxWidth = (int)Math.Round(maxHeight * 16.0 / 9.0);
-                bodyObj["MaxStreamingBitrate"] = GetMaxBitrateForHeight(maxHeight);
+                bodyObj["MaxStreamingBitrate"] = policy.FallbackMaxBitrateMbps > 0
+                    ? (long)policy.FallbackMaxBitrateMbps * 1_000_000
+                    : GetMaxBitrateForHeight(maxHeight);
 
                 // Inject CodecProfile conditions to enforce resolution limit
                 if (bodyObj["DeviceProfile"] is JsonObject dp)
