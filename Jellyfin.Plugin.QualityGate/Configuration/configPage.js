@@ -451,6 +451,14 @@ function renderPolicies(view) {
                     '</div>' +
                     '<div class="checkboxContainer checkboxContainer-withDescription qg-policy-toggle">' +
                         '<label>' +
+                            '<input is="emby-checkbox" type="checkbox" class="policy-fallback-transcode" id="policy-fallback-' + index + '" ' +
+                                (policy.FallbackTranscode ? 'checked' : '') + ' />' +
+                            '<span>Fallback Transcode</span>' +
+                        '</label>' +
+                        '<div class="fieldDescription">If the allowed quality doesn\'t exist, transcode the original file instead of blocking.</div>' +
+                    '</div>' +
+                    '<div class="checkboxContainer checkboxContainer-withDescription qg-policy-toggle">' +
+                        '<label>' +
                             '<input is="emby-checkbox" type="checkbox" class="policy-enabled" id="' + enabledId + '" ' +
                                 (policy.Enabled !== false ? 'checked' : '') + ' />' +
                             '<span>Enabled</span>' +
@@ -760,6 +768,7 @@ function collectFromDOM(view) {
             }
         ).filter(Boolean);
         config.Policies[index].IntroVideoPath = card.querySelector('.policy-intro').value.trim();
+        config.Policies[index].FallbackTranscode = card.querySelector('.policy-fallback-transcode').checked;
         config.Policies[index].Enabled = card.querySelector('.policy-enabled').checked;
     });
 
@@ -795,6 +804,7 @@ function addPolicy(view) {
         AllowedFilenamePatterns: [],
         BlockedFilenamePatterns: [],
         Enabled: true,
+        FallbackTranscode: false,
         BlockedMessageHeader: 'Quality Restricted',
         BlockedMessageText: 'This quality version is not available for your account.',
         BlockedMessageTimeoutMs: 8000,
@@ -900,10 +910,11 @@ function loadConfig(view) {
         config.UserPolicies = config.UserPolicies || [];
         config.DefaultPolicyId = config.DefaultPolicyId || '';
         config.DefaultIntroVideoPath = config.DefaultIntroVideoPath || '';
-        // Ensure filename pattern fields exist on each policy (upgrade from v2)
+        // Ensure fields exist on each policy (upgrade from older versions)
         config.Policies.forEach(function (policy) {
             policy.AllowedFilenamePatterns = policy.AllowedFilenamePatterns || [];
             policy.BlockedFilenamePatterns = policy.BlockedFilenamePatterns || [];
+            policy.FallbackTranscode = policy.FallbackTranscode || false;
         });
         return ApiClient.getUsers();
     }).then(function (userList) {
@@ -1022,7 +1033,7 @@ export default function (view) {
             return;
         }
 
-        if (event.target.matches('#defaultPolicySelect, .policy-enabled, .policy-name')) {
+        if (event.target.matches('#defaultPolicySelect, .policy-enabled, .policy-fallback-transcode, .policy-name')) {
             refreshComputedPreview(view);
         }
 

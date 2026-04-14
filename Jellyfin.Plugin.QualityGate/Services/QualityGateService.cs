@@ -198,6 +198,37 @@ public static class QualityGateService
     }
 
     /// <summary>
+    /// Determines whether fallback transcoding should be used for the given policy and sources.
+    /// Returns true only when the policy has FallbackTranscode enabled, the policy is not
+    /// the DenyAllPolicy sentinel (misconfiguration must stay fail-closed), there are sources
+    /// to play, and none of them pass the policy filter.
+    /// </summary>
+    public static bool ShouldFallbackTranscode(QualityPolicy policy, IEnumerable<MediaSourceInfo> sources)
+    {
+        if (!policy.FallbackTranscode || ReferenceEquals(policy, DenyAllPolicy))
+        {
+            return false;
+        }
+
+        var sourceList = sources as IList<MediaSourceInfo> ?? sources.ToList();
+        return sourceList.Count > 0 && !sourceList.Any(s => IsSourcePlayable(policy, s.Path));
+    }
+
+    /// <summary>
+    /// Returns a copy of the sources with direct play and direct stream disabled,
+    /// forcing Jellyfin to transcode server-side.
+    /// </summary>
+    public static MediaSourceInfo[] ApplyFallbackTranscode(IEnumerable<MediaSourceInfo> sources)
+    {
+        return sources.Select(s =>
+        {
+            s.SupportsDirectPlay = false;
+            s.SupportsDirectStream = false;
+            return s;
+        }).ToArray();
+    }
+
+    /// <summary>
     /// Filters media sources based on user policy.
     /// </summary>
     /// <param name="userId">The user ID.</param>

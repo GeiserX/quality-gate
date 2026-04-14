@@ -102,10 +102,20 @@ public class MediaSourceResultFilter : IAsyncResultFilter
 
                 if (filtered.Length == 0 && original.Count > 0)
                 {
-                    playbackInfo.ErrorCode = MediaBrowser.Model.Dlna.PlaybackErrorCode.NotAllowed;
-                    _logger.LogInformation(
-                        "QualityGate: All sources blocked for user {User} (policy: {Policy}) — returning NotAllowed",
-                        (object)userId, policy.Name);
+                    if (QualityGateService.ShouldFallbackTranscode(policy, original))
+                    {
+                        playbackInfo.MediaSources = QualityGateService.ApplyFallbackTranscode(original);
+                        _logger.LogInformation(
+                            "QualityGate: Fallback transcode for user {User} (policy: {Policy}) — {Count} sources forced to transcode",
+                            (object)userId, policy.Name, original.Count);
+                    }
+                    else
+                    {
+                        playbackInfo.ErrorCode = MediaBrowser.Model.Dlna.PlaybackErrorCode.NotAllowed;
+                        _logger.LogInformation(
+                            "QualityGate: All sources blocked for user {User} (policy: {Policy}) — returning NotAllowed",
+                            (object)userId, policy.Name);
+                    }
                 }
 
                 break;
@@ -121,7 +131,18 @@ public class MediaSourceResultFilter : IAsyncResultFilter
                 _logger.LogInformation(
                     "QualityGate: Filtered item sources for user {User} (policy: {Policy}) - {Original} to {Filtered} sources",
                     (object)userId, policy.Name, original.Count, filtered.Length);
-                itemDto.MediaSources = filtered;
+
+                if (filtered.Length == 0 && original.Count > 0 && QualityGateService.ShouldFallbackTranscode(policy, original))
+                {
+                    itemDto.MediaSources = QualityGateService.ApplyFallbackTranscode(original);
+                    _logger.LogInformation(
+                        "QualityGate: Fallback transcode for item '{Name}' user {User} (policy: {Policy})",
+                        itemDto.Name, (object)userId, policy.Name);
+                }
+                else
+                {
+                    itemDto.MediaSources = filtered;
+                }
 
                 break;
             }
@@ -190,7 +211,18 @@ public class MediaSourceResultFilter : IAsyncResultFilter
                 "QualityGate: Filtered '{Name}' for user {User} - {Original} to {Filtered} sources",
                 itemDto.Name, (object)userId, original.Count, itemDto.MediaSources.Length);
 
-            return itemDto.MediaSources.Length == 0 && original.Count > 0;
+            if (itemDto.MediaSources.Length == 0 && original.Count > 0)
+            {
+                if (QualityGateService.ShouldFallbackTranscode(policy, original))
+                {
+                    itemDto.MediaSources = QualityGateService.ApplyFallbackTranscode(original);
+                    return false;
+                }
+
+                return true;
+            }
+
+            return false;
         }
 
         // MediaSources not populated — look up from library to decide visibility
@@ -211,6 +243,14 @@ public class MediaSourceResultFilter : IAsyncResultFilter
             var allBlocked = !sources.Any(s => QualityGateService.IsSourcePlayable(policy, s.Path));
             if (allBlocked)
             {
+                if (QualityGateService.ShouldFallbackTranscode(policy, sources))
+                {
+                    _logger.LogDebug(
+                        "QualityGate: Fallback transcode — not hiding '{Name}' (user {User}, library lookup)",
+                        itemDto.Name, (object)userId);
+                    return false;
+                }
+
                 _logger.LogDebug(
                     "QualityGate: All {Count} sources blocked for '{Name}' (user {User}, library lookup)",
                     sources.Count, itemDto.Name, (object)userId);
