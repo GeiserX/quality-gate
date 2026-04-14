@@ -3,7 +3,7 @@
   "changelog": "v3.2.0.0: Removed path-prefix support, filename regex patterns only. Fail-closed default policy. Dangling symlink protection. Unit tests.",
   "description": "Quality Gate allows Jellyfin administrators to restrict users to specific media versions via filename regex patterns. Designed for Jellyfin multi-version naming (e.g. 'Movie (2021) - 1080p.mkv'). Useful for bandwidth management, tiered access, and device optimization.",
   "guid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "name": "Quality Gate",
+  "name": "QualityGate",
   "overview": "Restrict users to specific media versions based on filename regex patterns.",
   "owner": "GeiserX",
   "targetAbi": "10.11.0.0",

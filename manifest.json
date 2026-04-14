@@ -1,7 +1,7 @@
 [
   {
     "guid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-    "name": "Quality Gate",
+    "name": "QualityGate",
     "overview": "Restrict users to specific media versions based on filename regex patterns.",
     "description": "Quality Gate allows Jellyfin administrators to restrict users to specific media versions via filename regex patterns. Designed for Jellyfin multi-version naming (e.g. 'Movie (2021) - 1080p.mkv'). Useful for bandwidth management, tiered access, and device optimization.",
     "owner": "GeiserX",
