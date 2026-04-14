@@ -335,6 +335,11 @@ public class MediaSourceResultFilter : IAsyncResourceFilter, IAsyncResultFilter
 
         var start = itemsIdx + 7; // length of "/Items/"
         var end = path.IndexOf('/', start);
+        if (end < 0)
+        {
+            end = path.Length;
+        }
+
         if (end <= start)
         {
             return Guid.Empty;
