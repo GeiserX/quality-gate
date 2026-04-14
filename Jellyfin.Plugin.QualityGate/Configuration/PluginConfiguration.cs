@@ -111,6 +111,14 @@ public class QualityPolicy
     /// with direct play/stream disabled, forcing Jellyfin to transcode.
     /// </summary>
     public bool FallbackTranscode { get; set; }
+
+    /// <summary>
+    /// Gets or sets the maximum video height for fallback transcoding (e.g. 720 for 720p).
+    /// When greater than zero, forces the transcode output to be capped at this resolution.
+    /// When zero (default), the transcode uses the source resolution (no cap).
+    /// Only applies when <see cref="FallbackTranscode"/> is enabled.
+    /// </summary>
+    public int FallbackMaxHeight { get; set; }
 }
 
 /// <summary>

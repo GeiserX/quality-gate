@@ -449,13 +449,18 @@ function renderPolicies(view) {
                             'placeholder="/media/intros/policy-intro.mp4" />' +
                         '<div class="fieldDescription">Optional. Users under this policy see this intro instead of the default.</div>' +
                     '</div>' +
-                    '<div class="checkboxContainer checkboxContainer-withDescription qg-policy-toggle">' +
-                        '<label>' +
-                            '<input is="emby-checkbox" type="checkbox" class="policy-fallback-transcode" id="policy-fallback-' + index + '" ' +
-                                (policy.FallbackTranscode ? 'checked' : '') + ' />' +
-                            '<span>Fallback Transcode</span>' +
-                        '</label>' +
-                        '<div class="fieldDescription">If the allowed quality doesn\'t exist, transcode the original file instead of blocking.</div>' +
+                    '<div class="selectContainer qg-policy-fallback-field">' +
+                        '<label class="selectLabel" for="policy-fallback-' + index + '">If No Match Found</label>' +
+                        '<select is="emby-select" id="policy-fallback-' + index + '" class="emby-select policy-fallback-mode">' +
+                            '<option value="off"' + (!policy.FallbackTranscode ? ' selected' : '') + '>Block playback</option>' +
+                            '<option value="480"' + (policy.FallbackTranscode && policy.FallbackMaxHeight === 480 ? ' selected' : '') + '>Transcode to 480p</option>' +
+                            '<option value="720"' + (policy.FallbackTranscode && policy.FallbackMaxHeight === 720 ? ' selected' : '') + '>Transcode to 720p</option>' +
+                            '<option value="1080"' + (policy.FallbackTranscode && policy.FallbackMaxHeight === 1080 ? ' selected' : '') + '>Transcode to 1080p</option>' +
+                            '<option value="1440"' + (policy.FallbackTranscode && policy.FallbackMaxHeight === 1440 ? ' selected' : '') + '>Transcode to 1440p</option>' +
+                            '<option value="2160"' + (policy.FallbackTranscode && policy.FallbackMaxHeight === 2160 ? ' selected' : '') + '>Transcode to 4K</option>' +
+                            '<option value="0"' + (policy.FallbackTranscode && policy.FallbackMaxHeight === 0 ? ' selected' : '') + '>Transcode (no resolution cap)</option>' +
+                        '</select>' +
+                        '<div class="fieldDescription">When no file matches the allowed patterns, transcode at the selected resolution instead of blocking.</div>' +
                     '</div>' +
                     '<div class="checkboxContainer checkboxContainer-withDescription qg-policy-toggle">' +
                         '<label>' +
@@ -768,7 +773,9 @@ function collectFromDOM(view) {
             }
         ).filter(Boolean);
         config.Policies[index].IntroVideoPath = card.querySelector('.policy-intro').value.trim();
-        config.Policies[index].FallbackTranscode = card.querySelector('.policy-fallback-transcode').checked;
+        var fallbackVal = card.querySelector('.policy-fallback-mode').value;
+        config.Policies[index].FallbackTranscode = fallbackVal !== 'off';
+        config.Policies[index].FallbackMaxHeight = fallbackVal !== 'off' ? parseInt(fallbackVal, 10) : 0;
         config.Policies[index].Enabled = card.querySelector('.policy-enabled').checked;
     });
 
@@ -805,6 +812,7 @@ function addPolicy(view) {
         BlockedFilenamePatterns: [],
         Enabled: true,
         FallbackTranscode: false,
+        FallbackMaxHeight: 0,
         BlockedMessageHeader: 'Quality Restricted',
         BlockedMessageText: 'This quality version is not available for your account.',
         BlockedMessageTimeoutMs: 8000,
@@ -915,6 +923,7 @@ function loadConfig(view) {
             policy.AllowedFilenamePatterns = policy.AllowedFilenamePatterns || [];
             policy.BlockedFilenamePatterns = policy.BlockedFilenamePatterns || [];
             policy.FallbackTranscode = policy.FallbackTranscode || false;
+            policy.FallbackMaxHeight = policy.FallbackMaxHeight || 0;
         });
         return ApiClient.getUsers();
     }).then(function (userList) {
