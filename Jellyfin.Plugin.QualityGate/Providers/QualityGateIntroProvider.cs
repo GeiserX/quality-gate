@@ -106,7 +106,8 @@ public class QualityGateIntroProvider : IIntroProvider
                 try
                 {
                     var sources = _mediaSourceManager.GetStaticMediaSources(item, false);
-                    if (sources.Count > 0 && !sources.Any(s => QualityGateService.IsSourcePlayable(policy, s.Path)))
+                    if (sources.Count > 0 && !sources.Any(s => QualityGateService.IsSourcePlayable(policy, s.Path))
+                        && !QualityGateService.ShouldFallbackTranscode(policy, sources))
                     {
                         _logger.LogDebug(
                             "QualityGateIntroProvider: Skipping intro — all sources blocked for user {UserName}",

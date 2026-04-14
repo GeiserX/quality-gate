@@ -93,6 +93,14 @@ public class QualityGateController : ControllerBase
             "QualityGate API: Filtered sources for user {UserId} (policy: {Policy}) - {Original} -> {Filtered}",
             (object)userId, policy.Name, sourceList.Count, filteredSources.Count);
 
+        if (filteredSources.Count == 0 && QualityGateService.ShouldFallbackTranscode(policy, sourceList))
+        {
+            _logger.LogInformation(
+                "QualityGate API: Fallback transcode for user {UserId} (policy: {Policy}) — {Count} sources",
+                (object)userId, policy.Name, sourceList.Count);
+            return Ok(QualityGateService.ApplyFallbackTranscode(sourceList));
+        }
+
         return Ok(filteredSources);
     }
 
