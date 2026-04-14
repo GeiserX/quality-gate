@@ -243,7 +243,7 @@ public class MediaSourceResultFilter : IAsyncResourceFilter, IAsyncResultFilter
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "QualityGate: Error in TryForceTranscodeBodyAsync, skipping");
+            _logger.LogWarning(ex, "QualityGate: Error in TryForceTranscodeBodyAsync, skipping");
         }
     }
 
@@ -317,7 +317,10 @@ public class MediaSourceResultFilter : IAsyncResourceFilter, IAsyncResultFilter
 
                 if (filtered.Length == 0 && original.Count > 0)
                 {
-                    if (QualityGateService.ShouldFallbackTranscode(policy, original))
+                    // We already know all sources failed IsSourcePlayable above.
+                    // Use PolicyAllowsFallback + file-existence check to avoid re-scanning.
+                    if (QualityGateService.PolicyAllowsFallback(policy)
+                        && original.Any(s => !string.IsNullOrEmpty(s.Path) && File.Exists(s.Path)))
                     {
                         playbackInfo.MediaSources = QualityGateService.ApplyFallbackTranscode(original);
                         _logger.LogInformation(
@@ -347,7 +350,9 @@ public class MediaSourceResultFilter : IAsyncResourceFilter, IAsyncResultFilter
                     "QualityGate: Filtered item sources for user {User} (policy: {Policy}) - {Original} to {Filtered} sources",
                     (object)userId, policy.Name, original.Count, filtered.Length);
 
-                if (filtered.Length == 0 && original.Count > 0 && QualityGateService.ShouldFallbackTranscode(policy, original))
+                if (filtered.Length == 0 && original.Count > 0
+                    && QualityGateService.PolicyAllowsFallback(policy)
+                    && original.Any(s => !string.IsNullOrEmpty(s.Path) && File.Exists(s.Path)))
                 {
                     itemDto.MediaSources = QualityGateService.ApplyFallbackTranscode(original);
                     _logger.LogInformation(
@@ -428,7 +433,8 @@ public class MediaSourceResultFilter : IAsyncResourceFilter, IAsyncResultFilter
 
             if (itemDto.MediaSources.Length == 0 && original.Count > 0)
             {
-                if (QualityGateService.ShouldFallbackTranscode(policy, original))
+                if (QualityGateService.PolicyAllowsFallback(policy)
+                    && original.Any(s => !string.IsNullOrEmpty(s.Path) && File.Exists(s.Path)))
                 {
                     itemDto.MediaSources = QualityGateService.ApplyFallbackTranscode(original);
                     return false;
@@ -458,7 +464,8 @@ public class MediaSourceResultFilter : IAsyncResourceFilter, IAsyncResultFilter
             var allBlocked = !sources.Any(s => QualityGateService.IsSourcePlayable(policy, s.Path));
             if (allBlocked)
             {
-                if (QualityGateService.ShouldFallbackTranscode(policy, sources))
+                if (QualityGateService.PolicyAllowsFallback(policy)
+                    && sources.Any(s => !string.IsNullOrEmpty(s.Path) && File.Exists(s.Path)))
                 {
                     _logger.LogDebug(
                         "QualityGate: Fallback transcode — not hiding '{Name}' (user {User}, library lookup)",

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Jellyfin.Plugin.QualityGate.Configuration;
 using MediaBrowser.Model.Dto;
@@ -198,33 +199,57 @@ public static class QualityGateService
     }
 
     /// <summary>
+    /// Checks whether the policy configuration allows fallback transcoding.
+    /// This is a lightweight check that only examines the policy flags — it does NOT
+    /// evaluate sources. Use this in the filter after sources have already been evaluated
+    /// to avoid redundant IsSourcePlayable re-scans.
+    /// </summary>
+    internal static bool PolicyAllowsFallback(QualityPolicy policy)
+    {
+        return policy.FallbackTranscode && !ReferenceEquals(policy, DenyAllPolicy);
+    }
+
+    /// <summary>
     /// Determines whether fallback transcoding should be used for the given policy and sources.
     /// Returns true only when the policy has FallbackTranscode enabled, the policy is not
-    /// the DenyAllPolicy sentinel (misconfiguration must stay fail-closed), there are sources
-    /// to play, and none of them pass the policy filter.
+    /// the DenyAllPolicy sentinel (misconfiguration must stay fail-closed), at least one
+    /// source file physically exists on disk, and none of them pass the policy filter.
     /// </summary>
     public static bool ShouldFallbackTranscode(QualityPolicy policy, IEnumerable<MediaSourceInfo> sources)
     {
-        if (!policy.FallbackTranscode || ReferenceEquals(policy, DenyAllPolicy))
+        if (!PolicyAllowsFallback(policy))
         {
             return false;
         }
 
         var sourceList = sources as IList<MediaSourceInfo> ?? sources.ToList();
-        return sourceList.Count > 0 && !sourceList.Any(s => IsSourcePlayable(policy, s.Path));
+        if (sourceList.Count == 0)
+        {
+            return false;
+        }
+
+        // At least one source must physically exist — dangling symlinks / missing files
+        // cannot be transcoded, so fallback would be useless.
+        var hasExistingSource = sourceList.Any(s =>
+            !string.IsNullOrEmpty(s.Path) && File.Exists(s.Path));
+
+        return hasExistingSource && !sourceList.Any(s => IsSourcePlayable(policy, s.Path));
     }
 
     /// <summary>
-    /// Returns a copy of the sources with direct play and direct stream disabled,
-    /// forcing Jellyfin to transcode server-side.
+    /// Returns deep-cloned copies of the sources with direct play and direct stream disabled,
+    /// forcing Jellyfin to transcode server-side. Cloning prevents mutation of cached
+    /// MediaSourceInfo objects that Jellyfin may reuse across requests.
     /// </summary>
     public static MediaSourceInfo[] ApplyFallbackTranscode(IEnumerable<MediaSourceInfo> sources)
     {
         return sources.Select(s =>
         {
-            s.SupportsDirectPlay = false;
-            s.SupportsDirectStream = false;
-            return s;
+            var clone = JsonSerializer.Deserialize<MediaSourceInfo>(
+                JsonSerializer.SerializeToUtf8Bytes(s))!;
+            clone.SupportsDirectPlay = false;
+            clone.SupportsDirectStream = false;
+            return clone;
         }).ToArray();
     }
 

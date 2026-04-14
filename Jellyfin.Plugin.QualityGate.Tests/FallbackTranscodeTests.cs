@@ -163,6 +163,62 @@ public class FallbackTranscodeTests : IDisposable
         Assert.Empty(result);
     }
 
+    [Fact]
+    public void ApplyFallback_DoesNotMutateOriginals()
+    {
+        var sources = new[]
+        {
+            MakeSource("/media/Movie - 1080p.mkv"),
+            MakeSource("/media/Movie - Remux.mkv"),
+        };
+
+        var result = QualityGateService.ApplyFallbackTranscode(sources);
+
+        // Result should have flags disabled
+        Assert.All(result, s =>
+        {
+            Assert.False(s.SupportsDirectPlay);
+            Assert.False(s.SupportsDirectStream);
+        });
+
+        // Originals must remain untouched
+        Assert.All(sources, s =>
+        {
+            Assert.True(s.SupportsDirectPlay);
+            Assert.True(s.SupportsDirectStream);
+        });
+    }
+
+    [Fact]
+    public void ShouldFallback_AllSourcesMissing_ReturnsFalse()
+    {
+        // When all source files are dangling/missing, fallback should NOT trigger
+        // because there's nothing to transcode
+        var policy = MakePolicy(allowedPatterns: new List<string> { "- 720p" }, fallbackTranscode: true);
+        var sources = new[] { MakeSource("/nonexistent/Movie - 4K.mkv") };
+        Assert.False(QualityGateService.ShouldFallbackTranscode(policy, sources));
+    }
+
+    [Fact]
+    public void PolicyAllowsFallback_Enabled_ReturnsTrue()
+    {
+        var policy = MakePolicy(fallbackTranscode: true);
+        Assert.True(QualityGateService.PolicyAllowsFallback(policy));
+    }
+
+    [Fact]
+    public void PolicyAllowsFallback_Disabled_ReturnsFalse()
+    {
+        var policy = MakePolicy(fallbackTranscode: false);
+        Assert.False(QualityGateService.PolicyAllowsFallback(policy));
+    }
+
+    [Fact]
+    public void PolicyAllowsFallback_DenyAllPolicy_ReturnsFalse()
+    {
+        Assert.False(QualityGateService.PolicyAllowsFallback(QualityGateService.DenyAllPolicy));
+    }
+
     // --- Integration: FilterMediaSources with fallback ---
 
     [Fact]
