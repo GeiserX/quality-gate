@@ -119,6 +119,14 @@ public class QualityPolicy
     /// Only applies when <see cref="FallbackTranscode"/> is enabled.
     /// </summary>
     public int FallbackMaxHeight { get; set; }
+
+    /// <summary>
+    /// Gets or sets the maximum video bitrate in Mbps for fallback transcoding.
+    /// When greater than zero, overrides the automatic bitrate derived from resolution.
+    /// When zero (default), the bitrate is calculated from <see cref="FallbackMaxHeight"/>.
+    /// Only applies when <see cref="FallbackTranscode"/> is enabled.
+    /// </summary>
+    public int FallbackMaxBitrateMbps { get; set; }
 }
 
 /// <summary>
