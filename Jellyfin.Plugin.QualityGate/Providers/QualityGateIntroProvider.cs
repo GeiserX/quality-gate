@@ -71,7 +71,7 @@ public class QualityGateIntroProvider : IIntroProvider
     }
 
     /// <inheritdoc />
-    public string Name => "Quality Gate Intros";
+    public string Name => "QualityGate Intros";
 
     /// <inheritdoc />
     public Task<IEnumerable<IntroInfo>> GetIntros(BaseItem item, User user)
