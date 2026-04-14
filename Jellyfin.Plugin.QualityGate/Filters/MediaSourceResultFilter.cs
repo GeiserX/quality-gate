@@ -230,6 +230,40 @@ public class MediaSourceResultFilter : IAsyncResourceFilter, IAsyncResultFilter
                 }
             }
 
+            // Cap resolution when FallbackMaxHeight is set
+            if (policy.FallbackMaxHeight > 0 && node is JsonObject bodyObj)
+            {
+                var maxHeight = policy.FallbackMaxHeight;
+                var maxWidth = (int)Math.Round(maxHeight * 16.0 / 9.0);
+                bodyObj["MaxStreamingBitrate"] = GetMaxBitrateForHeight(maxHeight);
+
+                // Inject CodecProfile conditions to enforce resolution limit
+                if (bodyObj["DeviceProfile"] is JsonObject dp)
+                {
+                    var codecProfiles = dp["CodecProfiles"] as JsonArray ?? new JsonArray();
+                    codecProfiles.Add(new JsonObject
+                    {
+                        ["Type"] = "Video",
+                        ["Conditions"] = new JsonArray(
+                            new JsonObject
+                            {
+                                ["Condition"] = "LessThanEqual",
+                                ["Property"] = "Width",
+                                ["Value"] = maxWidth.ToString(),
+                                ["IsRequired"] = false,
+                            },
+                            new JsonObject
+                            {
+                                ["Condition"] = "LessThanEqual",
+                                ["Property"] = "Height",
+                                ["Value"] = maxHeight.ToString(),
+                                ["IsRequired"] = false,
+                            }),
+                    });
+                    dp["CodecProfiles"] = codecProfiles;
+                }
+            }
+
             var modifiedBody = node.ToJsonString();
             var bytes = Encoding.UTF8.GetBytes(modifiedBody);
             httpContext.Request.Body = new MemoryStream(bytes);
@@ -238,13 +272,30 @@ public class MediaSourceResultFilter : IAsyncResourceFilter, IAsyncResultFilter
             httpContext.Items[ForcedTranscodeKey] = true;
 
             _logger.LogInformation(
-                "QualityGate: Forcing transcode via DeviceProfile for item {Item} (user {User}, policy {Policy})",
-                itemId, (object)userId, policy.Name);
+                "QualityGate: Forcing transcode via DeviceProfile for item {Item} (user {User}, policy {Policy}, maxHeight {MaxH})",
+                itemId, (object)userId, policy.Name, policy.FallbackMaxHeight);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "QualityGate: Error in TryForceTranscodeBodyAsync, skipping");
         }
+    }
+
+    /// <summary>
+    /// Maps a target video height to a reasonable max streaming bitrate,
+    /// matching Jellyfin web client presets.
+    /// </summary>
+    private static long GetMaxBitrateForHeight(int maxHeight)
+    {
+        return maxHeight switch
+        {
+            <= 360 => 800_000,
+            <= 480 => 1_500_000,
+            <= 720 => 4_000_000,
+            <= 1080 => 10_000_000,
+            <= 1440 => 20_000_000,
+            _ => 40_000_000,
+        };
     }
 
     /// <summary>
