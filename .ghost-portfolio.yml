@@ -1,0 +1,3 @@
+description: "Jellyfin plugin to restrict users to specific media versions based on path-based policies."
+personalNote: "Built for my home media server to control which quality versions different users can access."
+techStack: "C#, Jellyfin Plugin API"
