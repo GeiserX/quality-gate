@@ -219,6 +219,7 @@ Things discovered during development that save time and prevent mistakes:
 - **Resolution capping requires CodecProfiles, not just MaxStreamingBitrate**: Setting `MaxStreamingBitrate` alone caps bitrate but does NOT cap resolution — Jellyfin will still output at source resolution with a lower bitrate. Must inject a `CodecProfile` with `LessThanEqual` conditions on `Width` and `Height` properties AND set `MaxStreamingBitrate` for proper resolution-limited transcoding.
 - **Deep-clone MediaSourceInfo via JSON serialization**: Jellyfin caches `MediaSourceInfo` objects across requests. Mutating `SupportsDirectPlay`/`SupportsDirectStream` directly corrupts the cache for subsequent requests. Always use `JsonSerializer.Deserialize<MediaSourceInfo>(JsonSerializer.SerializeToUtf8Bytes(s))` to clone before modifying.
 - **Guard against CollectionFolder in GetStaticMediaSources**: `ILibraryManager.GetItemById()` can return `CollectionFolder` items that don't implement `IHasMediaSources`. Calling `GetStaticMediaSources()` on them throws `InvalidCastException`. Always guard with a null/type check.
+- **Jellyfin SDK pinning**: ALWAYS pin `Jellyfin.Controller`, `Jellyfin.Model`, and `Jellyfin.Common` to the MINIMUM supported minor version (e.g., `10.11.0`), NEVER use wildcards like `10.*-*` or `10.11.*`. Wildcards resolve to the latest patch at build time, which breaks users on older patch versions with `ReflectionTypeLoadException`. All plugin APIs used are stable across patch versions.
 
 ## Troubleshooting
 
