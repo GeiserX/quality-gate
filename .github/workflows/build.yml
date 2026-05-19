@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   check-version:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     outputs:
       should_release: ${{ steps.check.outputs.should_release }}
     steps:
@@ -33,7 +33,7 @@ jobs:
   build:
     needs: [check-version]
     if: needs.check-version.outputs.should_release == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - uses: actions/checkout@v4
 
@@ -101,7 +101,8 @@ jobs:
           manifest[0]['versions'] = versions
           with open('manifest.json', 'w') as f:
               json.dump(manifest, f, indent=2, ensure_ascii=False)
-              f.write('\n')
+              f.write('
+')
           "
 
       - name: Create GitHub Release
