@@ -101,8 +101,7 @@ jobs:
           manifest[0]['versions'] = versions
           with open('manifest.json', 'w') as f:
               json.dump(manifest, f, indent=2, ensure_ascii=False)
-              f.write('
-')
+              f.write('\n')
           "
 
       - name: Create GitHub Release
