@@ -47,7 +47,7 @@ public class PluginTests : IDisposable
     [Fact]
     public void Plugin_Id_IsExpectedGuid()
     {
-        Assert.Equal(Guid.Parse("a1b2c3d4-e5f6-7890-abcd-ef1234567890"), _plugin.Id);
+        Assert.Equal(Guid.Parse("9cab70ca-0af3-4d3a-adab-6a0df2496a33"), _plugin.Id);
     }
 
     [Fact]
