@@ -8,9 +8,9 @@
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-    <AssemblyVersion>3.3.4.0</AssemblyVersion>
-    <FileVersion>3.3.4.0</FileVersion>
-    <Version>3.3.4.0</Version>
+    <AssemblyVersion>3.3.5.0</AssemblyVersion>
+    <FileVersion>3.3.5.0</FileVersion>
+    <Version>3.3.5.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,19 +25,4 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Configuration\configPage.html" />
-    <EmbeddedResource Include="Configuration\configPage.js" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Update="build.yaml">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
-
-  <ItemGroup>
-    <InternalsVisibleTo Include="Jellyfin.Plugin.QualityGate.Tests" />
-  </ItemGroup>
-
-</Project>
-
+    <EmbeddedResource Include="Configuration
