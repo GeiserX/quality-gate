@@ -29,7 +29,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public override string Name => "QualityGate";
 
     /// <inheritdoc />
-    public override Guid Id => Guid.Parse("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+    public override Guid Id => Guid.Parse("9cab70ca-0af3-4d3a-adab-6a0df2496a33");
 
     /// <inheritdoc />
     public override string Description => "Restrict users to specific media versions by hiding blocked sources from API responses.";
