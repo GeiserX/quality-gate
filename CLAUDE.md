@@ -12,7 +12,7 @@
 
 - **URL**: https://github.com/GeiserX/quality-gate
 - **Platform**: GitHub
-- **Plugin GUID**: `a1b2c3d4-e5f6-7890-abcd-ef1234567890`
+- **Plugin GUID**: `9cab70ca-0af3-4d3a-adab-6a0df2496a33`
 - **Previous names**: `jellyfin-quality-gate` (renamed to `quality-gate` in v2.0.0.0)
 
 ## Technology Stack
