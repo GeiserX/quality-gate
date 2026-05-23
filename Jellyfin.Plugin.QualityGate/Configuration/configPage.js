@@ -1,4 +1,4 @@
-var PLUGIN_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+var PLUGIN_ID = '9cab70ca-0af3-4d3a-adab-6a0df2496a33';
 var FULL_ACCESS_POLICY_ID = '__FULL_ACCESS__';
 var config = { Policies: [], UserPolicies: [], DefaultPolicyId: '', DefaultIntroVideoPath: '' };
 var users = [];
@@ -956,7 +956,11 @@ function loadConfig(view) {
         isLoaded = false;
         resetViewState(view);
         setStaticControlsEnabled(view, false);
-        setLoadStatus(view, 'Error: ' + err, 'error');
+        var message = err instanceof Response
+            ? 'HTTP ' + err.status + ' ' + err.statusText
+            : (err && err.message ? err.message : String(err));
+        console.error('QualityGate: failed to load configuration:', err);
+        setLoadStatus(view, 'Error: ' + message, 'error');
         setSaveStatus(view, 'Unable to load configuration.', 'error');
     });
 }
@@ -998,8 +1002,12 @@ function saveConfig(view) {
         setSaveStatus(view, 'Saved.', 'success');
         Dashboard.processPluginConfigurationUpdateResult();
     }).catch(function (err) {
-        setSaveStatus(view, 'Error saving: ' + err, 'error');
-        Dashboard.alert('Error saving: ' + err);
+        var message = err instanceof Response
+            ? 'HTTP ' + err.status + ' ' + err.statusText
+            : (err && err.message ? err.message : String(err));
+        console.error('QualityGate: failed to save configuration:', err);
+        setSaveStatus(view, 'Error saving: ' + message, 'error');
+        Dashboard.alert('Error saving: ' + message);
     });
 }
 
