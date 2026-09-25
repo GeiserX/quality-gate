@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Tasks;
 using Jellyfin.Plugin.QualityGate.EncodePriority;
 
 namespace Jellyfin.Plugin.QualityGate.Tests;
@@ -91,6 +92,48 @@ public sealed class PriorityFileWriterTests : IDisposable
         Assert.Equal("PRECIOUS", File.ReadAllText(victim));
         Assert.Null(new FileInfo(FilePath()).LinkTarget);
         Assert.Equal(TwoPaths, PriorityFileWriter.Read(FilePath()).Paths);
+    }
+
+    [Fact]
+    public async Task ANamedPipeAtTheOutput_IsForeign_AndNeverOpened()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        // Opening a pipe for reading blocks until something writes to it, and no cancellation
+        // token reaches a blocked open. A hung read would hold the task for good.
+        var path = FilePath();
+        MakeFifo(path);
+        try
+        {
+            var write = Task.Run(() => PriorityFileWriter.Write(path, "Shows", TwoPaths, false, Now));
+            var remove = Task.Run(() => PriorityFileWriter.Remove(path));
+
+            var both = Task.WhenAll(write, remove);
+            Assert.True(await Task.WhenAny(both, Task.Delay(TimeSpan.FromSeconds(5))) == both, "a read blocked on a named pipe");
+            Assert.Equal(WriteOutcome.Foreign, (await write).Outcome);
+            Assert.Equal(RemoveOutcome.NotOurs, await remove);
+        }
+        finally
+        {
+            // Releases any reader a failing run left blocked on the pipe.
+            ReleaseFifoReaders(path);
+        }
+    }
+
+    [Fact]
+    public void ASymlinkAtTheOutput_IsForeign_AndItsTargetIsLeftAlone()
+    {
+        var victim = Path.Combine(_dir, "victim.json");
+        PriorityFileWriter.Write(victim, "Other", TwoPaths, false, Now);
+        var before = File.ReadAllText(victim);
+        File.CreateSymbolicLink(FilePath(), victim);
+
+        Assert.Equal(WriteOutcome.Foreign, PriorityFileWriter.Write(FilePath(), "Shows", new[] { "a.mkv" }, false, Now.AddDays(2)).Outcome);
+        Assert.Equal(RemoveOutcome.NotOurs, PriorityFileWriter.Remove(FilePath()));
+        Assert.Equal(before, File.ReadAllText(victim));
     }
 
     [Fact]
@@ -236,6 +279,20 @@ public sealed class PriorityFileWriterTests : IDisposable
         File.WriteAllText(path, "not json");
         Assert.Empty(EncodePriorityState.Load(path, out var corruptError).WrittenFiles);
         Assert.NotNull(corruptError);
+    }
+
+    private static void MakeFifo(string path)
+    {
+        using var mkfifo = System.Diagnostics.Process.Start("mkfifo", path);
+        mkfifo.WaitForExit();
+        Assert.Equal(0, mkfifo.ExitCode);
+    }
+
+    private static void ReleaseFifoReaders(string path)
+    {
+        // A non-blocking writer open fails when no reader is waiting, which is the good case.
+        using var shell = System.Diagnostics.Process.Start("/bin/sh", new[] { "-c", "exec 3<>\"$0\" && exec 3>&-", path });
+        shell.WaitForExit(5000);
     }
 
     private static void MakeReadOnly(string dir)

@@ -104,6 +104,12 @@ internal static class PriorityFileWriter
     /// <summary>How old an unchanged file may get before it is rewritten.</summary>
     public static readonly TimeSpan HeartbeatAge = TimeSpan.FromHours(24);
 
+    /// <summary>
+    /// The largest file read back: far above the biggest list the plugin writes (5,000 paths),
+    /// so only something else is ever refused for its size.
+    /// </summary>
+    private const long MaxFileBytes = 64L * 1024 * 1024;
+
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = false };
 
     /// <summary>Writes a list, following every rule in the remarks.</summary>
@@ -208,13 +214,32 @@ internal static class PriorityFileWriter
     }
 
     /// <summary>Reads what is at a path, without judging it beyond "ours or not".</summary>
+    /// <remarks>
+    /// Only a regular, non-empty file of a plausible size is opened. The output folder may be
+    /// writable by others, and opening a named pipe blocks until something writes to it, which a
+    /// cancellation token cannot interrupt. A pipe, a device and a symlink all read as foreign,
+    /// so they are never opened, overwritten or deleted. A list the plugin wrote is never empty,
+    /// so an empty regular file reads as foreign too, as it did when it failed to parse.
+    /// </remarks>
     /// <param name="path">The file.</param>
     /// <returns>What is there.</returns>
     public static ExistingFile Read(string path)
     {
-        if (!File.Exists(path))
+        var info = new FileInfo(path);
+        if (info.LinkTarget is not null)
+        {
+            return ExistingFile.Foreign;
+        }
+
+        if (!info.Exists)
         {
             return ExistingFile.None;
+        }
+
+        // A pipe or a device reports a length of zero.
+        if (info.Length == 0 || info.Length > MaxFileBytes)
+        {
+            return ExistingFile.Foreign;
         }
 
         byte[] bytes = File.ReadAllBytes(path);
