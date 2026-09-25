@@ -241,7 +241,7 @@ public sealed class PriorityFileWriterTests : IDisposable
     }
 
     [Fact]
-    public void Cleanup_WhenTheDeleteFails_WritesAnEmptyListAndKeepsTheRecord()
+    public void Cleanup_WhenTheDeleteFails_WritesAnEmptyListAndForgetsTheFile()
     {
         var file = FilePath();
         PriorityFileWriter.Write(file, "Shows", TwoPaths, false, Now);
@@ -254,12 +254,28 @@ public sealed class PriorityFileWriterTests : IDisposable
 
         MakeWritable(_dir);
         Assert.Equal(RemoveOutcome.Emptied, Assert.Single(first).Outcome);
-        Assert.Equal(RemoveOutcome.Emptied, Assert.Single(second).Outcome);
+        Assert.Empty(second);
         var emptied = PriorityFileWriter.Read(file);
         Assert.True(emptied.IsOurs);
         Assert.Empty(emptied.Paths);
         Assert.Equal(stamp, File.GetLastWriteTimeUtc(file));
-        Assert.Equal(new[] { file }, state.WrittenFiles);
+        Assert.Empty(state.WrittenFiles);
+    }
+
+    [Fact]
+    public void Remove_OfAnAlreadyEmptiedFileInAReadOnlyFolder_LeavesItsMtimeAlone()
+    {
+        var file = FilePath();
+        PriorityFileWriter.Write(file, "Shows", TwoPaths, false, Now);
+        MakeReadOnly(_dir);
+        Assert.Equal(RemoveOutcome.Emptied, PriorityFileWriter.Remove(file));
+        var stamp = File.GetLastWriteTimeUtc(file);
+
+        var again = PriorityFileWriter.Remove(file);
+
+        MakeWritable(_dir);
+        Assert.Equal(RemoveOutcome.Emptied, again);
+        Assert.Equal(stamp, File.GetLastWriteTimeUtc(file));
     }
 
     [Fact]

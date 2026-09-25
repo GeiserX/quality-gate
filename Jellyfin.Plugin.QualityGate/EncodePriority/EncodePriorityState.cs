@@ -112,8 +112,9 @@ internal static class CleanupPass
     /// The encoder never expires a list it has read, so a file left behind keeps reordering its
     /// queue forever. This covers the feature switched off, a target disabled, removed, moved to
     /// another output or switched to dry run, and uninstall. A file that no longer carries the
-    /// plugin's marker is left alone and forgotten. A file that could not be removed or emptied
-    /// stays recorded, so the next run tries again.
+    /// plugin's marker is left alone and forgotten, and so is a file that could not be deleted
+    /// but now holds an empty list. Only a file that could be neither removed nor emptied stays
+    /// recorded, so the next run tries again.
     /// </remarks>
     /// <param name="state">The state, updated in place.</param>
     /// <param name="claimed">The output files the current configuration writes.</param>
@@ -130,7 +131,9 @@ internal static class CleanupPass
 
             var outcome = PriorityFileWriter.Remove(path);
             results.Add((path, outcome));
-            if (outcome is RemoveOutcome.Deleted or RemoveOutcome.Missing or RemoveOutcome.NotOurs)
+            // An emptied file tells the encoder nothing is urgent, which is the truth, so it is
+            // forgotten too. Keeping it would retry the delete and log it again on every run.
+            if (outcome is not RemoveOutcome.Failed)
             {
                 state.WrittenFiles.Remove(path);
             }

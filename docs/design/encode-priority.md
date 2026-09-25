@@ -295,7 +295,7 @@ The read-only library case is the common one in Docker: media is mounted `:ro`, 
 The encoder never expires a list it has read. It keeps reordering its queue by the last file until the file changes or disappears. So the plugin must remove what it wrote:
 
 - The state file records every output path the plugin has written.
-- The cleanup pass at the start of every run removes any recorded file not claimed by an enabled, non-dry-run target of an enabled feature. It deletes the file only if it parses and carries `"producer":"quality-gate"`. If the delete fails it writes `{"producer":"quality-gate","paths":[]}` instead. If both fail it logs and keeps the record for a retry.
+- The cleanup pass at the start of every run removes any recorded file not claimed by an enabled, non-dry-run target of an enabled feature. It deletes the file only if it parses and carries `"producer":"quality-gate"`. If the delete fails it writes `{"producer":"quality-gate","paths":[]}` instead. An emptied file is then forgotten, since an empty list is the truth. If both fail it logs and keeps the record for a retry.
 - This covers: feature switched off, target disabled or removed, output mode or path changed (the old file goes), dry run switched on, and uninstall.
 - Not covered: Jellyfin down, or the plugin removed by deleting its folder. The last list stays in force. The encoder-side fix is a `PRIORITY_MAX_AGE_HOURS` setting that ignores a list whose `generated` is too old; the 24-hour heartbeat exists so that check can be tight.
 
