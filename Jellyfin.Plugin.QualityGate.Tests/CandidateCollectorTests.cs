@@ -184,6 +184,31 @@ public class CandidateCollectorTests
     }
 
     [Fact]
+    public void NowPlaying_ASpecialOrAnEpisodeWithNoSeason_FeedsNoLookahead()
+    {
+        // With specials excluded, a lookahead from (0, n) would return the show's first regular
+        // episodes, long since watched by a viewer mid-series.
+        var viewer = Viewer("a");
+        var special = EpisodeOf("show-a", 0, 3);
+        var noSeason = EpisodeOf("show-b", 1, 4);
+        noSeason.ParentIndexNumber = null;
+        _sessions.Setup(s => s.Sessions).Returns(new[]
+        {
+            new SessionInfo(_sessions.Object, Mock.Of<ILogger>()) { UserId = viewer.Id, FullNowPlayingItem = special },
+            new SessionInfo(_sessions.Object, Mock.Of<ILogger>()) { UserId = viewer.Id, FullNowPlayingItem = noSeason },
+        });
+
+        var demand = Collector().Collect(Options(), new[] { viewer }, Now, CancellationToken.None);
+
+        Assert.DoesNotContain(_itemQueries, q => q.User == null);
+        Assert.Contains(demand.Signals, s => s.ItemId == special.Id && s.Tier == DemandTier.NowPlaying);
+
+        _itemQueries.Clear();
+        Collector().Collect(Options(c => c.PriorityNextUpIncludeSpecials = true), new[] { viewer }, Now, CancellationToken.None);
+        Assert.Equal((0, 4), Assert.Single(_itemQueries, q => q.User == null).MinParentAndIndexNumber);
+    }
+
+    [Fact]
     public void ContinueWatching_IsLimitedPerViewerAndOrderedByLastPlayed()
     {
         var movie = new Movie { Id = Guid.NewGuid(), Name = "Film A (2001)", Path = "/media/movies/Film A (2001).mkv" };

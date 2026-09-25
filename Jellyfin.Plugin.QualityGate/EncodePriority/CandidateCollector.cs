@@ -168,10 +168,10 @@ internal sealed class CandidateCollector : ICandidateCollector
                     }
 
                     run.Add(playing, user, DemandTier.NowPlaying, 0, nowUtc);
-                    if (options.NextUp && playing is Episode episode && episode.IndexNumber is int number)
+                    if (options.NextUp && playing is Episode episode && episode.IndexNumber is int number && run.LookaheadSeason(episode) is int season)
                     {
                         // What comes after the episode on screen is the next thing this viewer opens.
-                        run.AddLookahead(episode, (episode.ParentIndexNumber ?? 0, number + 1), user, DemandTier.NextUp, nowUtc, firstDepth: 1);
+                        run.AddLookahead(episode, (season, number + 1), user, DemandTier.NextUp, nowUtc, firstDepth: 1);
                     }
                 }
             }
@@ -356,11 +356,23 @@ internal sealed class CandidateCollector : ICandidateCollector
             // The start is depth 1 whatever the lookahead finds; the lookahead lists it again,
             // which the builder merges.
             Add(start, user, tier, 1, lastActivity);
-            if (_options.NextUpDepth > 1 && start.IndexNumber is int number)
+            if (_options.NextUpDepth > 1 && start.IndexNumber is int number && LookaheadSeason(start) is int season)
             {
-                AddLookahead(start, (start.ParentIndexNumber ?? 0, number), user, tier, lastActivity, firstDepth: 1);
+                AddLookahead(start, (season, number), user, tier, lastActivity, firstDepth: 1);
             }
         }
+
+        /// <summary>
+        /// The season a lookahead may start from, or null when none may run from this episode.
+        /// </summary>
+        /// <remarks>
+        /// A special (season 0) is skipped unless specials are included: with season 0 excluded
+        /// from the query, a lookahead from (0, n) returns the show's first regular episodes,
+        /// which a viewer mid-series watched long ago. An episode with no season number has no
+        /// position to look ahead from, for the same reason.
+        /// </remarks>
+        public int? LookaheadSeason(Episode episode)
+            => episode.ParentIndexNumber is int season && (season != 0 || _options.NextUpIncludeSpecials) ? season : null;
 
         /// <summary>Adds up to the configured depth of episodes from a position in a show.</summary>
         /// <returns>False when the show has no presentation key, so no lookahead could run.</returns>
