@@ -66,6 +66,17 @@ are coming from 3.3.x or earlier, translate your patterns into a height.
 - **Per-policy intro videos.** Optional. A different pre-roll for restricted users.
 - **Logging you can debug from.** Every decision names the cap, the user and the policy.
 
+## Companion: quality-gate-encoder
+
+A cap only helps a viewer if a version within it exists. Without one, Jellyfin transcodes live.
+[quality-gate-encoder](https://github.com/GeiserX/quality-gate-encoder) (Docker image
+[`drumsergio/quality-gate-encoder`](https://hub.docker.com/r/drumsergio/quality-gate-encoder),
+formerly jellyfin-encoder) pre-encodes a library into 720p versions such as `Film - 720p.mp4`.
+Quality Gate then serves those to capped users instead of a live transcode, and
+[version grouping](docs/one-library.md) shows each one beside its original.
+[Encode priority](docs/encode-priority.md) lets the plugin tell the encoder which files to make
+first: the ones capped viewers are about to watch.
+
 ## Requirements
 
 Jellyfin 12, on `net10.0`. Version 3.4.0.0 and later will not load on Jellyfin 10.x; 3.3.6.0 is

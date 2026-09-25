@@ -53,7 +53,8 @@ nobody. If you are migrating from 3.3.x or earlier, translate your patterns into
 ### Encode priority
 
 Off by default. See [encode priority](encode-priority.md) for what it does and how to set it
-up. None of these fields changes playback.
+up. The list is read by [quality-gate-encoder](https://github.com/GeiserX/quality-gate-encoder)
+1.5.4 or newer. None of these fields changes playback.
 
 Numbers outside their range are clamped when a run reads them, and an unknown value in a
 string field falls back to its default. Each correction is logged once as a warning.
