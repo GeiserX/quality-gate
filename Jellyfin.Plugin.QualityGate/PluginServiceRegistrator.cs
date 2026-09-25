@@ -1,3 +1,4 @@
+using Jellyfin.Plugin.QualityGate.EncodePriority;
 using Jellyfin.Plugin.QualityGate.Filters;
 using Jellyfin.Plugin.QualityGate.Providers;
 using MediaBrowser.Controller;
@@ -33,5 +34,9 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         // Its filename-pattern rewriting of item and listing responses has not been
         // re-validated against the Jellyfin 12 ABI, and the resolution cap does not need it.
         serviceCollection.AddSingleton<IIntroProvider, QualityGateIntroProvider>();
+
+        // Encode priority triggers: playback start and settings saved. Does in-memory checks only
+        // while the feature is off.
+        serviceCollection.AddHostedService<EncodePriorityEvents>();
     }
 }

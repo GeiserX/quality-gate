@@ -98,6 +98,9 @@ function resetViewState(view) {
     view.querySelector('#defaultPolicySelect').innerHTML = '<option value="">(No default - Full Access)</option>';
     view.querySelector('#apiKeyPolicySelect').innerHTML = '<option value="">(Uncapped)</option>';
     view.querySelector('#defaultIntroPath').value = '';
+    if (view.querySelector('#encodeTargetsContainer')) {
+        view.querySelector('#encodeTargetsContainer').innerHTML = '';
+    }
 }
 
 function getEnabledPolicy(policyId) {
@@ -473,6 +476,7 @@ function renderAll(view) {
     view.querySelector('#enableVersionGrouping').checked = Boolean(config.EnableVersionGrouping);
     view.querySelector('#versionGroupingSuffixes').value = (config.VersionGroupingSuffixes || []).join('\n');
     view.querySelector('#versionGroupingRoots').value = (config.VersionGroupingRoots || []).join('\n');
+    renderEncodePriority(view);
     upgradeNativeWidgets(view);
 }
 
@@ -911,7 +915,7 @@ function collectFromDOM(view) {
     config.EnableVersionGrouping = view.querySelector('#enableVersionGrouping').checked;
     config.VersionGroupingSuffixes = splitLines(view.querySelector('#versionGroupingSuffixes').value);
     config.VersionGroupingRoots = splitLines(view.querySelector('#versionGroupingRoots').value);
-
+    collectEncodePriority(view);
 }
 
 function splitLines(value) {
@@ -929,6 +933,7 @@ function refreshComputedPreview(view) {
     renderDefaultPolicyDropdown(view);
     renderApiKeyPolicyDropdown(view);
     renderUserAccess(view);
+    renderEncodePriority(view);
     upgradeNativeWidgets(view);
 }
 
@@ -1072,9 +1077,11 @@ function loadConfig(view) {
             policy.FallbackMaxHeight = policy.FallbackMaxHeight || 0;
             policy.FallbackMaxBitrateKbps = policy.FallbackMaxBitrateKbps || 0;
         });
-        return ApiClient.getUsers();
-    }).then(function (userList) {
+        normalizeEncodePriority(config);
+        return Promise.all([ApiClient.getUsers(), loadLibraryLocations()]);
+    }).then(function (results) {
         var enabledPolicies;
+        var userList = results[0];
 
         users = userList || [];
         enabledPolicies = config.Policies.filter(function (policy) {
@@ -1090,6 +1097,7 @@ function loadConfig(view) {
             'success'
         );
         setSaveStatus(view, 'Changes are local until you click Save.');
+        loadEncodePriorityStatus(view);
     }).catch(function (err) {
         isLoaded = false;
         resetViewState(view);
@@ -1126,6 +1134,7 @@ function saveConfig(view) {
     }
 
     collectFromDOM(view);
+    dropEmptyFolders(config);
 
     var regexErrors = validateRegexPatterns();
     if (regexErrors.length > 0) {
@@ -1134,11 +1143,21 @@ function saveConfig(view) {
         return;
     }
 
+    var encodeErrors = validateEncodeTargets(config, libraryLocations);
+    if (encodeErrors.length > 0) {
+        setSaveStatus(view, 'Encode priority settings need fixing.', 'error');
+        Dashboard.alert('Fix these encode priority settings before saving:\n\n' + encodeErrors.join('\n'));
+        return;
+    }
+
     setSaveStatus(view, 'Saving...', 'warning');
 
     ApiClient.updatePluginConfiguration(PLUGIN_ID, config).then(function () {
         setSaveStatus(view, 'Saved.', 'success');
         Dashboard.processPluginConfigurationUpdateResult();
+        setTimeout(function () {
+            loadEncodePriorityStatus(view);
+        }, 3000);
     }).catch(function (err) {
         var message = err instanceof Response
             ? 'HTTP ' + err.status + ' ' + err.statusText
@@ -1146,6 +1165,1120 @@ function saveConfig(view) {
         console.error('QualityGate: failed to save configuration:', err);
         setSaveStatus(view, 'Error saving: ' + message, 'error');
         Dashboard.alert('Error saving: ' + message);
+    });
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Encode priority
+ *
+ * Everything below renders the Encode Priority section and maps it back into the config object.
+ * The page posts the whole object, so fields this section does not render still round-trip. The
+ * pure helpers are exported so the node-driven tests exercise exactly what the browser runs.
+ * ------------------------------------------------------------------------------------------- */
+
+var ENCODE_PRIORITY_TASK_KEY = 'QualityGateEncodePriority';
+var ENCODE_PRIORITY_ACTIVITY_TYPE = 'QualityGate.EncodePriority';
+var SOURCE_FOLDER_FILE = '.encoder-priority.json';
+var DATA_FOLDER_PLACEHOLDER = '<Jellyfin data folder>';
+var OUTPUT_HEIGHT_PRESETS = [480, 576, 720, 1080, 1440, 2160];
+var SAMPLE_FILE = 'Show Name/Season 2/Show Name S02E05.mkv';
+var libraryLocations = [];
+var epCardState = {};
+var epDataPath = '';
+
+function orDefault(value, fallback) {
+    return value === undefined || value === null ? fallback : value;
+}
+
+function toInt(value, fallback) {
+    var parsed = parseInt(value, 10);
+    return isFinite(parsed) ? parsed : fallback;
+}
+
+/**
+ * A stored mode as the server reads it: trimmed, case ignored, an unknown value the default.
+ * The page compares modes exactly, so a hand-edited "datafolder" must become "DataFolder" here.
+ */
+function canonicalMode(value, names, fallback) {
+    var wanted = String(value === undefined || value === null ? '' : value).trim().toLowerCase();
+    for (var i = 0; i < names.length; i++) {
+        if (names[i].toLowerCase() === wanted) {
+            return names[i];
+        }
+    }
+
+    return fallback;
+}
+
+/** Fills in every encode priority field a config from an older release or a hand edit lacks. */
+export function normalizeEncodePriority(cfg) {
+    cfg.EnableEncodePriority = Boolean(cfg.EnableEncodePriority);
+    cfg.PriorityNowPlaying = orDefault(cfg.PriorityNowPlaying, true);
+    cfg.PriorityContinueWatching = orDefault(cfg.PriorityContinueWatching, true);
+    cfg.PriorityContinueWatchingPerUser = orDefault(cfg.PriorityContinueWatchingPerUser, 20);
+    cfg.PriorityNextUp = orDefault(cfg.PriorityNextUp, true);
+    cfg.PriorityNextUpDepth = orDefault(cfg.PriorityNextUpDepth, 3);
+    cfg.PriorityNextUpShowsPerUser = orDefault(cfg.PriorityNextUpShowsPerUser, 10);
+    cfg.PriorityNextUpIncludeSpecials = orDefault(cfg.PriorityNextUpIncludeSpecials, false);
+    cfg.PriorityFavourites = orDefault(cfg.PriorityFavourites, false);
+    cfg.PriorityFavouritesPerUser = orDefault(cfg.PriorityFavouritesPerUser, 25);
+    cfg.PriorityWatchedWithinDays = orDefault(cfg.PriorityWatchedWithinDays, 30);
+    cfg.PriorityUnprobedNeedsEncode = orDefault(cfg.PriorityUnprobedNeedsEncode, false);
+    cfg.PriorityRefreshOnPlayback = orDefault(cfg.PriorityRefreshOnPlayback, true);
+    cfg.PriorityDebounceMinutes = orDefault(cfg.PriorityDebounceMinutes, 10);
+    cfg.PriorityRunBudgetSeconds = orDefault(cfg.PriorityRunBudgetSeconds, 180);
+    cfg.EncodeTargets = (cfg.EncodeTargets || []).map(normalizeEncodeTarget);
+    return cfg;
+}
+
+/** Fills in one target's missing fields. Stored ids that no longer resolve are kept as they are. */
+export function normalizeEncodeTarget(target) {
+    var t = target || {};
+    t.Id = t.Id || generateId();
+    t.Name = orDefault(t.Name, '');
+    t.Enabled = orDefault(t.Enabled, true);
+    t.Folders = (t.Folders || []).map(function (folder) {
+        return { JellyfinPath: (folder && folder.JellyfinPath) || '', EncoderPath: (folder && folder.EncoderPath) || '' };
+    });
+    // Read the way the server reads them, so the page shows and saves what the server uses.
+    t.OutputHeight = Math.min(Math.max(toInt(orDefault(t.OutputHeight, 720), 720), 144), 4320);
+    t.OutputMode = canonicalMode(t.OutputMode, ['SourceFolder', 'DataFolder', 'Custom'], 'SourceFolder');
+    t.OutputPath = t.OutputPath || '';
+    t.AudienceMode = canonicalMode(t.AudienceMode, ['Auto', 'Policies', 'Users'], 'Auto');
+    t.AudiencePolicyIds = (t.AudiencePolicyIds || []).slice();
+    t.AudienceUserIds = (t.AudienceUserIds || []).slice();
+    t.ExcludedUserIds = (t.ExcludedUserIds || []).slice();
+    t.ResolveSymlinks = Boolean(t.ResolveSymlinks);
+    t.MaxEntries = orDefault(t.MaxEntries, 300);
+    t.DryRun = Boolean(t.DryRun);
+    return t;
+}
+
+function normalizeRoot(path, isWindows) {
+    var value = String(path || '');
+    return isWindows
+        ? value.replace(/\//g, '\\').replace(/\\+$/, '')
+        : value.replace(/\/+$/, '');
+}
+
+/**
+ * The part of a path below a folder, joined with "/", or null when the path is not inside it.
+ * The same rule as the server's PathRoots: equal to the folder or folder plus a separator, both
+ * separators and case-insensitive on Windows only.
+ */
+export function relativeTo(path, root, isWindows) {
+    var subject = normalizeRoot(path, isWindows);
+    var folder = normalizeRoot(root, isWindows);
+    var separator = isWindows ? '\\' : '/';
+    var a;
+    var b;
+
+    if (!subject || !folder) {
+        return null;
+    }
+
+    a = isWindows ? subject.toUpperCase() : subject;
+    b = isWindows ? folder.toUpperCase() : folder;
+    if (a === b) {
+        return '';
+    }
+
+    if (a.length > b.length + 1 && a.charAt(b.length) === separator && a.substring(0, b.length) === b) {
+        return isWindows ? subject.substring(folder.length + 1).replace(/\\/g, '/') : subject.substring(folder.length + 1);
+    }
+
+    return null;
+}
+
+function cleanEncoderPath(path) {
+    return String(path || '').trim().split('/').filter(function (part) {
+        return part.length > 0 && part !== '.';
+    }).join('/');
+}
+
+/** Maps a path Jellyfin sees onto the encoder's source folder, through the most specific folder. */
+export function mapToEncoderPath(path, mappings, isWindows) {
+    var best = null;
+    var bestLength = -1;
+    var remainder = '';
+
+    (mappings || []).forEach(function (mapping) {
+        var rest = relativeTo(path, mapping.JellyfinPath, isWindows);
+        var length;
+        if (rest === null) {
+            return;
+        }
+
+        length = normalizeRoot(mapping.JellyfinPath, isWindows).length;
+        if (length > bestLength) {
+            best = mapping;
+            bestLength = length;
+            remainder = rest;
+        }
+    });
+
+    if (!best || remainder === '') {
+        return null;
+    }
+
+    var prefix = cleanEncoderPath(best.EncoderPath);
+    return prefix ? prefix + '/' + remainder : remainder;
+}
+
+function joinPath(folder, name) {
+    var trimmed = String(folder || '').replace(/[\\/]+$/, '');
+    var separator = trimmed.indexOf('\\') !== -1 && trimmed.indexOf('/') === -1 ? '\\' : '/';
+    return trimmed + separator + name;
+}
+
+function dataFolderStem(id) {
+    return String(id || '').substring(0, 8).replace(/[^A-Za-z0-9_-]/g, '_');
+}
+
+/**
+ * The file a target writes, as Jellyfin sees it, or why it has none. dataPath is the server's
+ * data folder when known; otherwise a placeholder stands in for it.
+ */
+export function resolveOutputPath(target, dataPath) {
+    var mode = target.OutputMode || 'SourceFolder';
+    var source;
+
+    if (mode === 'DataFolder') {
+        return { path: joinPath(joinPath(joinPath(dataPath || DATA_FOLDER_PLACEHOLDER, 'quality-gate'), 'encode-priority'), dataFolderStem(target.Id) + '.json'), error: '' };
+    }
+
+    if (mode === 'Custom') {
+        if (!isAbsolutePath(target.OutputPath)) {
+            return { path: '', error: 'A custom output needs an absolute file path.' };
+        }
+
+        return { path: target.OutputPath, error: '' };
+    }
+
+    source = (target.Folders || []).find(function (folder) {
+        return cleanEncoderPath(folder.EncoderPath) === '' && folder.JellyfinPath;
+    });
+    if (!source) {
+        return { path: '', error: 'The encoder\'s source folder is not a folder Jellyfin sees; use Data folder or Custom.' };
+    }
+
+    return { path: joinPath(source.JellyfinPath, SOURCE_FOLDER_FILE), error: '' };
+}
+
+function isAbsolutePath(path) {
+    var value = String(path || '').trim();
+    return value.charAt(0) === '/' || /^[A-Za-z]:[\\/]/.test(value) || value.substring(0, 2) === '\\\\';
+}
+
+function findPolicy(cfg, policyId) {
+    return (cfg.Policies || []).find(function (policy) {
+        return policy.Id === policyId;
+    });
+}
+
+/**
+ * The policy a user plays under, resolved like the server does: an override, else the default.
+ * A missing or disabled policy is the deny-all sentinel, which playback treats as uncapped.
+ */
+function effectivePolicyOf(cfg, userId) {
+    var override = (cfg.UserPolicies || []).find(function (assignment) {
+        return assignment.UserId === userId;
+    });
+    var policyId = override && override.PolicyId ? override.PolicyId : cfg.DefaultPolicyId;
+    var policy;
+
+    if (override && override.PolicyId === FULL_ACCESS_POLICY_ID) {
+        return { policy: null, denyAll: false };
+    }
+
+    if (!policyId) {
+        return { policy: null, denyAll: false };
+    }
+
+    policy = findPolicy(cfg, policyId);
+    if (!policy || policy.Enabled === false) {
+        return { policy: null, denyAll: true };
+    }
+
+    return { policy: policy, denyAll: false };
+}
+
+/**
+ * Who a target serves, for the derived lines on its card. Counts users per policy; the server
+ * additionally skips viewers idle for longer than the activity window.
+ */
+export function targetAudience(target, cfg, userList) {
+    var height = toInt(target.OutputHeight, 720);
+    var excluded = target.ExcludedUserIds || [];
+    var groups = {};
+    var order = [];
+    var viewers = 0;
+    var belowOutput = 0;
+
+    (userList || []).forEach(function (user) {
+        var resolved;
+        var cap;
+        var key;
+        var label;
+
+        if ((user.Policy && user.Policy.IsDisabled) || excluded.indexOf(user.Id) !== -1) {
+            return;
+        }
+
+        resolved = effectivePolicyOf(cfg, user.Id);
+        if (resolved.denyAll) {
+            return;
+        }
+
+        cap = resolved.policy ? toInt(resolved.policy.MaxHeight, 0) : 0;
+        if (target.AudienceMode === 'Users') {
+            if ((target.AudienceUserIds || []).indexOf(user.Id) === -1) {
+                return;
+            }
+
+            if (cap > 0 && cap < height) {
+                belowOutput += 1;
+                return;
+            }
+
+            key = resolved.policy ? resolved.policy.Id : '__uncapped__';
+            label = resolved.policy ? (resolved.policy.Name || 'Unnamed Policy') : 'Uncapped users';
+            cap = cap > 0 ? cap : height;
+        } else {
+            if (!(cap > 0 && cap >= height)) {
+                return;
+            }
+
+            if (target.AudienceMode === 'Policies' && (target.AudiencePolicyIds || []).indexOf(resolved.policy.Id) === -1) {
+                return;
+            }
+
+            key = resolved.policy.Id;
+            label = resolved.policy.Name || 'Unnamed Policy';
+        }
+
+        if (!groups[key]) {
+            groups[key] = { name: label, cap: cap, viewers: 0 };
+            order.push(key);
+        }
+
+        groups[key].viewers += 1;
+        viewers += 1;
+    });
+
+    return {
+        viewers: viewers,
+        belowOutput: belowOutput,
+        serves: order.map(function (key) {
+            return groups[key];
+        }),
+        cannotHelp: (cfg.Policies || []).filter(function (policy) {
+            var cap = toInt(policy.MaxHeight, 0);
+            return policy.Enabled !== false && cap > 0 && cap < height;
+        }).map(function (policy) {
+            return { name: policy.Name || 'Unnamed Policy', cap: toInt(policy.MaxHeight, 0) };
+        })
+    };
+}
+
+/**
+ * Checks the encode priority settings before a save. Returns one line per problem. Disabled
+ * encoders are only checked for a name, so a half-configured one can be parked.
+ */
+export function validateEncodeTargets(cfg, locations) {
+    var errors = [];
+    var names = {};
+    var outputs = {};
+
+    if (!cfg.EnableEncodePriority) {
+        return errors;
+    }
+
+    (cfg.EncodeTargets || []).forEach(function (target, index) {
+        var label = 'Encoder "' + (target.Name || ('#' + (index + 1))) + '"';
+        var name = String(target.Name || '').trim();
+        var seenFolders = [];
+        var output;
+
+        if (!name || name.length > 64) {
+            errors.push('Encoder #' + (index + 1) + ': a name of 1 to 64 characters is required.');
+        } else if (names[name.toLowerCase()]) {
+            errors.push(label + ': another encoder has the same name.');
+        } else {
+            names[name.toLowerCase()] = true;
+        }
+
+        if (target.Enabled === false) {
+            return;
+        }
+
+        if (!(target.Folders || []).length) {
+            errors.push(label + ': add at least one folder.');
+        }
+
+        (target.Folders || []).forEach(function (folder) {
+            var encoderPath = String(folder.EncoderPath || '').trim();
+            if (!isAbsolutePath(folder.JellyfinPath)) {
+                errors.push(label + ': "' + (folder.JellyfinPath || '') + '" must be an absolute path, as Jellyfin sees it.');
+                return;
+            }
+
+            if (encoderPath.charAt(0) === '/' || encoderPath.indexOf('\\') !== -1 || encoderPath.split('/').indexOf('..') !== -1) {
+                errors.push(label + ': the encoder path "' + encoderPath + '" must be relative, use / and contain no "..".');
+            }
+
+            seenFolders.forEach(function (other) {
+                if (relativeTo(folder.JellyfinPath, other, false) !== null || relativeTo(other, folder.JellyfinPath, false) !== null) {
+                    errors.push(label + ': the folders "' + other + '" and "' + folder.JellyfinPath + '" overlap.');
+                }
+            });
+            seenFolders.push(folder.JellyfinPath);
+        });
+
+        if (target.AudienceMode === 'Policies' && !(target.AudiencePolicyIds || []).length) {
+            errors.push(label + ': choose at least one policy, or switch who counts back to capped viewers.');
+        }
+
+        if (target.AudienceMode === 'Users' && !(target.AudienceUserIds || []).length) {
+            errors.push(label + ': choose at least one user, or switch who counts back to capped viewers.');
+        }
+
+        output = resolveOutputPath(target, '');
+        if (output.error) {
+            errors.push(label + ': ' + output.error);
+            return;
+        }
+
+        if (target.OutputMode === 'Custom' && (locations || []).some(function (location) {
+            return relativeTo(target.OutputPath, location, false) !== null;
+        }) && String(target.OutputPath).split(/[\\/]/).pop().charAt(0) !== '.') {
+            errors.push(label + ': "' + target.OutputPath + '" is inside a library, so its file name must start with a dot.');
+        }
+
+        if (!target.DryRun) {
+            if (outputs[output.path]) {
+                errors.push(label + ': another encoder already writes ' + output.path + '.');
+            }
+
+            outputs[output.path] = true;
+        }
+    });
+
+    return errors;
+}
+
+/** The output height options, with the stored height always among them. */
+export function outputHeightOptions(configured) {
+    var selected = toInt(configured, 720);
+    var choices = OUTPUT_HEIGHT_PRESETS.slice();
+
+    if (selected > 0 && choices.indexOf(selected) === -1) {
+        choices.push(selected);
+        choices.sort(function (a, b) {
+            return a - b;
+        });
+    }
+
+    return choices.map(function (height) {
+        return buildOption(height, height + 'p', height === selected);
+    }).join('');
+}
+
+/** The copy-paste text for the encoder, per output mode. */
+export function encoderSetupText(target, resolvedPath) {
+    if (target.OutputMode === 'DataFolder') {
+        return 'Jellyfin\'s media mount is often read-only, so the file is written under Jellyfin\'s data folder. ' +
+            'Mount ' + resolvedPath + ' into the encoder read-only and set PRIORITY_FILE to its path inside the encoder container. ' +
+            'In the official and linuxserver images the data folder is /config/data.';
+    }
+
+    if (target.OutputMode === 'Custom') {
+        return 'Set PRIORITY_FILE to this file as the encoder sees it.';
+    }
+
+    return 'Nothing to set. jellyfin-encoder reads <SOURCE_FOLDER>/' + SOURCE_FOLDER_FILE + ' by default.';
+}
+
+/** The policy checklist for the Policies audience, keeping ids that no longer resolve. */
+export function buildAudiencePolicyChecklist(target, policies, index) {
+    var chosen = target.AudiencePolicyIds || [];
+    var height = toInt(target.OutputHeight, 720);
+    var html = (policies || []).map(function (policy) {
+        var cap = toInt(policy.MaxHeight, 0);
+        var greyed = !(cap > 0 && cap >= height);
+        return '<label data-greyed="' + greyed + '">' +
+            '<input type="checkbox" class="ep-audience-policy" data-index="' + index + '" value="' + escapeAttribute(policy.Id) + '"' +
+                (chosen.indexOf(policy.Id) !== -1 ? ' checked' : '') + ' /> ' +
+            escapeHtml(policy.Name || 'Unnamed Policy') + ' (' + (cap > 0 ? cap + 'p' : 'no cap') + ')' +
+            (greyed ? ' - below this encoder\'s ' + height + 'p output' : '') +
+            '</label>';
+    }).join('');
+
+    chosen.forEach(function (id) {
+        if (!(policies || []).some(function (policy) {
+            return policy.Id === id;
+        })) {
+            html += '<label><input type="checkbox" class="ep-audience-policy" data-index="' + index + '" value="' + escapeAttribute(id) + '" checked /> ' +
+                'Deleted policy (' + escapeHtml(String(id).substring(0, 8)) + '…)</label>';
+        }
+    });
+
+    return html;
+}
+
+/** A user checklist, keeping ids that no longer resolve. */
+export function buildUserChecklist(chosen, userList, index, className) {
+    var ids = chosen || [];
+    var html = (userList || []).map(function (user) {
+        return '<label><input type="checkbox" class="' + className + '" data-index="' + index + '" value="' + escapeAttribute(user.Id) + '"' +
+            (ids.indexOf(user.Id) !== -1 ? ' checked' : '') + ' /> ' + escapeHtml(user.Name) + '</label>';
+    }).join('');
+
+    ids.forEach(function (id) {
+        if (!(userList || []).some(function (user) {
+            return user.Id === id;
+        })) {
+            html += '<label><input type="checkbox" class="' + className + '" data-index="' + index + '" value="' + escapeAttribute(id) + '" checked /> ' +
+                'Unknown user (' + escapeHtml(String(id).substring(0, 8)) + '…)</label>';
+        }
+    });
+
+    return html || '<span class="fieldDescription">No users.</span>';
+}
+
+function targetSummary(target, audience, output) {
+    var folders = (target.Folders || []).map(function (folder) {
+        var encoder = cleanEncoderPath(folder.EncoderPath);
+        return (folder.JellyfinPath || '?') + ' → ' + (encoder || 'encoder root');
+    }).join(', ');
+
+    return (target.Name || 'Unnamed encoder') +
+        (target.Enabled === false ? ' (off)' : '') +
+        ' · ' + (folders || 'no folder') +
+        ' · ' + toInt(target.OutputHeight, 720) + 'p' +
+        ' · serves ' + audience.serves.length + ' ' + (audience.serves.length === 1 ? 'group' : 'groups') + ' (' + audience.viewers + ' viewers)' +
+        ' · ' + (target.DryRun ? 'dry run, writes nothing' : (output.path ? 'writes ' + output.path : output.error));
+}
+
+function buildFolderRows(target, index) {
+    var rows = target.Folders.length ? target.Folders : [{ JellyfinPath: '', EncoderPath: '' }];
+    return rows.map(function (folder, row) {
+        return '<div class="ep-folder-row">' +
+            '<div class="inputContainer">' +
+                '<label class="inputLabel inputLabelUnfocused" for="ep-folder-' + index + '-' + row + '">Jellyfin folder</label>' +
+                '<input type="text" class="emby-input ep-jellyfin-path" id="ep-folder-' + index + '-' + row + '" data-index="' + index + '" list="epLibraryLocations" ' +
+                    'value="' + escapeAttribute(folder.JellyfinPath) + '" placeholder="/media/tv" />' +
+            '</div>' +
+            '<div class="inputContainer ep-encoder-col">' +
+                '<label class="inputLabel inputLabelUnfocused" for="ep-encoder-' + index + '-' + row + '">Inside the encoder\'s source folder</label>' +
+                '<input type="text" class="emby-input ep-encoder-path" id="ep-encoder-' + index + '-' + row + '" data-index="' + index + '" ' +
+                    'value="' + escapeAttribute(folder.EncoderPath) + '" placeholder="usually empty" />' +
+            '</div>' +
+            '<button is="emby-button" type="button" class="raised ep-remove-folder" data-index="' + index + '" data-row="' + row + '" aria-label="Remove folder">' +
+                '<span>×</span>' +
+            '</button>' +
+        '</div>';
+    }).join('');
+}
+
+function buildTargetCard(target, index) {
+    var audience = targetAudience(target, config, users);
+    var output = resolveOutputPath(target, epDataPath);
+    var example = target.Folders.length
+        ? mapToEncoderPath(joinPath(target.Folders[0].JellyfinPath, SAMPLE_FILE), target.Folders, false)
+        : null;
+    var state = epCardState[target.Id] || { open: !target.Name, advanced: false };
+    var modes = [['SourceFolder', 'Beside the media (source folder)'], ['DataFolder', 'Jellyfin data folder'], ['Custom', 'Custom file']];
+    var audienceModes = [['Auto', 'Capped viewers this encoder can help'], ['Policies', 'Only users on these policies'], ['Users', 'These users, even if uncapped']];
+    var serves = audience.serves.map(function (group) {
+        return '<em>' + escapeHtml(group.name) + '</em> (' + group.viewers + (group.viewers === 1 ? ' viewer' : ' viewers') + ')';
+    }).join(', ');
+    var cannotHelp = audience.cannotHelp.map(function (policy) {
+        return '<em>' + escapeHtml(policy.name) + '</em> (' + policy.cap + 'p)';
+    }).join(', ');
+
+    return '<details class="ep-card' + (state.advanced ? ' ep-show-advanced' : '') + '" data-index="' + index + '" data-id="' + escapeAttribute(target.Id) + '"' + (state.open ? ' open' : '') + '>' +
+        '<summary>' + escapeHtml(targetSummary(target, audience, output)) + '</summary>' +
+        '<div class="inputContainer">' +
+            '<label class="inputLabel inputLabelUnfocused" for="ep-name-' + index + '">Name</label>' +
+            '<input type="text" class="emby-input ep-name" id="ep-name-' + index + '" data-index="' + index + '" maxlength="64" value="' + escapeAttribute(target.Name) + '" placeholder="Shows" />' +
+        '</div>' +
+        '<label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" class="ep-enabled" data-index="' + index + '"' + (target.Enabled !== false ? ' checked' : '') + ' /><span>Enabled</span></label>' +
+        '<h4 class="ep-block-title">Folders</h4>' +
+        buildFolderRows(target, index) +
+        '<button is="emby-button" type="button" class="raised ep-add-folder" data-index="' + index + '"><span>Add folder</span></button>' +
+        '<div class="ep-example">' + (example
+            ? '<code>' + escapeHtml(joinPath(target.Folders[0].JellyfinPath, SAMPLE_FILE)) + '</code> will be written as <code>' + escapeHtml(example) + '</code>'
+            : 'Add a folder to see how a file is written.') + '</div>' +
+        '<div class="selectContainer">' +
+            '<label class="selectLabel" for="ep-height-' + index + '">Encoder output height</label>' +
+            '<select is="emby-select" class="emby-select ep-output-height" id="ep-height-' + index + '" data-index="' + index + '">' + outputHeightOptions(target.OutputHeight) + '</select>' +
+            '<div class="fieldDescription">What the encoder produces. jellyfin-encoder always produces 720p.</div>' +
+        '</div>' +
+        '<h4 class="ep-block-title">Where to write</h4>' +
+        modes.map(function (mode) {
+            return '<label class="checkboxContainer"><input type="radio" name="ep-output-mode-' + index + '" class="ep-output-mode" data-index="' + index + '" value="' + mode[0] + '"' +
+                (target.OutputMode === mode[0] ? ' checked' : '') + ' /> <span>' + mode[1] + '</span></label>';
+        }).join('') +
+        (target.OutputMode === 'Custom'
+            ? '<div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="ep-output-path-' + index + '">File, as Jellyfin sees it</label>' +
+                '<input type="text" class="emby-input ep-output-path" id="ep-output-path-' + index + '" data-index="' + index + '" value="' + escapeAttribute(target.OutputPath) + '" placeholder="/media/tv/.encoder-priority.json" /></div>'
+            : '') +
+        '<div class="ep-setup">' +
+            (output.error
+                ? '<span class="ep-error">' + escapeHtml(output.error) + '</span>'
+                : 'Writes <code class="ep-resolved-path">' + escapeHtml(output.path) + '</code><br /><span class="ep-setup-text">' + escapeHtml(encoderSetupText(target, output.path)) + '</span>') +
+        '</div>' +
+        '<div class="ep-derived">' +
+            (audience.serves.length ? 'Serves: ' + serves + '.' : '<span class="ep-warning">Serves nobody yet: no capped viewer has a cap at or above ' + toInt(target.OutputHeight, 720) + 'p.</span>') +
+            (audience.cannotHelp.length ? '<br /><span class="ep-warning">Cannot help: ' + cannotHelp + ', whose cap is below this encoder\'s ' + toInt(target.OutputHeight, 720) + 'p output. Those viewers keep getting live transcodes.</span>' : '') +
+            (audience.belowOutput ? '<br /><span class="ep-warning">' + audience.belowOutput + ' chosen users are capped below the output and are skipped.</span>' : '') +
+        '</div>' +
+        '<details class="ep-card-advanced"' + (state.advanced ? ' open' : '') + ' data-index="' + index + '">' +
+            '<summary>Advanced</summary>' +
+            '<h4 class="ep-block-title">Who counts</h4>' +
+            audienceModes.map(function (mode) {
+                return '<label class="checkboxContainer"><input type="radio" name="ep-audience-' + index + '" class="ep-audience-mode" data-index="' + index + '" value="' + mode[0] + '"' +
+                    (target.AudienceMode === mode[0] ? ' checked' : '') + ' /> <span>' + mode[1] + '</span></label>';
+            }).join('') +
+            (target.AudienceMode === 'Policies' ? '<div class="ep-checklist">' + buildAudiencePolicyChecklist(target, config.Policies, index) + '</div>' : '') +
+            (target.AudienceMode === 'Users' ? '<div class="ep-checklist">' + buildUserChecklist(target.AudienceUserIds, users, index, 'ep-audience-user') + '</div>' : '') +
+            '<h4 class="ep-block-title">Never count these users</h4>' +
+            '<div class="ep-checklist">' + buildUserChecklist(target.ExcludedUserIds, users, index, 'ep-excluded-user') + '</div>' +
+            '<label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" class="ep-resolve-symlinks" data-index="' + index + '"' + (target.ResolveSymlinks ? ' checked' : '') + ' /><span>Resolve symlinks before mapping (for a library that points at a tree of links)</span></label>' +
+            '<div class="ep-signal-row"><span>Longest list written</span><input type="number" class="emby-input ep-number ep-max-entries" data-index="' + index + '" min="1" max="5000" step="1" value="' + toInt(target.MaxEntries, 300) + '" /></div>' +
+            '<label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" class="ep-dry-run" data-index="' + index + '"' + (target.DryRun ? ' checked' : '') + ' /><span>Dry run: build and report, write no file</span></label>' +
+        '</details>' +
+        '<button is="emby-button" type="button" class="raised qg-delete-btn ep-remove-target" data-index="' + index + '" style="background:#c62828 !important;color:#fff !important;border-color:#c62828 !important;"><span>Remove encoder</span></button>' +
+    '</details>';
+}
+
+function renderEncodeTargets(view) {
+    var container = view.querySelector('#encodeTargetsContainer');
+    if (!container) {
+        return;
+    }
+
+    container.innerHTML = config.EncodeTargets.length
+        ? config.EncodeTargets.map(buildTargetCard).join('')
+        : getEmptyState('No encoder yet. Click "Add encoder" to create one.');
+
+    container.querySelectorAll('.ep-card').forEach(function (card) {
+        card.addEventListener('toggle', function (event) {
+            if (event.target === card) {
+                rememberCard(card.dataset.id, 'open', card.open);
+            }
+        });
+    });
+
+    container.querySelectorAll('.ep-card-advanced').forEach(function (details) {
+        details.addEventListener('toggle', function () {
+            var card = details.closest('.ep-card');
+            rememberCard(card.dataset.id, 'advanced', details.open);
+            card.classList.toggle('ep-show-advanced', details.open);
+        });
+    });
+}
+
+function rememberCard(id, key, value) {
+    epCardState[id] = epCardState[id] || { open: false, advanced: false };
+    epCardState[id][key] = value;
+}
+
+function renderEncodePriority(view) {
+    var body = view.querySelector('#encodePriorityBody');
+    var datalist = view.querySelector('#epLibraryLocations');
+    if (!body) {
+        return;
+    }
+
+    view.querySelector('#enableEncodePriority').checked = config.EnableEncodePriority;
+    body.dataset.off = String(!config.EnableEncodePriority);
+    view.querySelector('#epNowPlaying').checked = Boolean(config.PriorityNowPlaying);
+    view.querySelector('#epContinueWatching').checked = Boolean(config.PriorityContinueWatching);
+    view.querySelector('#epNextUp').checked = Boolean(config.PriorityNextUp);
+    view.querySelector('#epNextUpDepth').value = config.PriorityNextUpDepth;
+    view.querySelector('#epFavourites').checked = Boolean(config.PriorityFavourites);
+    view.querySelector('#epWatchedWithinDays').value = config.PriorityWatchedWithinDays;
+    view.querySelector('#epRefreshOnPlayback').checked = Boolean(config.PriorityRefreshOnPlayback);
+    view.querySelector('#epDebounceMinutes').value = config.PriorityDebounceMinutes;
+    view.querySelector('#epContinueWatchingPerUser').value = config.PriorityContinueWatchingPerUser;
+    view.querySelector('#epNextUpShowsPerUser').value = config.PriorityNextUpShowsPerUser;
+    view.querySelector('#epNextUpIncludeSpecials').checked = Boolean(config.PriorityNextUpIncludeSpecials);
+    view.querySelector('#epFavouritesPerUser').value = config.PriorityFavouritesPerUser;
+    view.querySelector('#epUnprobedNeedsEncode').checked = Boolean(config.PriorityUnprobedNeedsEncode);
+    view.querySelector('#epRunBudgetSeconds').value = config.PriorityRunBudgetSeconds;
+    if (datalist) {
+        datalist.innerHTML = libraryLocations.map(function (location) {
+            return '<option value="' + escapeAttribute(location) + '"></option>';
+        }).join('');
+    }
+
+    renderEncodeTargets(view);
+}
+
+function checkedValues(card, selector) {
+    return Array.prototype.map.call(card.querySelectorAll(selector + ':checked'), function (input) {
+        return input.value;
+    });
+}
+
+/**
+ * The folder rows as typed, empty ones included, so each keeps the index its × button carries
+ * and a re-render keeps a row just added. saveConfig drops the empty ones.
+ */
+export function readFolderRows(jellyfinPaths, encoderPaths) {
+    return Array.prototype.map.call(jellyfinPaths, function (input, row) {
+        return { JellyfinPath: input.value.trim(), EncoderPath: encoderPaths[row] ? encoderPaths[row].value.trim() : '' };
+    });
+}
+
+/** Drops the folder rows left empty on both sides, before the page validates and saves. */
+export function dropEmptyFolders(cfg) {
+    (cfg.EncodeTargets || []).forEach(function (target) {
+        target.Folders = (target.Folders || []).filter(function (folder) {
+            return folder.JellyfinPath || folder.EncoderPath;
+        });
+    });
+}
+
+function collectEncodePriority(view) {
+    var toggle = view.querySelector('#enableEncodePriority');
+    if (!toggle) {
+        return;
+    }
+
+    config.EnableEncodePriority = toggle.checked;
+    config.PriorityNowPlaying = view.querySelector('#epNowPlaying').checked;
+    config.PriorityContinueWatching = view.querySelector('#epContinueWatching').checked;
+    config.PriorityNextUp = view.querySelector('#epNextUp').checked;
+    config.PriorityNextUpDepth = toInt(view.querySelector('#epNextUpDepth').value, config.PriorityNextUpDepth);
+    config.PriorityFavourites = view.querySelector('#epFavourites').checked;
+    config.PriorityWatchedWithinDays = toInt(view.querySelector('#epWatchedWithinDays').value, config.PriorityWatchedWithinDays);
+    config.PriorityRefreshOnPlayback = view.querySelector('#epRefreshOnPlayback').checked;
+    config.PriorityDebounceMinutes = toInt(view.querySelector('#epDebounceMinutes').value, config.PriorityDebounceMinutes);
+    config.PriorityContinueWatchingPerUser = toInt(view.querySelector('#epContinueWatchingPerUser').value, config.PriorityContinueWatchingPerUser);
+    config.PriorityNextUpShowsPerUser = toInt(view.querySelector('#epNextUpShowsPerUser').value, config.PriorityNextUpShowsPerUser);
+    config.PriorityNextUpIncludeSpecials = view.querySelector('#epNextUpIncludeSpecials').checked;
+    config.PriorityFavouritesPerUser = toInt(view.querySelector('#epFavouritesPerUser').value, config.PriorityFavouritesPerUser);
+    config.PriorityUnprobedNeedsEncode = view.querySelector('#epUnprobedNeedsEncode').checked;
+    config.PriorityRunBudgetSeconds = toInt(view.querySelector('#epRunBudgetSeconds').value, config.PriorityRunBudgetSeconds);
+
+    view.querySelectorAll('#encodeTargetsContainer .ep-card').forEach(function (card) {
+        var target = config.EncodeTargets[parseInt(card.dataset.index, 10)];
+        var jellyfinPaths;
+        var encoderPaths;
+        var mode;
+        var audience;
+        var outputPath;
+
+        if (!target) {
+            return;
+        }
+
+        jellyfinPaths = card.querySelectorAll('.ep-jellyfin-path');
+        encoderPaths = card.querySelectorAll('.ep-encoder-path');
+        target.Name = card.querySelector('.ep-name').value.trim();
+        target.Enabled = card.querySelector('.ep-enabled').checked;
+        target.Folders = readFolderRows(jellyfinPaths, encoderPaths);
+        target.OutputHeight = toInt(card.querySelector('.ep-output-height').value, target.OutputHeight);
+        mode = card.querySelector('.ep-output-mode:checked');
+        target.OutputMode = mode ? mode.value : target.OutputMode;
+        outputPath = card.querySelector('.ep-output-path');
+        if (outputPath) {
+            target.OutputPath = outputPath.value.trim();
+        }
+
+        audience = card.querySelector('.ep-audience-mode:checked');
+        target.AudienceMode = audience ? audience.value : target.AudienceMode;
+        if (card.querySelector('.ep-audience-policy')) {
+            target.AudiencePolicyIds = checkedValues(card, '.ep-audience-policy');
+        }
+
+        if (card.querySelector('.ep-audience-user')) {
+            target.AudienceUserIds = checkedValues(card, '.ep-audience-user');
+        }
+
+        if (card.querySelector('.ep-excluded-user')) {
+            target.ExcludedUserIds = checkedValues(card, '.ep-excluded-user');
+        }
+
+        target.ResolveSymlinks = card.querySelector('.ep-resolve-symlinks').checked;
+        target.MaxEntries = toInt(card.querySelector('.ep-max-entries').value, target.MaxEntries);
+        target.DryRun = card.querySelector('.ep-dry-run').checked;
+    });
+}
+
+function refreshEncodePriority(view) {
+    collectFromDOM(view);
+    renderEncodePriority(view);
+    upgradeNativeWidgets(view);
+}
+
+function addEncodeTarget(view) {
+    var target;
+    if (!isLoaded) {
+        return;
+    }
+
+    collectFromDOM(view);
+    target = normalizeEncodeTarget({ Name: '', Folders: [{ JellyfinPath: '', EncoderPath: '' }] });
+    epCardState[target.Id] = { open: true, advanced: false };
+    config.EncodeTargets.push(target);
+    renderEncodePriority(view);
+    upgradeNativeWidgets(view);
+    markDirty(view);
+}
+
+function handleEncodePriorityClick(view, button) {
+    var index = parseInt(button.dataset.index, 10);
+    var target;
+
+    collectFromDOM(view);
+    target = config.EncodeTargets[index];
+    if (!target) {
+        return;
+    }
+
+    if (button.classList.contains('ep-add-folder')) {
+        target.Folders.push({ JellyfinPath: '', EncoderPath: '' });
+    } else if (button.classList.contains('ep-remove-folder')) {
+        target.Folders.splice(parseInt(button.dataset.row, 10), 1);
+    } else if (button.classList.contains('ep-remove-target')) {
+        if (!confirm('Remove encoder "' + (target.Name || 'Unnamed encoder') + '"? Its list file is removed on the next run.')) {
+            return;
+        }
+
+        config.EncodeTargets.splice(index, 1);
+    }
+
+    renderEncodePriority(view);
+    upgradeNativeWidgets(view);
+    markDirty(view);
+}
+
+function formatTime(value) {
+    if (!value) {
+        return 'never';
+    }
+
+    var date = new Date(value);
+    return isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+}
+
+var RESULT_BADGES = {
+    OK: 'OK',
+    Unchanged: 'OK, unchanged',
+    Warning: 'Warning',
+    Error: 'Error',
+    TimedOut: 'Timed out, previous list kept',
+    DryRun: 'Dry run'
+};
+
+function badgeClass(badge) {
+    if (badge === 'OK' || badge === 'OK, unchanged') {
+        return 'ep-badge ep-badge-ok';
+    }
+
+    if (badge === 'Warning' || badge === 'Timed out, previous list kept') {
+        return 'ep-badge ep-badge-warning';
+    }
+
+    return badge === 'Error' ? 'ep-badge ep-badge-error' : 'ep-badge';
+}
+
+function findStatusTarget(targets, id) {
+    return (targets || []).find(function (candidate) {
+        return candidate.Id === id;
+    }) || null;
+}
+
+function formatDuration(ms) {
+    return Math.max(0, Math.round((ms || 0) / 1000)) + ' s';
+}
+
+function countsLine(counts) {
+    var c = counts || {};
+    return [
+        [c.Viewers, 'viewers'],
+        [c.DemandItems, 'demand items'],
+        [c.Gaps, 'gaps'],
+        [c.Listed, 'listed'],
+        [c.Covered, 'covered'],
+        [c.HeightUnknown, 'height unknown'],
+        [c.Unmapped, 'unmapped'],
+        [c.CutByLimit, 'cut by the limit']
+    ].map(function (pair) {
+        return (pair[0] || 0) + ' ' + pair[1];
+    }).join(' · ');
+}
+
+var SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+function formatSpan(ms) {
+    var minutes = Math.max(0, Math.round(ms / 60000));
+    var hours = Math.floor(minutes / 60);
+    return hours > 0 ? hours + ' h ' + (minutes % 60) + ' m' : minutes + ' m';
+}
+
+/**
+ * The end-to-end proof for one encoder over the last 7 days: how many items were listed, how
+ * many gained a within-cap version (with the median wait), how many a capped viewer then played
+ * within their cap, and how many were played above it although a smaller version existed.
+ */
+export function buildSevenDaySummary(target, covered, nowMs) {
+    var since = nowMs - SEVEN_DAYS_MS;
+    var listed = {};
+    var mine = (covered || []).filter(function (record) {
+        return record.TargetId === target.Id && Date.parse(record.CoveredAt) >= since;
+    });
+    var waits;
+    var median;
+
+    (target.Entries || []).forEach(function (entry) {
+        if (Date.parse(entry.FirstListedAt) >= since) {
+            listed[entry.ItemId] = true;
+        }
+    });
+    mine.forEach(function (record) {
+        if (Date.parse(record.ListedAt) >= since) {
+            listed[record.ItemId] = true;
+        }
+    });
+
+    waits = mine.map(function (record) {
+        return Date.parse(record.CoveredAt) - Date.parse(record.ListedAt);
+    }).sort(function (a, b) {
+        return a - b;
+    });
+    median = waits.length
+        ? (waits.length % 2 ? waits[(waits.length - 1) / 2] : (waits[waits.length / 2 - 1] + waits[waits.length / 2]) / 2)
+        : null;
+
+    return 'Last 7 days: ' + Object.keys(listed).length + ' listed · ' +
+        mine.length + ' covered' + (median === null ? '' : ' (median ' + formatSpan(median) + ')') + ' · ' +
+        mine.filter(function (record) {
+            return record.ServedAt;
+        }).length + ' served within cap · ' +
+        mine.filter(function (record) {
+            return record.ServedOverCapAt;
+        }).length + ' played over the cap';
+}
+
+/** The list as a table: rank, title, the path as the encoder sees it, the height, why. */
+export function buildListTable(entries) {
+    if (!(entries || []).length) {
+        return '<p class="fieldDescription">The list is empty: nothing capped viewers are watching needs an encode.</p>';
+    }
+
+    return '<table class="ep-preview-table"><thead><tr><th>#</th><th>Title</th><th>Path as the encoder sees it</th><th>Height</th><th>Why</th></tr></thead><tbody>' +
+        entries.map(function (entry) {
+            return '<tr>' +
+                '<td>' + escapeHtml(entry.Rank) + '</td>' +
+                '<td>' + escapeHtml(entry.Title || 'Item no longer in the library') + '</td>' +
+                '<td><code>' + escapeHtml(entry.Path) + '</code></td>' +
+                '<td>' + (entry.Height ? escapeHtml(entry.Height) + 'p' : 'unknown') + '</td>' +
+                '<td>' + (entry.Reasons || []).map(function (reason) {
+                    return '<span class="ep-chip">' + escapeHtml(reason) + '</span>';
+                }).join(' ') + (entry.Users > 1 ? ' <span class="ep-chip">' + escapeHtml(entry.Users) + ' viewers</span>' : '') + '</td>' +
+            '</tr>';
+        }).join('') +
+        '</tbody></table>';
+}
+
+/**
+ * The status panel per target. With the plugin's status endpoint it shows the last run, the
+ * counts, the findings, the current list and the last preview; without it, it falls back to
+ * what Jellyfin already ships: the scheduled task's last result and the task's activity entries.
+ */
+export function buildStatusPanels(cfg, task, entries, status, nowMs) {
+    var result = task && task.LastExecutionResult;
+    var now = nowMs || Date.now();
+    var preview = status && status.Preview;
+
+    if (!(cfg.EncodeTargets || []).length) {
+        return '<p class="fieldDescription">No encoder configured.</p>';
+    }
+
+    return cfg.EncodeTargets.map(function (target) {
+        var mine = (entries || []).filter(function (entry) {
+            return entry.Type === ENCODE_PRIORITY_ACTIVITY_TYPE && String(entry.ShortOverview || '').indexOf((target.Name || '') + ':') === 0;
+        });
+        var latest = mine[0];
+        var state = status ? findStatusTarget(status.Targets, target.Id) : null;
+        var previewed = preview ? findStatusTarget(preview.Targets, target.Id) : null;
+        var badge;
+        var html;
+
+        if (!cfg.EnableEncodePriority || target.Enabled === false) {
+            badge = 'Off';
+        } else if (state && state.Result) {
+            badge = RESULT_BADGES[state.Result] || state.Result;
+        } else if (!result) {
+            badge = 'Waiting for first run';
+        } else if (result.Status === 'Failed' || result.Status === 'Aborted') {
+            badge = 'Error';
+        } else if (latest && latest.Overview && latest.Overview.indexOf('TimedOut') !== -1) {
+            badge = 'Timed out, previous list kept';
+        } else if (latest && latest.Severity && latest.Severity !== 'Information') {
+            badge = 'Warning';
+        } else {
+            badge = latest ? 'OK' : 'OK, unchanged';
+        }
+
+        html = '<div class="ep-status-panel">' +
+            '<strong>' + escapeHtml(target.Name || 'Unnamed encoder') + '</strong>' +
+            '<span class="' + badgeClass(badge) + '">' + escapeHtml(badge) + '</span>';
+
+        if (state) {
+            html += '<div class="fieldDescription">Last run: ' + escapeHtml(formatTime(state.LastRunUtc)) +
+                    ' (' + formatDuration(state.DurationMs) + ', ' + escapeHtml(state.Trigger || 'scheduled') + ')' +
+                    ' · last write: ' + escapeHtml(formatTime(state.LastWriteUtc)) +
+                    (state.OutputPath ? ' · ' + escapeHtml(state.OutputPath) : '') +
+                    (state.Error ? ' · ' + escapeHtml(state.Error) : '') +
+                '</div>' +
+                '<div>' + escapeHtml(countsLine(state.Counts)) + '</div>' +
+                '<div>' + escapeHtml(buildSevenDaySummary(state, status.Covered, now)) + '</div>' +
+                ((state.Findings || []).length
+                    ? '<ul>' + state.Findings.map(function (finding) {
+                        return '<li><strong>' + escapeHtml(finding.Code) + '</strong>: ' + escapeHtml(finding.Message) +
+                            ((finding.Examples || []).length ? '<br /><code>' + finding.Examples.map(escapeHtml).join('</code><br /><code>') + '</code>' : '') +
+                            '</li>';
+                    }).join('') + '</ul>'
+                    : '') +
+                '<details class="ep-list"><summary>Current list (' + (state.Entries || []).length + ' entries)</summary>' + buildListTable(state.Entries) + '</details>';
+        } else {
+            html += '<div class="fieldDescription">Last run: ' + escapeHtml(formatTime(result && result.EndTimeUtc)) +
+                    (result && result.StartTimeUtc && result.EndTimeUtc
+                        ? ' (' + Math.max(0, Math.round((new Date(result.EndTimeUtc) - new Date(result.StartTimeUtc)) / 1000)) + ' s)'
+                        : '') +
+                    (result && result.ErrorMessage ? ' · ' + escapeHtml(result.ErrorMessage) : '') +
+                    (latest ? ' · last change: ' + escapeHtml(formatTime(latest.Date)) : '') +
+                '</div>' +
+                (latest ? '<div>' + escapeHtml(latest.ShortOverview) + '</div>' : '') +
+                (latest && latest.Overview
+                    ? '<ul>' + latest.Overview.split('\n').map(function (line) {
+                        return '<li>' + escapeHtml(line) + '</li>';
+                    }).join('') + '</ul>'
+                    : '');
+        }
+
+        if (previewed) {
+            html += '<details class="ep-list"><summary>Preview from ' + escapeHtml(formatTime(preview.RanAtUtc)) +
+                (previewed.Result === 'TimedOut' ? ', timed out' : ' (' + (previewed.Entries || []).length + ' entries, nothing written)') +
+                '</summary>' +
+                '<div>' + escapeHtml(countsLine(previewed.Counts)) + '</div>' +
+                ((previewed.Findings || []).length
+                    ? '<ul>' + previewed.Findings.map(function (finding) {
+                        return '<li><strong>' + escapeHtml(finding.Code) + '</strong>: ' + escapeHtml(finding.Message) + '</li>';
+                    }).join('') + '</ul>'
+                    : '') +
+                buildListTable(previewed.Entries) +
+                '</details>';
+        }
+
+        return html + '</div>';
+    }).join('');
+}
+
+function getJson(path, params) {
+    return ApiClient.getJSON(ApiClient.getUrl(path, params));
+}
+
+function findEncodePriorityTask() {
+    return getJson('ScheduledTasks').then(function (tasks) {
+        return (tasks || []).find(function (task) {
+            return task.Key === ENCODE_PRIORITY_TASK_KEY;
+        }) || null;
+    });
+}
+
+function loadEncodePriorityStatus(view) {
+    var container = view.querySelector('#encodePriorityStatus');
+    if (!container) {
+        return Promise.resolve();
+    }
+
+    return Promise.all([
+        findEncodePriorityTask(),
+        getJson('System/ActivityLog/Entries', { type: ENCODE_PRIORITY_ACTIVITY_TYPE, limit: 100 }).catch(function () {
+            return { Items: [] };
+        }),
+        getJson('QualityGate/EncodePriority/Status').catch(function () {
+            return null;
+        })
+    ]).then(function (results) {
+        var status = results[2];
+        if (status && status.DataPath && status.DataPath !== epDataPath) {
+            epDataPath = status.DataPath;
+            updateResolvedPaths(view);
+        }
+
+        container.innerHTML = buildStatusPanels(config, results[0], (results[1] && results[1].Items) || [], status);
+    }).catch(function (err) {
+        container.innerHTML = '<p class="fieldDescription ep-error">Could not load the status: ' + escapeHtml(err && err.message ? err.message : String(err)) + '</p>';
+    });
+}
+
+function runEncodePriorityNow(view) {
+    findEncodePriorityTask().then(function (task) {
+        if (!task) {
+            throw new Error('the scheduled task was not found; restart Jellyfin after installing the plugin');
+        }
+
+        return ApiClient.ajax({ type: 'POST', url: ApiClient.getUrl('ScheduledTasks/Running/' + task.Id) });
+    }).then(function () {
+        Dashboard.alert('Encode priority run started. Save first if you changed anything: the run uses the saved settings.');
+        setTimeout(function () {
+            loadEncodePriorityStatus(view);
+        }, 3000);
+    }).catch(function (err) {
+        Dashboard.alert('Could not start the run: ' + (err && err.message ? err.message : String(err)));
+    });
+}
+
+/** Shows the real Data folder path on each card once the status has told the page where it is. */
+function updateResolvedPaths(view) {
+    view.querySelectorAll('#encodeTargetsContainer .ep-card').forEach(function (card) {
+        var target = config.EncodeTargets[parseInt(card.dataset.index, 10)];
+        var path = card.querySelector('.ep-resolved-path');
+        var setup = card.querySelector('.ep-setup-text');
+        var output;
+        if (!target || !path || target.OutputMode !== 'DataFolder') {
+            return;
+        }
+
+        output = resolveOutputPath(target, epDataPath);
+        path.textContent = output.path;
+        if (setup) {
+            setup.textContent = encoderSetupText(target, output.path);
+        }
+    });
+}
+
+function previewEncodePriority(view) {
+    ApiClient.ajax({ type: 'POST', url: ApiClient.getUrl('QualityGate/EncodePriority/Preview') }).then(function () {
+        Dashboard.alert('Preview queued. It builds every enabled encoder\'s list from the saved settings and writes nothing. It appears under Status when it finishes.');
+        setTimeout(function () {
+            loadEncodePriorityStatus(view);
+        }, 3000);
+    }).catch(function (err) {
+        Dashboard.alert('Could not queue the preview: ' + (err && err.message ? err.message : (err && err.status ? 'HTTP ' + err.status : String(err))));
+    });
+}
+
+function loadLibraryLocations() {
+    return getJson('Library/VirtualFolders').then(function (folders) {
+        libraryLocations = [];
+        (folders || []).forEach(function (folder) {
+            (folder.Locations || []).forEach(function (location) {
+                if (libraryLocations.indexOf(location) === -1) {
+                    libraryLocations.push(location);
+                }
+            });
+        });
+    }).catch(function () {
+        libraryLocations = [];
     });
 }
 
@@ -1161,6 +2294,26 @@ export default function (view) {
 
     view.querySelector('#btnAddPolicy').addEventListener('click', function () {
         addPolicy(view);
+    });
+
+    view.querySelector('#btnAddEncodeTarget').addEventListener('click', function () {
+        addEncodeTarget(view);
+    });
+
+    view.querySelector('#btnEncodePriorityRunNow').addEventListener('click', function () {
+        runEncodePriorityNow(view);
+    });
+
+    view.querySelector('#btnEncodePriorityPreview').addEventListener('click', function () {
+        previewEncodePriority(view);
+    });
+
+    view.querySelector('#encodeTargetsContainer').addEventListener('click', function (event) {
+        var button = event.target.closest('.ep-add-folder, .ep-remove-folder, .ep-remove-target');
+        if (button && isLoaded) {
+            event.preventDefault();
+            handleEncodePriorityClick(view, button);
+        }
     });
 
     form.addEventListener('submit', function (event) {
@@ -1197,8 +2350,12 @@ export default function (view) {
             return;
         }
 
-        if (event.target.matches('#defaultPolicySelect, #apiKeyPolicySelect, .policy-enabled, .policy-fallback-transcode, .policy-name')) {
+        if (event.target.matches('#defaultPolicySelect, #apiKeyPolicySelect, .policy-enabled, .policy-fallback-transcode, .policy-name, .policy-max-height')) {
             refreshComputedPreview(view);
+        }
+
+        if (event.target.matches('#enableEncodePriority, .ep-name, .ep-enabled, .ep-jellyfin-path, .ep-encoder-path, .ep-output-height, .ep-output-mode, .ep-output-path, .ep-audience-mode, .ep-dry-run')) {
+            refreshEncodePriority(view);
         }
 
         markDirty(view);

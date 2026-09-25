@@ -270,17 +270,20 @@ public class ResolutionCapFilter : IAsyncResourceFilter, IAsyncResultFilter
             return;
         }
 
-        var withinCap = sources.Where(s => !QualityGateService.ExceedsHeightCap(policy, s)).ToArray();
-        if (withinCap.Length == sources.Count)
+        // The same predicate the encode priority list uses, so what playback transcodes and what
+        // the list asks an encoder to fix can never disagree.
+        var heights = sources.Select(QualityGateService.GetVideoHeight).ToArray();
+        if (!QualityGateService.IsCapGap(heights, policy.MaxHeight))
         {
-            // Nothing is over the cap, so nothing may be removed — but the best of them
-            // still goes first, because clients play MediaSources[0].
-            response.MediaSources = QualityGateService.OrderBestFirst(sources);
-            return;
-        }
+            var withinCap = sources.Where(s => !QualityGateService.ExceedsHeightCap(policy, s)).ToArray();
+            if (withinCap.Length == sources.Count)
+            {
+                // Nothing is over the cap, so nothing may be removed — but the best of them
+                // still goes first, because clients play MediaSources[0].
+                response.MediaSources = QualityGateService.OrderBestFirst(sources);
+                return;
+            }
 
-        if (withinCap.Length > 0)
-        {
             _logger.LogInformation(
                 "QualityGate: capped PlaybackInfo at {Cap}p for user {User} (policy: {Policy}) — offering {Kept} of {Total} sources",
                 policy.MaxHeight, (object)userId, policy.Name, withinCap.Length, sources.Count);

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using Jellyfin.Plugin.QualityGate.Configuration;
+using Jellyfin.Plugin.QualityGate.EncodePriority;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Model.Plugins;
@@ -38,6 +40,33 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     /// Gets the current plugin instance.
     /// </summary>
     public static Plugin? Instance { get; private set; }
+
+    /// <summary>
+    /// Removes every encode priority list the plugin wrote, so an encoder is not left reordering its
+    /// queue by a file nothing will ever update again. Best effort: it needs only the state file
+    /// and file access, and a failure must not block the uninstall.
+    /// </summary>
+    public override void OnUninstalling()
+    {
+        try
+        {
+            // The state records every list written. With no state there is nothing to remove, and
+            // saving one would create a folder on the way out.
+            var statePath = EncodePriorityPaths.StateFile(ApplicationPaths.DataPath);
+            if (File.Exists(statePath))
+            {
+                var state = EncodePriorityState.Load(statePath, out _);
+                CleanupPass.Run(state, new HashSet<string>());
+                state.Save(statePath);
+            }
+        }
+        catch (Exception)
+        {
+            // Nothing sensible to do while the plugin is being removed.
+        }
+
+        base.OnUninstalling();
+    }
 
     /// <inheritdoc />
     public IEnumerable<PluginPageInfo> GetPages()
