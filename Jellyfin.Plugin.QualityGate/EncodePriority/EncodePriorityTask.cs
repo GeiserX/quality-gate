@@ -140,8 +140,8 @@ public sealed class EncodePriorityTask : IScheduledTask
     /// <inheritdoc />
     public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
     {
-        var trigger = EncodePriorityRuntime.TakeTrigger();
-        if (EncodePriorityRuntime.TakePreview())
+        var (trigger, preview) = EncodePriorityRuntime.TakeRequest();
+        if (preview)
         {
             await PreviewAsync(progress, cancellationToken).ConfigureAwait(false);
 

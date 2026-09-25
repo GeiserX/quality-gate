@@ -42,28 +42,33 @@ internal static class EncodePriorityRuntime
     {
         lock (Gate)
         {
-            // Compared per label, not against the whole string: while a long run is going,
-            // alternating triggers would otherwise append again on every request.
-            if (_pendingTrigger is null)
-            {
-                _pendingTrigger = trigger;
-            }
-            else if (!_pendingTrigger.Split(", ").Contains(trigger, StringComparer.Ordinal))
-            {
-                _pendingTrigger += ", " + trigger;
-            }
+            AppendTrigger(trigger);
         }
     }
 
     /// <summary>Asks the next run to build every enabled encoder's list as a dry run first.</summary>
     public static void RequestPreview()
     {
+        // The flag and its label go in together. A run taking them between two locks would
+        // otherwise run the preview and leave "preview" behind as the label of the next real run.
         lock (Gate)
         {
             _previewPending = true;
+            AppendTrigger(PreviewTrigger);
         }
+    }
 
-        RequestRun(PreviewTrigger);
+    /// <summary>Takes and clears the recorded reason and the preview request together.</summary>
+    /// <returns>The reason, or <see cref="ScheduledTrigger"/>, and whether a preview was asked for.</returns>
+    public static (string Trigger, bool Preview) TakeRequest()
+    {
+        lock (Gate)
+        {
+            var request = (_pendingTrigger ?? ScheduledTrigger, _previewPending);
+            _pendingTrigger = null;
+            _previewPending = false;
+            return request;
+        }
     }
 
     /// <summary>Takes and clears the preview request.</summary>
@@ -172,6 +177,20 @@ internal static class EncodePriorityRuntime
             var trigger = _pendingTrigger ?? ScheduledTrigger;
             _pendingTrigger = null;
             return trigger;
+        }
+    }
+
+    // Callers hold Gate. Compared per label, not against the whole string: while a long run is
+    // going, alternating triggers would otherwise append again on every request.
+    private static void AppendTrigger(string trigger)
+    {
+        if (_pendingTrigger is null)
+        {
+            _pendingTrigger = trigger;
+        }
+        else if (!_pendingTrigger.Split(", ").Contains(trigger, StringComparer.Ordinal))
+        {
+            _pendingTrigger += ", " + trigger;
         }
     }
 }
