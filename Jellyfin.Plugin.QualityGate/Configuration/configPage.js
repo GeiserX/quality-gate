@@ -1981,6 +1981,58 @@ function countsLine(counts) {
     }).join(' · ');
 }
 
+var SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+function formatSpan(ms) {
+    var minutes = Math.max(0, Math.round(ms / 60000));
+    var hours = Math.floor(minutes / 60);
+    return hours > 0 ? hours + ' h ' + (minutes % 60) + ' m' : minutes + ' m';
+}
+
+/**
+ * The end-to-end proof for one encoder over the last 7 days: how many items were listed, how
+ * many gained a within-cap version (with the median wait), how many a capped viewer then played
+ * within their cap, and how many were played above it although a smaller version existed.
+ */
+export function buildSevenDaySummary(target, covered, nowMs) {
+    var since = nowMs - SEVEN_DAYS_MS;
+    var listed = {};
+    var mine = (covered || []).filter(function (record) {
+        return record.TargetId === target.Id && Date.parse(record.CoveredAt) >= since;
+    });
+    var waits;
+    var median;
+
+    (target.Entries || []).forEach(function (entry) {
+        if (Date.parse(entry.FirstListedAt) >= since) {
+            listed[entry.ItemId] = true;
+        }
+    });
+    mine.forEach(function (record) {
+        if (Date.parse(record.ListedAt) >= since) {
+            listed[record.ItemId] = true;
+        }
+    });
+
+    waits = mine.map(function (record) {
+        return Date.parse(record.CoveredAt) - Date.parse(record.ListedAt);
+    }).sort(function (a, b) {
+        return a - b;
+    });
+    median = waits.length
+        ? (waits.length % 2 ? waits[(waits.length - 1) / 2] : (waits[waits.length / 2 - 1] + waits[waits.length / 2]) / 2)
+        : null;
+
+    return 'Last 7 days: ' + Object.keys(listed).length + ' listed · ' +
+        mine.length + ' covered' + (median === null ? '' : ' (median ' + formatSpan(median) + ')') + ' · ' +
+        mine.filter(function (record) {
+            return record.ServedAt;
+        }).length + ' served within cap · ' +
+        mine.filter(function (record) {
+            return record.ServedOverCapAt;
+        }).length + ' played over the cap';
+}
+
 /** The list as a table: rank, title, the path as the encoder sees it, the height, why. */
 export function buildListTable(entries) {
     if (!(entries || []).length) {
@@ -2007,8 +2059,9 @@ export function buildListTable(entries) {
  * counts, the findings, the current list and the last preview; without it, it falls back to
  * what Jellyfin already ships: the scheduled task's last result and the task's activity entries.
  */
-export function buildStatusPanels(cfg, task, entries, status) {
+export function buildStatusPanels(cfg, task, entries, status, nowMs) {
     var result = task && task.LastExecutionResult;
+    var now = nowMs || Date.now();
     var preview = status && status.Preview;
 
     if (!(cfg.EncodeTargets || []).length) {
@@ -2053,6 +2106,7 @@ export function buildStatusPanels(cfg, task, entries, status) {
                     (state.Error ? ' · ' + escapeHtml(state.Error) : '') +
                 '</div>' +
                 '<div>' + escapeHtml(countsLine(state.Counts)) + '</div>' +
+                '<div>' + escapeHtml(buildSevenDaySummary(state, status.Covered, now)) + '</div>' +
                 ((state.Findings || []).length
                     ? '<ul>' + state.Findings.map(function (finding) {
                         return '<li><strong>' + escapeHtml(finding.Code) + '</strong>: ' + escapeHtml(finding.Message) +

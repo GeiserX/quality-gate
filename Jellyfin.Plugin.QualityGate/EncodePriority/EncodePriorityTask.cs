@@ -171,12 +171,33 @@ public sealed class EncodePriorityTask : IScheduledTask
             return;
         }
 
+        // Plays noted since the last run. They go back in the queue if this run ends without
+        // saving the state, so a cancelled run or a failed save does not lose the served trail.
+        var plays = EncodePriorityRuntime.DrainServed();
+        var saved = false;
+        try
+        {
+            saved = await RunCoreAsync(config, plays, trigger, progress, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (!saved && plays.Count > 0)
+            {
+                EncodePriorityRuntime.Requeue(plays);
+            }
+        }
+    }
+
+    private async Task<bool> RunCoreAsync(PluginConfiguration config, IReadOnlyList<ServedPlay> plays, string trigger, IProgress<double>? progress, CancellationToken cancellationToken)
+    {
         var started = Stopwatch.StartNew();
         var now = _clock();
         var options = ReadOptions(config);
         var dataPath = _applicationPaths.DataPath;
         var statePath = EncodePriorityPaths.StateFile(dataPath);
         var state = LoadState(statePath);
+        FoldServed(state, plays);
+        EncodePriorityRuntime.SetCovered(state.Covered);
         var libraries = ReadLibraries();
         var locations = libraries.SelectMany(l => l.Locations).ToList();
 
@@ -230,9 +251,9 @@ public sealed class EncodePriorityTask : IScheduledTask
 
         if (runnable.Count == 0)
         {
-            SaveState(state, statePath);
+            TrimCovered(state, now);
             progress?.Report(100);
-            return;
+            return SaveState(state, statePath);
         }
 
         progress?.Report(5);
@@ -258,8 +279,7 @@ public sealed class EncodePriorityTask : IScheduledTask
                 state.Targets[target.Id] = previous;
             }
 
-            SaveState(state, statePath);
-            return;
+            return SaveState(state, statePath);
         }
 
         progress?.Report(80);
@@ -313,6 +333,17 @@ public sealed class EncodePriorityTask : IScheduledTask
 
             next.Entries = ToStateEntries(build, previous, now);
             next.Counts = build.Counts;
+
+            var overCap = state.Covered
+                .Where(c => c.TargetId == target.Id && c.ServedOverCapAt is not null && now - c.CoveredAt < CoveredKeptFor)
+                .ToList();
+            if (overCap.Count > 0)
+            {
+                findings.Add(new Finding(
+                    "ServedOverCap",
+                    $"{overCap.Count} covered items were played by a capped viewer on a version above their cap, although a version within the cap exists. Quality Gate should have offered that version; please report it with these item ids.",
+                    overCap.Take(5).Select(c => c.ItemId.ToString("N")).ToList()));
+            }
 
             if (IsStuck(target, next, state, listChanged, now))
             {
@@ -373,8 +404,8 @@ public sealed class EncodePriorityTask : IScheduledTask
 
         TrimCovered(state, now);
         EncodePriorityRuntime.SetCovered(state.Covered);
-        SaveState(state, statePath);
         progress?.Report(100);
+        return SaveState(state, statePath);
     }
 
     /// <summary>
@@ -724,15 +755,74 @@ public sealed class EncodePriorityTask : IScheduledTask
         }
     }
 
-    private void SaveState(EncodePriorityState state, string statePath)
+    private bool SaveState(EncodePriorityState state, string statePath)
     {
         try
         {
             state.Save(statePath);
+            return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _logger.LogError(ex, "QualityGate: could not save encode priority state to {Path}", statePath);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Folds the plays the playback handler noted into the covered records: a play on a version
+    /// within the viewer's cap is the end-to-end proof (served); a play on a version above it means
+    /// Quality Gate did not offer the within-cap version, which is a bug worth flagging.
+    /// </summary>
+    /// <remarks>
+    /// Each version's height is measured the way playback measures it, once per item per run. A
+    /// version with no known height counts as within the cap, as it does in playback. A play that
+    /// does not say which version it used, names a version the item does not have, or happened
+    /// before the item was covered proves nothing and is dropped. The first served play and the
+    /// first over-cap play of each record are kept.
+    /// </remarks>
+    /// <param name="state">The state, updated in place.</param>
+    /// <param name="plays">The plays, oldest first.</param>
+    internal void FoldServed(EncodePriorityState state, IReadOnlyList<ServedPlay> plays)
+    {
+        var versions = new Dictionary<Guid, IReadOnlyList<VersionInfo>>();
+        foreach (var play in plays)
+        {
+            if (play.MediaSourceId is not { } played)
+            {
+                continue;
+            }
+
+            foreach (var record in state.Covered.Where(c => (c.ItemId == play.ItemId || c.CoveredVersionId == played) && play.PlayedAt >= c.CoveredAt))
+            {
+                if (!versions.TryGetValue(record.ItemId, out var known))
+                {
+                    known = _collector.GetVersions(record.ItemId);
+                    versions[record.ItemId] = known;
+                }
+
+                var version = known.FirstOrDefault(v => v.Id == played);
+                if (version is null)
+                {
+                    continue;
+                }
+
+                if (version.Height is not int height || height <= play.Cap)
+                {
+                    record.ServedAt ??= play.PlayedAt;
+                    record.ServedVersionId ??= played;
+                }
+                else if (record.ServedOverCapAt is null)
+                {
+                    record.ServedOverCapAt = play.PlayedAt;
+                    record.ServedOverCapVersionId = played;
+                    _logger.LogWarning(
+                        "QualityGate: covered item {ItemId} was played on a {Height}p version by a viewer capped at {Cap}p, although a version within the cap exists",
+                        (object)record.ItemId,
+                        height,
+                        play.Cap);
+                }
+            }
         }
     }
 

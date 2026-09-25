@@ -305,6 +305,7 @@ public sealed class ConfigPageEncodePriorityTests : IDisposable
         Assert.Contains("Item no longer in the library", html, StringComparison.Ordinal);
         Assert.Contains("<td>unknown</td>", html, StringComparison.Ordinal);
         Assert.Contains("(1 entries, nothing written)", html, StringComparison.Ordinal);
+        Assert.Contains("Last 7 days: 0 listed · 0 covered · 0 served within cap · 0 played over the cap", html, StringComparison.Ordinal);
         Assert.Contains("<code>Film A (2001)/Film A (2001).mkv</code>", html, StringComparison.Ordinal);
 
         // The encoder the status does not know yet falls back to the scheduled task and activity log.
@@ -335,6 +336,29 @@ public sealed class ConfigPageEncodePriorityTests : IDisposable
             "{Targets:[{Id:'t1',Name:'Shows',Result:'OK',Counts:{},Findings:[],Entries:[]}],Preview:null,Covered:[]})");
 
         Assert.Contains(">Off<", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SevenDaySummary_CountsListedCoveredServedAndOverCap()
+    {
+        var summary = Eval<string>(
+            "page.buildSevenDaySummary({Id:'t1',Entries:[{ItemId:'a',FirstListedAt:'2026-09-24T00:00:00Z'},{ItemId:'old',FirstListedAt:'2026-09-01T00:00:00Z'}]}, [" +
+            "{ItemId:'b',TargetId:'t1',ListedAt:'2026-09-24T00:00:00Z',CoveredAt:'2026-09-24T02:00:00Z',ServedAt:'2026-09-24T05:00:00Z'}," +
+            "{ItemId:'c',TargetId:'t1',ListedAt:'2026-09-24T00:00:00Z',CoveredAt:'2026-09-24T04:20:00Z',ServedOverCapAt:'2026-09-24T06:00:00Z'}," +
+            "{ItemId:'d',TargetId:'t1',ListedAt:'2026-09-23T00:00:00Z',CoveredAt:'2026-09-23T03:10:00Z'}," +
+            "{ItemId:'e',TargetId:'t2',ListedAt:'2026-09-24T00:00:00Z',CoveredAt:'2026-09-24T01:00:00Z',ServedAt:'2026-09-24T02:00:00Z'}," +
+            "{ItemId:'f',TargetId:'t1',ListedAt:'2026-09-10T00:00:00Z',CoveredAt:'2026-09-11T00:00:00Z',ServedAt:'2026-09-11T02:00:00Z'}]," +
+            "Date.parse('2026-09-25T10:00:00Z'))");
+
+        Assert.Equal("Last 7 days: 4 listed · 3 covered (median 3 h 10 m) · 1 served within cap · 1 played over the cap", summary);
+    }
+
+    [Fact]
+    public void SevenDaySummary_WithNothingCovered_HasNoMedian()
+    {
+        Assert.Equal(
+            "Last 7 days: 0 listed · 0 covered · 0 served within cap · 0 played over the cap",
+            Eval<string>("page.buildSevenDaySummary({Id:'t1',Entries:[]}, [], Date.parse('2026-09-25T10:00:00Z'))"));
     }
 
     [Fact]

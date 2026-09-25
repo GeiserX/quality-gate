@@ -245,4 +245,16 @@ internal sealed class CoveredRecord
 
     /// <summary>Gets or sets the tallest cap for which the item was a gap.</summary>
     public int GapCap { get; set; }
+
+    /// <summary>Gets or sets when a capped viewer first played it on a version within their cap.</summary>
+    public DateTime? ServedAt { get; set; }
+
+    /// <summary>Gets or sets the version that play used.</summary>
+    public Guid? ServedVersionId { get; set; }
+
+    /// <summary>Gets or sets when a capped viewer first played it on a version above their cap.</summary>
+    public DateTime? ServedOverCapAt { get; set; }
+
+    /// <summary>Gets or sets the version that play used.</summary>
+    public Guid? ServedOverCapVersionId { get; set; }
 }

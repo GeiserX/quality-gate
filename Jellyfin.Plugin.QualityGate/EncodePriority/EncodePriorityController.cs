@@ -116,7 +116,17 @@ internal static class EncodePriorityStatus
             state.Preview is { } preview
                 ? new StatusPreview(preview.RanAtUtc, preview.DurationMs, preview.Result, preview.Targets.Select(t => ToTarget(t.Key, t.Value, title)).ToList())
                 : null,
-            state.Covered.Select(c => new StatusCovered(c.ItemId, title(c.ItemId), c.TargetId, c.ListedAt, c.CoveredAt, c.CoveredVersionId, c.GapCap)).ToList());
+            state.Covered.Select(c => new StatusCovered(
+                c.ItemId,
+                title(c.ItemId),
+                c.TargetId,
+                c.ListedAt,
+                c.CoveredAt,
+                c.CoveredVersionId,
+                c.GapCap,
+                c.ServedAt,
+                c.ServedVersionId,
+                c.ServedOverCapAt)).ToList());
 
         return JsonSerializer.Serialize(response, JsonOptions);
     }
@@ -181,5 +191,15 @@ internal static class EncodePriorityStatus
         DateTime FirstListedAt,
         IReadOnlyList<string> Reasons);
 
-    private sealed record StatusCovered(Guid ItemId, string? Title, string TargetId, DateTime ListedAt, DateTime CoveredAt, Guid CoveredVersionId, int GapCap);
+    private sealed record StatusCovered(
+        Guid ItemId,
+        string? Title,
+        string TargetId,
+        DateTime ListedAt,
+        DateTime CoveredAt,
+        Guid CoveredVersionId,
+        int GapCap,
+        DateTime? ServedAt,
+        Guid? ServedVersionId,
+        DateTime? ServedOverCapAt);
 }

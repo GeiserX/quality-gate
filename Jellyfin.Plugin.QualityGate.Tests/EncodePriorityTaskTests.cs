@@ -425,6 +425,110 @@ public sealed class EncodePriorityTaskTests : IDisposable
         Assert.False(EncodePriorityRuntime.TakePreview());
     }
 
+    private async Task<(Guid Item, Guid Copy)> CoverAnItem()
+    {
+        EncodePriorityRuntime.Reset();
+        var item = Wants(Path.Combine(_tv, "Show A", "x.mkv"), 1080);
+        await NewTask().RunAsync("test", null, CancellationToken.None);
+
+        var copy = Guid.NewGuid();
+        _collector.Demand.Versions[item] = new[]
+        {
+            new VersionInfo(item, Path.Combine(_tv, "Show A", "x.mkv"), 1080),
+            new VersionInfo(copy, Path.Combine(_tv, "Show A", "x - 720p.mkv"), 720),
+        };
+        _now = Now.AddHours(3);
+        await NewTask().RunAsync("test", null, CancellationToken.None);
+        Assert.Single(State().Covered);
+        Assert.True(EncodePriorityRuntime.IsCovered(item));
+        return (item, copy);
+    }
+
+    [Fact]
+    public async Task ACappedPlayOnTheWithinCapVersion_RecordsServedAt()
+    {
+        var (item, copy) = await CoverAnItem();
+
+        EncodePriorityRuntime.RecordServed(new ServedPlay(item, copy, 720, Now.AddHours(4)));
+        _now = Now.AddHours(5);
+        await NewTask().RunAsync("test", null, CancellationToken.None);
+
+        var covered = Assert.Single(State().Covered);
+        Assert.Equal(Now.AddHours(4), covered.ServedAt);
+        Assert.Equal(copy, covered.ServedVersionId);
+        Assert.Null(covered.ServedOverCapAt);
+        Assert.DoesNotContain(State().Targets["aaaaaaaa-shows"].Findings, f => f.Code == "ServedOverCap");
+        Assert.Empty(EncodePriorityRuntime.DrainServed());
+    }
+
+    [Fact]
+    public async Task ACappedPlayOnTheOverCapVersion_RaisesServedOverCap()
+    {
+        var (item, _) = await CoverAnItem();
+
+        EncodePriorityRuntime.RecordServed(new ServedPlay(item, item, 720, Now.AddHours(4)));
+        _now = Now.AddHours(5);
+        await NewTask().RunAsync("test", null, CancellationToken.None);
+
+        var covered = Assert.Single(State().Covered);
+        Assert.Null(covered.ServedAt);
+        Assert.Equal(Now.AddHours(4), covered.ServedOverCapAt);
+        Assert.Equal(item, covered.ServedOverCapVersionId);
+        var finding = Assert.Single(State().Targets["aaaaaaaa-shows"].Findings, f => f.Code == "ServedOverCap");
+        Assert.Equal(new[] { item.ToString("N") }, finding.Examples);
+        Assert.Contains(_entries, e => e.Overview?.Contains("ServedOverCap", StringComparison.Ordinal) == true);
+    }
+
+    [Fact]
+    public async Task APlayThatCannotProveAnything_IsDropped()
+    {
+        var (item, copy) = await CoverAnItem();
+
+        EncodePriorityRuntime.RecordServed(new ServedPlay(item, null, 720, Now.AddHours(4)));
+        EncodePriorityRuntime.RecordServed(new ServedPlay(item, copy, 720, Now.AddHours(2)));
+        EncodePriorityRuntime.RecordServed(new ServedPlay(item, Guid.NewGuid(), 720, Now.AddHours(4)));
+        _now = Now.AddHours(5);
+        await NewTask().RunAsync("test", null, CancellationToken.None);
+
+        var covered = Assert.Single(State().Covered);
+        Assert.Null(covered.ServedAt);
+        Assert.Null(covered.ServedOverCapAt);
+        Assert.Empty(EncodePriorityRuntime.DrainServed());
+    }
+
+    [Fact]
+    public async Task TheServedQueue_SurvivesACancelledRunAndIsDrainedByTheNextOne()
+    {
+        var (item, copy) = await CoverAnItem();
+        EncodePriorityRuntime.RecordServed(new ServedPlay(item, copy, 720, Now.AddHours(4)));
+
+        _collector.BlockUntilCancelled = true;
+        using (var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(50)))
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => NewTask().RunAsync("test", null, cts.Token));
+        }
+
+        Assert.Null(Assert.Single(State().Covered).ServedAt);
+
+        _collector.BlockUntilCancelled = false;
+        _now = Now.AddHours(5);
+        await NewTask().RunAsync("test", null, CancellationToken.None);
+
+        Assert.Equal(Now.AddHours(4), Assert.Single(State().Covered).ServedAt);
+        Assert.Empty(EncodePriorityRuntime.DrainServed());
+    }
+
+    [Fact]
+    public async Task APreview_LeavesTheServedQueueForTheRealRun()
+    {
+        var (item, copy) = await CoverAnItem();
+        EncodePriorityRuntime.RecordServed(new ServedPlay(item, copy, 720, Now.AddHours(4)));
+
+        await NewTask().PreviewAsync(null, CancellationToken.None);
+
+        Assert.Single(EncodePriorityRuntime.DrainServed());
+    }
+
     private static void SetMode(string dir, UnixFileMode mode)
     {
         if (!OperatingSystem.IsWindows())

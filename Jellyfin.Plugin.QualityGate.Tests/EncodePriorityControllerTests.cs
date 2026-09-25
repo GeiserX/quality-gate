@@ -115,7 +115,7 @@ public sealed class EncodePriorityControllerTests : IDisposable
         };
         state.Preview = new PreviewState { RanAtUtc = Now, Result = "OK" };
         state.Preview.Targets["t1"] = new TargetState { Name = "Shows", Result = "DryRun" };
-        state.Covered.Add(new CoveredRecord { ItemId = film, TargetId = "t1", ListedAt = Now.AddHours(-3), CoveredAt = Now, GapCap = 720 });
+        state.Covered.Add(new CoveredRecord { ItemId = film, TargetId = "t1", ListedAt = Now.AddHours(-3), CoveredAt = Now, GapCap = 720, ServedAt = Now.AddHours(1) });
         state.Save(EncodePriorityPaths.StateFile(_data));
 
         var status = Status();
@@ -134,6 +134,8 @@ public sealed class EncodePriorityControllerTests : IDisposable
         Assert.Equal(JsonValueKind.Null, entries[2].GetProperty("Title").ValueKind);
         Assert.Equal("DryRun", status.GetProperty("Preview").GetProperty("Targets")[0].GetProperty("Result").GetString());
         Assert.Equal("Film A (2001)", status.GetProperty("Covered")[0].GetProperty("Title").GetString());
+        Assert.Equal(Now.AddHours(1), status.GetProperty("Covered")[0].GetProperty("ServedAt").GetDateTime().ToUniversalTime());
+        Assert.Equal(JsonValueKind.Null, status.GetProperty("Covered")[0].GetProperty("ServedOverCapAt").ValueKind);
         _library.Verify(l => l.GetItemById(film), Times.Once);
     }
 
