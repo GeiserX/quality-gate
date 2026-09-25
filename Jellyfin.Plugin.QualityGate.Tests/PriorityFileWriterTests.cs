@@ -77,6 +77,23 @@ public sealed class PriorityFileWriterTests : IDisposable
     }
 
     [Fact]
+    public void Write_ASymlinkPlantedAtTheTempName_IsNotFollowed()
+    {
+        // The output folder may be writable by others. A link at the temp name must not make
+        // the write overwrite the file it points at, nor end up as the output file.
+        var victim = Path.Combine(_dir, "victim.db");
+        File.WriteAllText(victim, "PRECIOUS");
+        File.CreateSymbolicLink(Path.Combine(_dir, "..encoder-priority.json.tmp"), victim);
+
+        var result = PriorityFileWriter.Write(FilePath(), "Shows", TwoPaths, createDirectory: false, Now);
+
+        Assert.Equal(WriteOutcome.Written, result.Outcome);
+        Assert.Equal("PRECIOUS", File.ReadAllText(victim));
+        Assert.Null(new FileInfo(FilePath()).LinkTarget);
+        Assert.Equal(TwoPaths, PriorityFileWriter.Read(FilePath()).Paths);
+    }
+
+    [Fact]
     public void Write_AnUnchangedList_LeavesTheFileAndItsMtimeAlone()
     {
         PriorityFileWriter.Write(FilePath(), "Shows", TwoPaths, createDirectory: false, Now);

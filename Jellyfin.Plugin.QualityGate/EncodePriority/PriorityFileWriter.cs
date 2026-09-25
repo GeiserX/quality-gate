@@ -86,9 +86,10 @@ internal sealed class PriorityFile
 /// <item>The file is replaced only when its paths change. Every mtime change makes the encoder
 /// rebuild its queue and log a line. A file older than a day is rewritten with a fresh
 /// <c>generated</c> so an age check in the encoder can be tight.</item>
-/// <item>Writes are atomic: <c>.name.tmp</c> in the same folder, flushed, then moved over the
-/// target. Both names start with a dot, which the encoder and Jellyfin's library monitor ignore.
-/// Any failure deletes the temp file and leaves the previous file in force.</item>
+/// <item>Writes are atomic: <c>.name.tmp</c> in the same folder, created exclusively so a
+/// symlink planted there is never followed, flushed, then moved over the target. Both names
+/// start with a dot, which the encoder and Jellyfin's library monitor ignore. Any failure
+/// deletes the temp file and leaves the previous file in force.</item>
 /// <item>UTF-8 without a byte order mark: the encoder's <c>json.load</c> rejects one.</item>
 /// </list>
 /// </remarks>
@@ -265,9 +266,15 @@ internal static class PriorityFileWriter
         var temp = Path.Combine(directory, "." + Path.GetFileName(path) + ".tmp");
         try
         {
+            // The output folder may be writable by others (a library root), so a symlink may be
+            // waiting at the temp name. FileMode.Create would follow it and overwrite whatever it
+            // points at. Delete removes a link itself, never its target, and CreateNew (O_EXCL)
+            // refuses anything planted again between the two calls.
+            File.Delete(temp);
+
             // A FileStream straight into System.Text.Json is UTF-8 with no byte order mark.
             // A StreamWriter with Encoding.UTF8 would emit one, and the encoder cannot read it.
-            using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
+            using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
                 JsonSerializer.Serialize(stream, value, JsonOptions);
                 stream.Flush(true);
@@ -302,10 +309,8 @@ internal static class PriorityFileWriter
     {
         try
         {
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
+            // File.Delete is a no-op for a missing file and removes a symlink, not its target.
+            File.Delete(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
