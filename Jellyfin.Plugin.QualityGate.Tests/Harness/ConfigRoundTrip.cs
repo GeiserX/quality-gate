@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Text.Json;
+using Jellyfin.Extensions.Json;
 using Jellyfin.Plugin.QualityGate.Configuration;
 using MediaBrowser.Common.Configuration;
 using Moq;
@@ -40,7 +42,11 @@ public sealed class ConfigRoundTrip : IDisposable
     /// <returns>A new plugin instance that has not yet loaded its configuration.</returns>
     public Plugin Start() => new(_appPaths, new RealXmlSerializer());
 
-    /// <summary>Saves <paramref name="config"/> as the page's Save button does, then restarts and loads it back.</summary>
+    /// <summary>
+    /// Saves <paramref name="config"/> through the plugin to XML, then restarts and loads it back.
+    /// This is the XML half of a page save only: the object never passes through JSON. Use
+    /// <see cref="SaveFromPageJson"/> for the whole path.
+    /// </summary>
     /// <param name="config">The configuration to save.</param>
     /// <returns>The configuration a restarted server sees.</returns>
     public PluginConfiguration SaveAndReload(PluginConfiguration config)
@@ -48,6 +54,17 @@ public sealed class ConfigRoundTrip : IDisposable
         Start().UpdateConfiguration(config);
         return Load();
     }
+
+    /// <summary>
+    /// Saves the JSON the page posts as the page's Save button does: Jellyfin deserialises the body
+    /// with its own JSON defaults (the Guid converter included), then the plugin writes XML. Then
+    /// restarts and loads it back.
+    /// </summary>
+    /// <param name="json">The body the page posts.</param>
+    /// <returns>The configuration a restarted server sees.</returns>
+    public PluginConfiguration SaveFromPageJson(string json)
+        => SaveAndReload(JsonSerializer.Deserialize<PluginConfiguration>(json, JsonDefaults.Options)
+            ?? throw new InvalidDataException("the page JSON deserialised to null"));
 
     /// <summary>Restarts and loads whatever is on disk.</summary>
     /// <returns>The configuration a restarted server sees.</returns>

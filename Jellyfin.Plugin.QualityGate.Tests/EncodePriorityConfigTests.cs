@@ -178,6 +178,33 @@ public sealed class EncodePriorityConfigTests : IDisposable
     }
 
     [Fact]
+    public void APageSave_ThroughJellyfinsJson_KeepsEveryEncoderField()
+    {
+        // The page echoes user ids back as the GET gave them. Jellyfin's Guid converter reads
+        // both the "N" form and the dashed form.
+        var json = "{\"EnableEncodePriority\":true,\"PriorityNextUpDepth\":5,\"EncodeTargets\":[{"
+            + "\"Id\":\"t-shows\",\"Name\":\"Shows\",\"Enabled\":true,"
+            + "\"Folders\":[{\"JellyfinPath\":\"/media/tv\",\"EncoderPath\":\"tv\"}],"
+            + "\"OutputHeight\":720,\"OutputMode\":\"DataFolder\",\"OutputPath\":\"\",\"AudienceMode\":\"Users\","
+            + "\"AudiencePolicyIds\":[\"p720\"],"
+            + $"\"AudienceUserIds\":[\"{ViewerA:N}\",\"{ViewerB:D}\"],"
+            + $"\"ExcludedUserIds\":[\"{ViewerB:N}\"],"
+            + "\"ResolveSymlinks\":true,\"MaxEntries\":40,\"DryRun\":true}]}";
+
+        var config = _store.SaveFromPageJson(json);
+        config = _store.SaveFromPageJson(json);
+
+        Assert.Equal(5, config.PriorityNextUpDepth);
+        var target = Assert.Single(config.EncodeTargets);
+        Assert.Equal(("t-shows", "Shows", "DataFolder", "Users"), (target.Id, target.Name, target.OutputMode, target.AudienceMode));
+        Assert.Equal(("/media/tv", "tv"), (Assert.Single(target.Folders).JellyfinPath, target.Folders[0].EncoderPath));
+        Assert.Equal(new[] { "p720" }, target.AudiencePolicyIds);
+        Assert.Equal(new[] { ViewerA, ViewerB }, target.AudienceUserIds);
+        Assert.Equal(new[] { ViewerB }, target.ExcludedUserIds);
+        Assert.Equal((true, 40, true), (target.ResolveSymlinks, target.MaxEntries, target.DryRun));
+    }
+
+    [Fact]
     public void ConfigFromBeforeEncodePriority_LoadsWithTheFeatureOff()
     {
         _store.WriteXml("""
