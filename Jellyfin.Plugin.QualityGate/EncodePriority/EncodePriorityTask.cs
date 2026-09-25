@@ -196,9 +196,12 @@ public sealed class EncodePriorityTask : IScheduledTask
         var dataPath = _applicationPaths.DataPath;
         var statePath = EncodePriorityPaths.StateFile(dataPath);
         var state = LoadState(statePath);
+        var loaded = state.ToJson();
         FoldServed(state, plays);
         EncodePriorityRuntime.SetCovered(state.Covered);
-        var libraries = ReadLibraries();
+
+        // With the feature off only the cleanup pass runs, and it needs no library.
+        var libraries = options.Enabled ? ReadLibraries() : new List<LibraryFolder>();
         var locations = libraries.SelectMany(l => l.Locations).ToList();
 
         // Which file each writing target claims. Two targets may not write one file.
@@ -253,7 +256,10 @@ public sealed class EncodePriorityTask : IScheduledTask
         {
             TrimCovered(state, now);
             progress?.Report(100);
-            return SaveState(state, statePath);
+
+            // Nothing runs, so an unchanged state is not rewritten. A server that never turned the
+            // feature on gets no folder and no hourly write.
+            return state.ToJson() == loaded || SaveState(state, statePath);
         }
 
         progress?.Report(5);

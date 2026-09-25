@@ -303,7 +303,7 @@ The encoder never expires a list it has read. It keeps reordering its queue by t
 
 ### 7.1 State file
 
-`<IApplicationPaths.DataPath>/quality-gate/encode-priority/state.json`, written atomically at the end of every run. It is not config, so the page's whole-object save cannot overwrite it. Contents:
+`<IApplicationPaths.DataPath>/quality-gate/encode-priority/state.json`, written atomically at the end of every run that changed it. A run with nothing to build (the feature off, or no enabled encoder) leaves an unchanged state alone, so a server that never turns the feature on gets no folder and no hourly write; uninstall saves the state only if one exists. It is not config, so the page's whole-object save cannot overwrite it. Contents:
 
 - Per target: last run (time, trigger, duration, result), last write, the written list with per-entry `itemId`, `firstListedAt` and reasons, counts, findings.
 - Per covered item, bounded to 7 days or 500 rows: `itemId`, `listedAt`, `coveredAt`, `servedAt`, `servedVersionId`.
@@ -360,7 +360,7 @@ jellyfin-encoder PR #34 is merged (2026-09-24) and shipped as v1.5.4 (`drumsergi
 ## 8. Compatibility
 
 - **Defaults keep 3.8.2.0 behaviour.** `EnableEncodePriority` is false, `EncodeTargets` is empty. An XML config saved by an earlier version has none of the new elements; `XmlSerializer` leaves the initialiser values in place, so the feature is off. A downgrade drops the new elements, because `XmlSerializer` ignores unknown ones.
-- **Disabled means zero change.** No task work beyond the cleanup pass, no event subscription work beyond an in-memory flag check, no request-path change beyond `CapPlaybackInfo` calling a predicate with the same truth table as before.
+- **Disabled means zero change.** No task work beyond the cleanup pass (no library read, and no state write unless the cleanup changed something), no event subscription work beyond an in-memory flag check, no request-path change beyond `CapPlaybackInfo` calling a predicate with the same truth table as before.
 - **Lists start empty.** `XmlSerializer` appends loaded items to a list property that already holds items from its initialiser. `VersionGroupingSuffixes` (`PluginConfiguration.cs:75`) has this bug today: every save plus restart adds another `" - 720p"`, and a cleared list comes back. No new list gets initialiser items. Defaults are applied at read time in `EncodePriorityOptions.From` and as placeholders on the page. The fix for `VersionGroupingSuffixes` ships first, as its own change, with the first real `XmlSerializer` round-trip test in the repo; every existing test mocks the serializer.
 - **Save path.** An admin save arrives as JSON, is deserialised into the config type and then written as XML. Enumerated fields are strings so an unknown value cannot fail the whole save. Integers are clamped when read, not on save.
 - **Saved config migration.** None needed. There is no earlier shape of these fields.

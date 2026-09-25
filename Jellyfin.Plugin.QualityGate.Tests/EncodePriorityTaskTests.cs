@@ -162,6 +162,36 @@ public sealed class EncodePriorityTaskTests : IDisposable
     }
 
     [Fact]
+    public async Task FeatureNeverOn_CreatesNoFolderAndReadsNoLibrary()
+    {
+        _plugin.Configuration.EnableEncodePriority = false;
+
+        await NewTask().RunAsync("scheduled", null, CancellationToken.None);
+        await NewTask().RunAsync("settings saved", null, CancellationToken.None);
+
+        Assert.False(Directory.Exists(EncodePriorityPaths.Root(_data)));
+        _library.Verify(l => l.GetVirtualFolders(), Times.Never);
+        Assert.Equal(0, _collector.Calls);
+    }
+
+    [Fact]
+    public async Task FeatureOff_AfterTheCleanup_LeavesTheStateFileAlone()
+    {
+        Wants(Path.Combine(_tv, "Show A", "x.mkv"), 1080);
+        await NewTask().RunAsync("test", null, CancellationToken.None);
+        _plugin.Configuration.EnableEncodePriority = false;
+        await NewTask().RunAsync("test", null, CancellationToken.None);
+        var statePath = EncodePriorityPaths.StateFile(_data);
+        var stamp = File.GetLastWriteTimeUtc(statePath);
+        File.SetLastWriteTimeUtc(statePath, stamp.AddHours(-1));
+
+        _now = Now.AddHours(1);
+        await NewTask().RunAsync("scheduled", null, CancellationToken.None);
+
+        Assert.Equal(stamp.AddHours(-1), File.GetLastWriteTimeUtc(statePath));
+    }
+
+    [Fact]
     public async Task TargetDisabledOrSwitchedToDryRun_HasItsFileRemoved()
     {
         Wants(Path.Combine(_tv, "Show A", "x.mkv"), 1080);

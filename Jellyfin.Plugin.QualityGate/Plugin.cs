@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using Jellyfin.Plugin.QualityGate.Configuration;
 using Jellyfin.Plugin.QualityGate.EncodePriority;
 using MediaBrowser.Common.Configuration;
@@ -49,10 +50,15 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     {
         try
         {
+            // The state records every list written. With no state there is nothing to remove, and
+            // saving one would create a folder on the way out.
             var statePath = EncodePriorityPaths.StateFile(ApplicationPaths.DataPath);
-            var state = EncodePriorityState.Load(statePath, out _);
-            CleanupPass.Run(state, new HashSet<string>());
-            state.Save(statePath);
+            if (File.Exists(statePath))
+            {
+                var state = EncodePriorityState.Load(statePath, out _);
+                CleanupPass.Run(state, new HashSet<string>());
+                state.Save(statePath);
+            }
         }
         catch (Exception)
         {

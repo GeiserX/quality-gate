@@ -212,9 +212,11 @@ public sealed class EncodePriorityTriggerTests : IDisposable
     }
 
     [Fact]
-    public void Uninstalling_WithNoStateFile_DoesNotThrow()
+    public void Uninstalling_WithNoStateFile_DoesNotThrowOrCreateOne()
     {
         _plugin.OnUninstalling();
+
+        Assert.False(Directory.Exists(EncodePriorityPaths.Root(Path.Combine(_dir, "data"))));
     }
 
     /// <summary>A clock whose timers fire only when the test says so.</summary>

@@ -60,6 +60,10 @@ internal sealed class EncodePriorityState
         }
     }
 
+    /// <summary>Serialises the state as it would be saved, to tell whether a run changed it.</summary>
+    /// <returns>The JSON.</returns>
+    public string ToJson() => JsonSerializer.Serialize(this, JsonOptions);
+
     /// <summary>Saves the state atomically, creating its folder when needed.</summary>
     /// <param name="path">The state file.</param>
     public void Save(string path) => PriorityFileWriter.WriteJsonAtomic(path, this, createDirectory: true);
