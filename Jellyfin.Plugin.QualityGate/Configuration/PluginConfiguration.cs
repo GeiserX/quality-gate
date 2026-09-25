@@ -71,8 +71,10 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Gets or sets the filename suffixes that mark an encoded copy.
     /// A file pairs only when its name is exactly another file's name plus one of these, so
     /// "Movie - 720p.mp4" joins "Movie.mkv" while "Movie - German.mkv" does not.
+    /// Empty (the default) means " - 720p", applied when the list is read. The list must start
+    /// empty: XmlSerializer adds loaded items to whatever an initialiser put there.
     /// </summary>
-    public List<string> VersionGroupingSuffixes { get; set; } = new() { " - 720p" };
+    public List<string> VersionGroupingSuffixes { get; set; } = new();
 }
 
 /// <summary>
