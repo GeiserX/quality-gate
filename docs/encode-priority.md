@@ -165,7 +165,8 @@ Everything from a higher line comes before anything from a lower one:
 3. Next Up. The next episode of every followed show comes before the second episode of any
    show, and so on up to the depth you set.
 4. Favourites: favourite films, and the next unwatched episodes of favourite shows. Off by
-   default.
+   default. Each favourite show costs up to about 3 queries per viewer per run, so keep
+   Favourites per viewer modest on a server with many viewers, or a run can time out.
 
 Within a line, items more viewers want come first, then the most recent activity, then the
 path, so the same inputs always give the same file. A viewer idle for longer than the activity

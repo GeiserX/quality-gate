@@ -70,7 +70,7 @@ string field falls back to its default. Each correction is logged once as a warn
 | `PriorityNextUpShowsPerUser` | int | `10` | 1 to 50 | Most shows per viewer, most recently played first |
 | `PriorityNextUpIncludeSpecials` | bool | `false` | | Include season 0 in the lookahead |
 | `PriorityFavourites` | bool | `false` | | Rank favourite films and the next episodes of favourite shows |
-| `PriorityFavouritesPerUser` | int | `25` | 1 to 200 | Most favourites per viewer |
+| `PriorityFavouritesPerUser` | int | `25` | 1 to 200 | Most favourites per viewer. Each favourite show costs up to about 3 queries per run (its Next up, a first-unplayed fallback and a lookahead), so a high value with many viewers can hit the run budget |
 | `PriorityWatchedWithinDays` | int | `30` | 1 to 365 | Only activity in the last N days counts; idle viewers are skipped |
 | `PriorityUnprobedNeedsEncode` | bool | `false` | | Treat a version with no known height as over the cap when building the list. Playback still treats it as within the cap |
 | `PriorityRefreshOnPlayback` | bool | `true` | | Queue a run after a capped viewer starts playback |

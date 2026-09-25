@@ -369,9 +369,11 @@ jellyfin-encoder PR #34 is merged (2026-09-24) and shipped as v1.5.4 (`drumsergi
 
 ## 9. Performance
 
-The library is never scanned. Per audience user: one resumable query, one batched Next Up query (bounded by the date cutoff), one favourites query when enabled, and at most `PriorityNextUpShowsPerUser` lookahead queries shared through the per-run cache. Then `GetAllVersions` and `GetMediaStreams` for the deduplicated candidates only.
+The library is never scanned. Per audience user: one resumable query, one batched Next Up query (bounded by the date cutoff), at most `PriorityNextUpShowsPerUser` lookahead queries, and one more lookahead per episode the user is playing now. Lookaheads are cached per run on `(series key, season, episode, depth)`, so they are shared only by viewers standing at the same episode. Then `GetAllVersions` and `GetMediaStreams` for the deduplicated candidates only.
 
-Worst case with 200 capped users and the defaults: about 400 to 600 small indexed queries plus one lookahead per distinct show in progress, then stream reads for a few thousand versions. That is tens of seconds in the background, under the 180-second budget. Users idle for more than `PriorityWatchedWithinDays` are skipped before any query.
+Favourites, when enabled, cost more than one query. Besides the favourites query itself, each favourite show costs a per-show `GetNextUp`, a fallback first-unplayed query when Next Up is empty, and a lookahead when `PriorityNextUpDepth` is above 1: up to about 3 queries per favourite show, so about 75 more per user at the default `PriorityFavouritesPerUser` of 25 and about 600 at the clamp of 200.
+
+Worst case with 200 capped users and the defaults (favourites off): about 400 to 600 small indexed queries plus one lookahead per distinct show position in progress, then stream reads for a few thousand versions. That is tens of seconds in the background, under the 180-second budget. With favourites on, add up to 3 queries per favourite show per user; a large favourites set can go over the budget, which keeps the previous list and reports `TimedOut`. Users idle for more than `PriorityWatchedWithinDays` are skipped before any query.
 
 Guards: the `CancellationToken` is checked between users and between candidates; progress is reported per user; a run that trips the budget writes nothing and says so; `MaxEntries` bounds the file.
 
