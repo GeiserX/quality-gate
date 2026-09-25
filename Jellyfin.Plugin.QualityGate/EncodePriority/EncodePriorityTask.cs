@@ -416,6 +416,7 @@ public sealed class EncodePriorityTask : IScheduledTask
         }
 
         TrimCovered(state, now);
+        EncodePriorityRuntime.SetCovered(state.Covered);
         SaveState(state, statePath);
         progress?.Report(100);
     }

@@ -1,10 +1,12 @@
 using System;
+using Jellyfin.Plugin.QualityGate.EncodePriority;
 using Jellyfin.Plugin.QualityGate.Filters;
 using Jellyfin.Plugin.QualityGate.Providers;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Library;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Moq;
 
@@ -30,6 +32,20 @@ public class PluginServiceRegistratorTests
         var introDescriptor = Assert.Single(services, s => s.ServiceType == typeof(IIntroProvider));
         Assert.Equal(ServiceLifetime.Singleton, introDescriptor.Lifetime);
         Assert.Equal(typeof(QualityGateIntroProvider), introDescriptor.ImplementationType);
+    }
+
+    /// <summary>
+    /// The encode priority triggers run as a hosted service, so the playback-start subscription
+    /// lives for the server's lifetime and is removed on shutdown.
+    /// </summary>
+    [Fact]
+    public void RegisterServices_AddsTheEncodePriorityEventsAsAHostedService()
+    {
+        var services = Register();
+
+        var hosted = Assert.Single(services, s => s.ServiceType == typeof(IHostedService));
+        Assert.Equal(ServiceLifetime.Singleton, hosted.Lifetime);
+        Assert.Equal(typeof(EncodePriorityEvents), hosted.ImplementationType);
     }
 
     [Fact]
