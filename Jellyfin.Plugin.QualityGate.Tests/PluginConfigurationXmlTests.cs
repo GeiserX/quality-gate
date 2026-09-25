@@ -114,6 +114,21 @@ public sealed class PluginConfigurationXmlTests : IDisposable
     }
 
     [Fact]
+    public void OneSavedCustomSuffix_IsUsedInsteadOfTheDefault()
+    {
+        // A single saved suffix is a real choice, not an empty list: the default must not replace it.
+        var config = new PluginConfiguration { VersionGroupingSuffixes = new List<string> { " - SD" } };
+
+        for (var i = 0; i < 3; i++)
+        {
+            config = _store.SaveAndReload(config);
+        }
+
+        Assert.Equal(new[] { " - SD" }, config.VersionGroupingSuffixes);
+        Assert.Equal(new[] { " - SD" }, VersionGroupingResolver.EffectiveSuffixes(config));
+    }
+
+    [Fact]
     public void ConfigWrittenByTheCurrentRelease_LoadsWithTheSameEffectiveSuffixes()
     {
         _store.WriteXml(ReleaseXml("""
