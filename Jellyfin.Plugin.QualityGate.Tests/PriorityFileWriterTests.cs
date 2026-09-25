@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.QualityGate.EncodePriority;
+using Jellyfin.Plugin.QualityGate.Tests.Harness;
 
 namespace Jellyfin.Plugin.QualityGate.Tests;
 
@@ -190,6 +191,11 @@ public sealed class PriorityFileWriterTests : IDisposable
     [Fact]
     public void Write_IntoAReadOnlyFolder_FailsAndKeepsThePreviousFile()
     {
+        if (!ReadOnlyFolders.AreEnforced)
+        {
+            return;
+        }
+
         PriorityFileWriter.Write(FilePath(), "Shows", TwoPaths, createDirectory: false, Now);
         var before = File.ReadAllText(FilePath());
         MakeReadOnly(_dir);
@@ -243,6 +249,11 @@ public sealed class PriorityFileWriterTests : IDisposable
     [Fact]
     public void Cleanup_WhenTheDeleteFails_WritesAnEmptyListAndForgetsTheFile()
     {
+        if (!ReadOnlyFolders.AreEnforced)
+        {
+            return;
+        }
+
         var file = FilePath();
         PriorityFileWriter.Write(file, "Shows", TwoPaths, false, Now);
         var state = new EncodePriorityState { WrittenFiles = new List<string> { file } };
@@ -265,6 +276,11 @@ public sealed class PriorityFileWriterTests : IDisposable
     [Fact]
     public void Remove_OfAnAlreadyEmptiedFileInAReadOnlyFolder_LeavesItsMtimeAlone()
     {
+        if (!ReadOnlyFolders.AreEnforced)
+        {
+            return;
+        }
+
         var file = FilePath();
         PriorityFileWriter.Write(file, "Shows", TwoPaths, false, Now);
         MakeReadOnly(_dir);

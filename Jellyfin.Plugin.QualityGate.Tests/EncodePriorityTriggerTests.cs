@@ -203,6 +203,38 @@ public sealed class EncodePriorityTriggerTests : IDisposable
     }
 
     [Fact]
+    public async Task APreviewRequest_IsTakenWithItsLabelOrNotAtAll()
+    {
+        // A run taking the request between the flag and the label would run the preview and
+        // leave "preview" behind to mislabel the next real run.
+        var mismatches = 0;
+        var requesting = true;
+        var requester = Task.Run(() =>
+        {
+            for (var i = 0; i < 200_000; i++)
+            {
+                EncodePriorityRuntime.RequestPreview();
+            }
+
+            Volatile.Write(ref requesting, false);
+        });
+
+        while (Volatile.Read(ref requesting))
+        {
+            var (trigger, preview) = EncodePriorityRuntime.TakeRequest();
+            if (preview != (trigger == EncodePriorityRuntime.PreviewTrigger))
+            {
+                mismatches++;
+            }
+        }
+
+        await requester;
+        var (last, lastPreview) = EncodePriorityRuntime.TakeRequest();
+        Assert.Equal(lastPreview, last == EncodePriorityRuntime.PreviewTrigger);
+        Assert.Equal(0, mismatches);
+    }
+
+    [Fact]
     public void Uninstalling_RemovesEveryListThePluginWrote()
     {
         var data = Path.Combine(_dir, "data");

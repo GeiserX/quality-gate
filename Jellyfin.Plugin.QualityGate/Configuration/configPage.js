@@ -1152,6 +1152,7 @@ function saveConfig(view) {
     }
 
     collectFromDOM(view);
+    dropEmptyFolders(config);
 
     var regexErrors = validateRegexPatterns();
     if (regexErrors.length > 0) {
@@ -1840,6 +1841,25 @@ function checkedValues(card, selector) {
     });
 }
 
+/**
+ * The folder rows as typed, empty ones included, so each keeps the index its × button carries
+ * and a re-render keeps a row just added. saveConfig drops the empty ones.
+ */
+export function readFolderRows(jellyfinPaths, encoderPaths) {
+    return Array.prototype.map.call(jellyfinPaths, function (input, row) {
+        return { JellyfinPath: input.value.trim(), EncoderPath: encoderPaths[row] ? encoderPaths[row].value.trim() : '' };
+    });
+}
+
+/** Drops the folder rows left empty on both sides, before the page validates and saves. */
+export function dropEmptyFolders(cfg) {
+    (cfg.EncodeTargets || []).forEach(function (target) {
+        target.Folders = (target.Folders || []).filter(function (folder) {
+            return folder.JellyfinPath || folder.EncoderPath;
+        });
+    });
+}
+
 function collectEncodePriority(view) {
     var toggle = view.querySelector('#enableEncodePriority');
     if (!toggle) {
@@ -1878,11 +1898,7 @@ function collectEncodePriority(view) {
         encoderPaths = card.querySelectorAll('.ep-encoder-path');
         target.Name = card.querySelector('.ep-name').value.trim();
         target.Enabled = card.querySelector('.ep-enabled').checked;
-        target.Folders = Array.prototype.map.call(jellyfinPaths, function (input, row) {
-            return { JellyfinPath: input.value.trim(), EncoderPath: encoderPaths[row] ? encoderPaths[row].value.trim() : '' };
-        }).filter(function (folder) {
-            return folder.JellyfinPath || folder.EncoderPath;
-        });
+        target.Folders = readFolderRows(jellyfinPaths, encoderPaths);
         target.OutputHeight = toInt(card.querySelector('.ep-output-height').value, target.OutputHeight);
         mode = card.querySelector('.ep-output-mode:checked');
         target.OutputMode = mode ? mode.value : target.OutputMode;

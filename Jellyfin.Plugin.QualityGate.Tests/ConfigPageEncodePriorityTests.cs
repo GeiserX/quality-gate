@@ -146,6 +146,25 @@ public sealed class ConfigPageEncodePriorityTests : IDisposable
     }
 
     [Fact]
+    public void RemovingAnEmptyFolderRow_RemovesThatRowAndNotTheNextOne()
+    {
+        var folders = Eval<EncodeFolderMapping[]>(
+            "(() => { var rows = page.readFolderRows([{value:''},{value:' /media/tv '}], [{value:''},{value:''}]); rows.splice(0, 1); return rows; })()");
+
+        Assert.Equal("/media/tv", Assert.Single(folders).JellyfinPath);
+    }
+
+    [Fact]
+    public void EmptyFolderRows_AreDroppedBeforeSaving()
+    {
+        var saved = Eval<string[]>(
+            "(() => { var cfg = page.normalizeEncodePriority({EnableEncodePriority:true,EncodeTargets:[{Name:'A',Folders:[{JellyfinPath:'',EncoderPath:''},{JellyfinPath:'/media/tv',EncoderPath:''},{JellyfinPath:'',EncoderPath:''}]}]});" +
+            " page.dropEmptyFolders(cfg); return page.validateEncodeTargets(cfg, ['/media/tv']).concat(cfg.EncodeTargets[0].Folders.map(f => f.JellyfinPath)); })()");
+
+        Assert.Equal(new[] { "/media/tv" }, saved);
+    }
+
+    [Fact]
     public void AHandEditedModeInAnotherCase_IsReadAsTheServerReadsIt()
     {
         // The server ignores case and spaces; the page compares exactly. Without this a stored
