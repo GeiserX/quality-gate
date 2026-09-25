@@ -33,7 +33,7 @@ public class EncodeTarget
     /// <summary>Gets or sets the folders Jellyfin sees, and where each sits inside the encoder's source folder.</summary>
     public List<EncodeFolderMapping> Folders { get; set; } = new();
 
-    /// <summary>Gets or sets the height the encoder produces. jellyfin-encoder always produces 720.</summary>
+    /// <summary>Gets or sets the height the encoder produces. quality-gate-encoder always produces 720.</summary>
     public int OutputHeight { get; set; } = 720;
 
     /// <summary>Gets or sets where the file goes: <c>SourceFolder</c>, <c>DataFolder</c> or <c>Custom</c>.</summary>

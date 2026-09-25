@@ -36,7 +36,7 @@ namespace Jellyfin.Plugin.QualityGate.Library;
 /// </remarks>
 public partial class VersionGroupingResolver : IItemResolver, IMultiItemResolver
 {
-    /// <summary>The suffix used when the admin has saved none: what jellyfin-encoder names its copies.</summary>
+    /// <summary>The suffix used when the admin has saved none: what quality-gate-encoder names its copies.</summary>
     public const string DefaultSuffix = " - 720p";
 
     private static readonly IReadOnlyList<string> DefaultSuffixes = new[] { DefaultSuffix };
