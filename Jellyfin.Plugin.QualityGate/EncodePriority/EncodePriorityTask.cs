@@ -143,16 +143,25 @@ public sealed class EncodePriorityTask : IScheduledTask
         var (trigger, preview) = EncodePriorityRuntime.TakeRequest();
         if (preview)
         {
-            await PreviewAsync(progress, cancellationToken).ConfigureAwait(false);
-
             // A trigger that arrived together with the preview still gets its real run.
-            var rest = string.Join(", ", trigger.Split(", ").Where(t => t != EncodePriorityRuntime.PreviewTrigger));
-            if (rest.Length == 0)
+            var rest = trigger.Split(", ").Where(t => t != EncodePriorityRuntime.PreviewTrigger).ToList();
+            try
+            {
+                await PreviewAsync(progress, cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                // The real run does not happen now, so the next one carries its reasons.
+                rest.ForEach(EncodePriorityRuntime.RequestRun);
+                throw;
+            }
+
+            if (rest.Count == 0)
             {
                 return;
             }
 
-            trigger = rest;
+            trigger = string.Join(", ", rest);
         }
 
         await RunAsync(trigger, progress, cancellationToken).ConfigureAwait(false);

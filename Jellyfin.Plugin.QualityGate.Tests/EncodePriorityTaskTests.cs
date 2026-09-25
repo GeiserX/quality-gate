@@ -508,6 +508,23 @@ public sealed class EncodePriorityTaskTests : IDisposable
         Assert.False(EncodePriorityRuntime.TakePreview());
     }
 
+    [Fact]
+    public async Task Preview_ThatIsCancelled_KeepsTheOtherTriggersForTheNextRun()
+    {
+        EncodePriorityRuntime.Reset();
+        Wants(Path.Combine(_tv, "Show A", "x.mkv"), 1080);
+        _collector.BlockUntilCancelled = true;
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
+
+        EncodePriorityRuntime.RequestRun("playback");
+        EncodePriorityRuntime.RequestRun("settings saved");
+        EncodePriorityRuntime.RequestPreview();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => NewTask().ExecuteAsync(new Progress<double>(), cts.Token));
+
+        Assert.False(File.Exists(ShowsFile));
+        Assert.Equal(("playback, settings saved", false), EncodePriorityRuntime.TakeRequest());
+    }
+
     private async Task<(Guid Item, Guid Copy)> CoverAnItem()
     {
         EncodePriorityRuntime.Reset();
