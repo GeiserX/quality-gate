@@ -105,41 +105,15 @@ public partial class VersionGroupingResolver : IItemResolver, IMultiItemResolver
             return true;
         }
 
-        if (string.IsNullOrEmpty(path))
-        {
-            return false;
-        }
-
-        // Windows paths are case-insensitive and may be typed with either separator.
-        var comparison = OperatingSystem.IsWindows()
-            ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal;
-        var subject = Normalize(path);
-
         for (var i = 0; i < roots.Count; i++)
         {
-            if (string.IsNullOrEmpty(roots[i]))
-            {
-                continue;
-            }
-
-            var root = Normalize(roots[i]);
-            if (root.Length != 0
-                && (subject.Equals(root, comparison)
-                    || subject.StartsWith(root + Path.DirectorySeparatorChar, comparison)))
+            if (PathRoots.IsUnder(path, roots[i]))
             {
                 return true;
             }
         }
 
         return false;
-    }
-
-    private static string Normalize(string path)
-    {
-        return path
-            .Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar)
-            .TrimEnd(Path.DirectorySeparatorChar);
     }
 
     /// <summary>
