@@ -120,12 +120,19 @@ public class VersionGroupingResolverTests : IDisposable
     }
 
     [Fact]
-    public void NoSuffixesConfigured_ClaimsNothing()
+    public void NoSuffixesConfigured_PairsWithTheDefaultSuffix()
     {
+        // An empty list is what a config that never set suffixes loads as, and a restarted
+        // server has always paired " - 720p" copies for it.
         Enable();
         _plugin.Configuration.VersionGroupingSuffixes = new List<string>();
         var files = Files("Alien (1979).mkv", "Alien (1979) - 720p.mkv");
-        Assert.Null(Resolve(files));
+        var result = Resolve(files);
+        Assert.NotNull(result);
+        var movie = Assert.Single(result!.Items);
+        Assert.Equal(Path.Combine(_tempDir, "Alien (1979).mkv"), movie.Path);
+        var version = Assert.Single(((Video)movie).LocalAlternateVersions);
+        Assert.Equal(Path.Combine(_tempDir, "Alien (1979) - 720p.mkv"), version);
     }
 
     [Fact]

@@ -1060,7 +1060,9 @@ function loadConfig(view) {
         config.ApiKeyPolicyId = config.ApiKeyPolicyId || '';
         config.EnableVersionGrouping = config.EnableVersionGrouping || false;
         config.VersionGroupingRoots = config.VersionGroupingRoots || [];
-        config.VersionGroupingSuffixes = config.VersionGroupingSuffixes || [' - 720p'];
+        // Empty means the default, which the textarea shows as its placeholder. Filling it in
+        // here would write the default back into the saved list on the next save.
+        config.VersionGroupingSuffixes = config.VersionGroupingSuffixes || [];
         // Ensure fields exist on each policy (upgrade from older versions)
         config.Policies.forEach(function (policy) {
             policy.AllowedFilenamePatterns = policy.AllowedFilenamePatterns || [];

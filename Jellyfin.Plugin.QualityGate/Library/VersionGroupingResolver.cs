@@ -36,6 +36,11 @@ namespace Jellyfin.Plugin.QualityGate.Library;
 /// </remarks>
 public partial class VersionGroupingResolver : IItemResolver, IMultiItemResolver
 {
+    /// <summary>The suffix used when the admin has saved none: what jellyfin-encoder names its copies.</summary>
+    public const string DefaultSuffix = " - 720p";
+
+    private static readonly IReadOnlyList<string> DefaultSuffixes = new[] { DefaultSuffix };
+
     /// <summary>Mirrors MovieResolver's own sample exclusion, so the same files are ignored.</summary>
     [GeneratedRegex(@"\bsample\b", RegexOptions.IgnoreCase)]
     private static partial Regex IsSampleRegex();
@@ -149,6 +154,19 @@ public partial class VersionGroupingResolver : IItemResolver, IMultiItemResolver
             || extension.Equals(".strm", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Gets the suffixes that mark an encoded copy, with the default applied when none are saved.
+    /// </summary>
+    /// <remarks>
+    /// The default lives here rather than in the list's initialiser. <c>XmlSerializer</c> adds
+    /// loaded items to whatever the initialiser put there, so a default in the list gained a
+    /// copy on every save and restart, and a list the admin cleared came back.
+    /// </remarks>
+    /// <param name="config">The plugin configuration.</param>
+    /// <returns>The saved suffixes, or <see cref="DefaultSuffix"/> when the list is empty.</returns>
+    internal static IReadOnlyList<string> EffectiveSuffixes(PluginConfiguration config)
+        => config.VersionGroupingSuffixes is { Count: > 0 } saved ? saved : DefaultSuffixes;
+
     private MultiItemResolverResult? Group(
         Folder parent,
         List<FileSystemMetadata> files,
@@ -166,11 +184,7 @@ public partial class VersionGroupingResolver : IItemResolver, IMultiItemResolver
             return null;
         }
 
-        var suffixes = config.VersionGroupingSuffixes;
-        if (suffixes is null || suffixes.Count == 0)
-        {
-            return null;
-        }
+        var suffixes = EffectiveSuffixes(config);
 
         var candidates = new List<FileSystemMetadata>();
         var leftOver = new List<FileSystemMetadata>();
