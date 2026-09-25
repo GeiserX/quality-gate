@@ -36,15 +36,22 @@ internal static class EncodePriorityRuntime
     private static bool _previewPending;
     private static HashSet<Guid> _coveredIds = new();
 
-    /// <summary>Records why the next run is happening.</summary>
+    /// <summary>Records why the next run is happening. Each label appears once, in arrival order.</summary>
     /// <param name="trigger">A short label.</param>
     public static void RequestRun(string trigger)
     {
         lock (Gate)
         {
-            _pendingTrigger = _pendingTrigger is null || _pendingTrigger == trigger
-                ? trigger
-                : _pendingTrigger + ", " + trigger;
+            // Compared per label, not against the whole string: while a long run is going,
+            // alternating triggers would otherwise append again on every request.
+            if (_pendingTrigger is null)
+            {
+                _pendingTrigger = trigger;
+            }
+            else if (!_pendingTrigger.Split(", ").Contains(trigger, StringComparer.Ordinal))
+            {
+                _pendingTrigger += ", " + trigger;
+            }
         }
     }
 

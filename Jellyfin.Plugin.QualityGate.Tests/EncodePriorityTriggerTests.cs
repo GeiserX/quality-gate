@@ -190,6 +190,19 @@ public sealed class EncodePriorityTriggerTests : IDisposable
     }
 
     [Fact]
+    public void TriggerLabels_AreEachKeptOnce_HoweverOftenTheyAlternate()
+    {
+        EncodePriorityRuntime.RequestRun("playback");
+        EncodePriorityRuntime.RequestRun("settings saved");
+        EncodePriorityRuntime.RequestRun("playback");
+        EncodePriorityRuntime.RequestRun("settings saved");
+        EncodePriorityRuntime.RequestRun("library scan");
+
+        Assert.Equal("playback, settings saved, library scan", EncodePriorityRuntime.TakeTrigger());
+        Assert.Equal(EncodePriorityRuntime.ScheduledTrigger, EncodePriorityRuntime.TakeTrigger());
+    }
+
+    [Fact]
     public void Uninstalling_RemovesEveryListThePluginWrote()
     {
         var data = Path.Combine(_dir, "data");
