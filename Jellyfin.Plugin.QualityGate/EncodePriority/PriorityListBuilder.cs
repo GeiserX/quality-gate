@@ -328,8 +328,6 @@ internal static class PriorityListBuilder
                 continue;
             }
 
-            build.Counts.Gaps++;
-
             // Every version the encoder could start from, the cheapest (lowest) first. Listing the
             // others is harmless: the encoder skips a file whose output already exists.
             var sources = versions
@@ -339,6 +337,7 @@ internal static class PriorityListBuilder
                 .ToList();
 
             var entries = new List<ListedEntry>();
+            var missed = new List<string>();
             foreach (var source in sources)
             {
                 var path = source.Path;
@@ -357,7 +356,7 @@ internal static class PriorityListBuilder
 
                 if (MapToEncoderPath(path, target.Folders) is not { } encoderPath)
                 {
-                    unmapped.Add(path);
+                    missed.Add(path);
                     continue;
                 }
 
@@ -378,10 +377,19 @@ internal static class PriorityListBuilder
 
             if (entries.Count == 0)
             {
-                build.Counts.Unmapped++;
+                // A gap another encoder makes the copy for is that encoder's gap. With one encoder
+                // per library, counting it here would flag every encoder for the others' libraries.
+                if (!MappedByAnotherEncoder(target, sources, gapCap, input))
+                {
+                    build.Counts.Gaps++;
+                    build.Counts.Unmapped++;
+                    unmapped.AddRange(missed);
+                }
+
                 continue;
             }
 
+            build.Counts.Gaps++;
             listed.Add((candidate, entries));
         }
 
@@ -450,6 +458,19 @@ internal static class PriorityListBuilder
         var prefix = folders[index].EncoderPath;
         return prefix.Length == 0 ? remainder : prefix + "/" + remainder;
     }
+
+    /// <summary>
+    /// Whether another encoder that writes its list would take this gap: enabled, not a dry run,
+    /// producing a copy within the gap's cap, with a folder holding one of the sources.
+    /// </summary>
+    private static bool MappedByAnotherEncoder(EncodeTargetOptions target, IReadOnlyList<VersionInfo> sources, int gapCap, BuildInput input)
+        => input.Options.RunnableTargets
+            .Where(other => other.Id != target.Id && !other.DryRun && other.OutputHeight <= gapCap)
+            .Any(other => sources.Any(source =>
+            {
+                var path = other.ResolveSymlinks ? input.ResolveLink(source.Path) ?? source.Path : source.Path;
+                return MapToEncoderPath(path, other.Folders) is not null;
+            }));
 
     private static void AddFolderFindings(EncodeTargetOptions target, BuildInput input, TargetBuild build)
     {

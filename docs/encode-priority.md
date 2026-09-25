@@ -47,7 +47,7 @@ it never overwrites or deletes a file without it.
 | **Output height** | The height the encoder produces. |
 | **Gap** | An item a capped viewer gets as a live transcode: at least one version has a known height above their cap, and no version is within it. The same test playback uses. |
 | **Covered** | A listed item that has since gained a version within the cap. It leaves the list. |
-| **Unmapped** | A gap whose file is under none of the encoder's folders. It is counted and reported, never guessed. |
+| **Unmapped** | A gap whose file is under none of the encoder's folders, and under no folder of another enabled encoder that writes its list. It is counted and reported, never guessed. A gap another encoder takes is that encoder's gap, so with one encoder per library neither flags the other's. |
 
 Two things you never set, because they follow from settings that already exist:
 

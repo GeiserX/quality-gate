@@ -310,6 +310,70 @@ public class PriorityListBuilderTests
     }
 
     [Fact]
+    public void Unmapped_GapAnotherEncoderMaps_IsNotCountedHere()
+    {
+        // One encoder per library: the films a capped viewer watches are the film encoder's gaps,
+        // not unmapped ones for the show encoder.
+        var shows = new EncodeTarget { Id = "t1", Name = "Shows", Folders = new List<EncodeFolderMapping> { new() { JellyfinPath = "/media/tv" } } };
+        var films = new EncodeTarget { Id = "t2", Name = "Films", Folders = new List<EncodeFolderMapping> { new() { JellyfinPath = "/media/films" } } };
+        var options = Options(shows, films);
+        var demand = new Demand();
+        for (var i = 0; i < 7; i++)
+        {
+            demand.Ask(demand.Item($"/media/films/Film {i}.mkv", 1080), V720);
+        }
+
+        demand.Ask(demand.Item("/media/tv/Show A/x.mkv", 1080), V720);
+        var libraries = new[] { new LibraryFolder("Shows", new[] { "/media/tv" }), new LibraryFolder("Films", new[] { "/media/films" }) };
+
+        var showBuild = Build(options.Targets[0], demand, options, libraries);
+        var filmBuild = Build(options.Targets[1], demand, options, libraries);
+
+        Assert.Equal((1, 1, 0), (showBuild.Counts.Gaps, showBuild.Counts.Listed, showBuild.Counts.Unmapped));
+        Assert.Equal((7, 7, 0), (filmBuild.Counts.Gaps, filmBuild.Counts.Listed, filmBuild.Counts.Unmapped));
+        Assert.DoesNotContain(showBuild.Findings, f => f.Code == "MostlyUnmapped");
+        Assert.DoesNotContain(filmBuild.Findings, f => f.Code == "MostlyUnmapped");
+    }
+
+    [Theory]
+    [InlineData("disabled")]
+    [InlineData("dryrun")]
+    [InlineData("taller")]
+    public void Unmapped_GapOnlyAnEncoderThatWritesNothingOrCannotHelpMaps_StillCounts(string other)
+    {
+        // A disabled or dry-run encoder makes no copy, and a 1080p one cannot help a 720p viewer,
+        // so the gap is still nobody's.
+        var shows = new EncodeTarget { Id = "t1", Name = "Shows", Folders = new List<EncodeFolderMapping> { new() { JellyfinPath = "/media/tv" } } };
+        var films = new EncodeTarget
+        {
+            Id = "t2",
+            Name = "Films",
+            Enabled = other != "disabled",
+            DryRun = other == "dryrun",
+            OutputHeight = other == "taller" ? 1080 : 720,
+            Folders = new List<EncodeFolderMapping> { new() { JellyfinPath = "/media/films" } },
+        };
+        var options = Options(shows, films);
+        var demand = new Demand();
+        for (var i = 0; i < 7; i++)
+        {
+            demand.Ask(demand.Item($"/media/films/Film {i}.mkv", 2160), V720);
+        }
+
+        demand.Ask(demand.Item("/media/tv/Show A/x.mkv", 1080), V720);
+
+        var build = Build(
+            options.Targets[0],
+            demand,
+            options,
+            new[] { new LibraryFolder("Shows", new[] { "/media/tv" }), new LibraryFolder("Films", new[] { "/media/films" }) });
+
+        Assert.Equal((8, 7), (build.Counts.Gaps, build.Counts.Unmapped));
+        var finding = Assert.Single(build.Findings, f => f.Code == "MostlyUnmapped");
+        Assert.Contains("/media/films (library Films)", finding.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ResolveSymlinks_MapsTheTargetAndCountsFailures()
     {
         var demand = new Demand();
