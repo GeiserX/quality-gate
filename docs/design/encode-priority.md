@@ -1,6 +1,6 @@
 # Encode priority: design
 
-Status: design, no code yet. Written for a reader who knows Jellyfin but not this plugin's code.
+Status: implemented on branch `feat/encode-priority`, plan steps 1 to 13; not released yet. Written for a reader who knows Jellyfin but not this plugin's code. Where the code differs from what follows, the code is right and section 13 (Deviations) says how. The user guide is [docs/encode-priority.md](../encode-priority.md).
 
 ## 1. The problem
 
@@ -85,7 +85,7 @@ All fields live on the existing flat `PluginConfiguration` (`Configuration/Plugi
 | `JellyfinPath` | string | `""` | absolute; trailing separators trimmed; warning (not error) when under no library location | Basic | The folder as Jellyfin sees it inside its container. |
 | `EncoderPath` | string | `""` | relative; `/` separators only; no leading `/`; no `..`; no `\` | Advanced | Where that folder sits inside the encoder's source folder. Empty means it is the source folder itself. |
 
-Output paths must be unique across enabled, non-dry-run targets. Two targets may not share an identical `JellyfinPath`.
+Output paths must be unique across enabled, non-dry-run targets. Two targets may share a `JellyfinPath` (the 480p plus 720p example in section 4.4 needs it); one target may not list overlapping folders.
 
 Enumerated fields are strings, not C# enums. An unknown value falls back to the default with one warning in the log. A C# enum would make the whole config save fail to deserialise, and the admin's other changes would be lost with it.
 
@@ -144,7 +144,7 @@ Per target, a small panel:
 
 | Element | Contents | Source |
 |---|---|---|
-| Badge | `Off` · `Waiting for first run` · `OK` · `OK, unchanged` · `Warning` · `Error` · `Timed out, previous list kept` | scheduled task result plus activity entries |
+| Badge | `Off` · `Waiting for first run` · `OK` · `OK, unchanged` · `Warning` · `Error` · `Timed out, previous list kept` · `Dry run` | the target's last run from the status endpoint; without it, scheduled task result plus activity entries |
 | Timeline | Last run (time, duration, trigger), last file write | same |
 | Counts | Viewers · demand items · gaps · **listed** · covered · height unknown · unmapped · cut by the limit | activity entries |
 | Findings | One line each with the fix (section 7.2) | activity entries |
@@ -326,15 +326,19 @@ Each finding has a code, a one-line explanation and the fix. They appear in the 
 | `WriteFailed` | Section 6.1 | Includes the exception message and the Data folder recipe. |
 | `Stuck` | The top ten entries of an unchanged list have been listed more than 48 hours, none of the target's gaps was covered in that time, and the file is older than 48 hours | "The encoder does not seem to be working on this list. Check that `PRIORITY_FILE` points at this file as the encoder sees it, that `SOURCE_FOLDER` is the folder mapped here, and the INFO line the encoder logs when it reloads the list: `Priority list <file>: N entries, M of P pending files match` (`app/monitor.py:1401-1405`). Zero matching files means the folder mapping is wrong." This is the plugin's only view of an encoder that does not read the file, so it says *seem*. |
 | `TimedOut` | Run budget exceeded | "Previous list kept. N of M viewers processed. Lower Next up shows per viewer or depth." |
+| `AudienceBelowOutput` | `Users` mode names users capped below the output height | Says how many; their copies would still be over their cap. |
+| `OutputInvalid` | The output mode cannot resolve a file (Source folder with no folder at the encoder root, a Custom path that is not absolute or is a visible file inside a library) | The reason, with the fix. |
+| `OutputConflict` | A second enabled, writing target resolves to a file another already writes | Only the first writes. |
+| `ServedOverCap` | A covered item was played by a capped viewer on a version above their cap (section 7.4) | Up to five item ids. Kept while the covered record is (7 days). |
 
 Activity log entries (`IActivityManager.CreateAsync`, `Type = "QualityGate.EncodePriority"`, user id `Guid.Empty` because the `ActivityLog` constructor takes one) are written once per target on each run where the list changed or a finding appeared or cleared, so volume stays at most one per run per target. `ShortOverview` carries the counts: `Shows: 41 listed (+5, -3) · 7 viewers · 2 unmapped`.
 
-### 7.3 Status endpoint (ask-first)
+### 7.3 Status endpoint (ask-first, approved)
 
-New API endpoints are an ask-first item in this repo's `CLAUDE.md`. The page works without one (section 3.5), so the endpoint is a separate step that needs the owner's yes:
+New API endpoints are an ask-first item in this repo's `CLAUDE.md`. The page works without one (section 3.5), so the endpoint was a separate step; the owner approved it:
 
-- `GET /QualityGate/EncodePriority/Status`, admin only (`RequiresElevation`), returns the state file. It powers the preview table and the covered and served trail.
-- `POST /QualityGate/EncodePriority/Preview`, admin only, queues a run with every target in dry-run mode.
+- `GET /QualityGate/EncodePriority/Status`, admin only (`RequiresElevation`), returns the state file with item titles looked up per request, plus Jellyfin's data folder so the page can show Data folder paths. It powers the list and preview tables and the covered and served trail.
+- `POST /QualityGate/EncodePriority/Preview`, admin only, queues a run that builds every enabled target's list as a dry run, even with the feature saved as off. The preview writes and removes no file, writes no activity entry and leaves each target's real last run alone; it is kept in a separate `Preview` slot of the state.
 
 It is read-only apart from queueing a dry run, it is not on the playback path, and it is not a revival of the removed `QualityGateController`. Controllers in a plugin assembly are found by assembly scan, so it needs no registration.
 
@@ -344,7 +348,7 @@ It is read-only apart from queueing a dry run, it is not on the playback path, a
 2. **Covered.** A later run finds the item is no longer a gap because a within-cap version now exists. It gets `coveredAt`. The post-scan trigger makes this happen soon after the version appears.
 3. **Served.** The hosted service also watches `PlaybackStart` for a capped user playing an item in the covered set. `MediaSourceId` on the event is the version actually played. If it is the recorded within-cap version, the handler appends `(itemId, versionId, time)` to an in-memory queue, and the next run folds it into the state as `servedAt`. A covered item played on an over-cap source means Quality Gate offered no sibling; that is a real bug and is flagged `ServedOverCap`. Only the task writes the state file, so there is no concurrent write.
 
-The 7-day summary on the page is these three counts: "34 listed · 29 covered (median 3 h 10 m) · 21 served within cap · 2 still live-transcoding". The docs page adds the manual recipe: pick a row in the preview, watch the encoder log for the reload line and its match count, wait for the encode, open the item in Jellyfin and see two versions, play it as a capped user, and check the dashboard shows direct play of the within-cap version.
+The 7-day summary on the page is these counts: "34 listed · 29 covered (median 3 h 10 m) · 21 served within cap · 0 played over the cap". The docs page adds the manual recipe: pick a row in the preview, watch the encoder log for the reload line and its match count, wait for the encode, open the item in Jellyfin and see two versions, play it as a capped user, and check the dashboard shows direct play of the within-cap version.
 
 ### 7.5 Encoder-side changes before release
 
@@ -386,8 +390,8 @@ Before release, a run is timed in dry-run mode against a large real library and 
 
 ## 11. Open questions for the owner
 
-1. Approve the admin-only status and preview endpoint (section 7.3)? Without it the page shows badge, counts and findings but no preview table or served trail.
-2. Ship the `VersionGroupingSuffixes` fix first as its own change? Recommended yes.
+1. Approve the admin-only status and preview endpoint (section 7.3)? Without it the page shows badge, counts and findings but no preview table or served trail. **Approved; shipped in step 12.**
+2. Ship the `VersionGroupingSuffixes` fix first as its own change? Recommended yes. **Done as step 1.**
 3. Open the jellyfin-encoder follow-up PR (section 7.5: BOM tolerance, NFC, `PRIORITY_MAX_AGE_HOURS`) before this feature ships? Recommended yes.
 4. Confirm which folders the production libraries point at, the real files or a tree of links, before the first live run. `GET /Library/VirtualFolders` answers it.
 5. Default scheduled interval: every hour is proposed. Should it be shorter for a server with events switched off?
@@ -410,3 +414,20 @@ Each step is one reviewed commit. Every step leaves the plugin releasable with t
 11. **Docs and release.** `docs/encode-priority.md` (setup per output mode, the verification recipe, the encoder-side requirements), new rows in `docs/configuration.md`, version bump in the csproj (three places), `build.yaml` changelog entry stating the feature is off by default, `meta.json`.
 12. **Status and preview endpoint** (after the owner's yes). `EncodePriorityController` with the two routes, and the preview table plus 7-day summary on the page. Tests: elevation required; status returns the state file; preview queues a dry run and writes no file.
 13. **Served tracking.** Fold the served queue into the state, the `ServedOverCap` finding, and the 7-day summary. Tests: a capped play on the within-cap version records `servedAt`; a play on the over-cap version raises `ServedOverCap`; the queue survives a run and is drained by it.
+
+## 13. Deviations
+
+What shipped differs from the sections above in these ways. Each is also in the body of the commit that made it.
+
+- **Shared folders across targets** (step 4). Two targets may share a Jellyfin folder, because the 480p plus 720p example in section 4.4 needs exactly that and nothing breaks. Only a repeated or overlapping folder within one target is rejected, by the page.
+- **Cleanup when the delete fails** (step 5). The empty list is written in place by truncating the existing file. An atomic temp-file write needs the same folder permission the delete lacked, so an in-place write is the only one that can succeed. It happens only when the file is not already empty, so a retry does not move the mtime. Normal list writes stay atomic.
+- **Demand details the design left open** (step 6). The episode on screen feeds the lookahead from the episode after it, at the Next Up tier, and only when the Next Up signal is on. Next Up and favourite signals carry the viewer's `LastActivityDate` as their recency, because Jellyfin's Next Up returns no per-show played date without one more query per show. A favourite show with no Next Up episode starts at its first unplayed episode, found by presentation key.
+- **A 2160p-only item wanted by a 1080p viewer** (step 7). The plan's test wording says it is not listed for a 480p target; sections 4.3 and 4.4 say it is kept for every target whose output is at most 1080. The code follows 4.3 and 4.4: listed for 480p, 720p and 1080p targets, not for 1440p.
+- **Findings the design did not name**: `AudienceBelowOutput` (step 7), `OutputInvalid` and `OutputConflict` (step 8). They are in the table in section 7.2.
+- **Covered** (step 8) means an item dropped off the list and one of its versions now has a known height at or below the tallest cap it was a gap for. An item that dropped off because nobody asks for it any more is not covered.
+- **Stuck** (step 8) measures from the last time the list's paths changed, not the file's mtime: the 24-hour heartbeat rewrites the file, so its mtime is never two days old.
+- **Status badge without the endpoint** (step 10). Activity entries are written only when a list or its findings change, so a run with no new entry reads as "OK, unchanged".
+- **Release items of step 11** (version bump in the csproj, `build.yaml` changelog, `meta.json`) are left for the release, which is a separate step. Step 11 shipped the user guide, the configuration rows and a README link.
+- **Preview** (step 12) builds even with the feature saved as off, so an admin can check lists before switching it on, and it never runs the cleanup pass. A trigger that arrives together with a preview request still gets its real run afterwards. The status response also carries item titles and Jellyfin's data folder.
+- **The 7-day summary** moved from step 12 to step 13, because it needs served tracking.
+- **Served tracking** (step 13). The last count of the summary is "played over the cap" instead of "still live-transcoding": the plugin cannot see a live transcode of an item that was never covered, and a covered item played above the cap is what it can prove. Heights of played versions are measured the way playback measures them, and an unknown height counts as within the cap. A play that names no version, names a version the item does not have, or happened before the item was covered is dropped. Plays wait in memory until the next run; a run that ends without saving the state puts them back, and a restart in between loses them. `ServedOverCap` stays on the target while the covered record is kept, 7 days.
