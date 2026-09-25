@@ -75,7 +75,11 @@ public class CapGapTests
     [MemberData(nameof(HeightSets))]
     public void CapPlaybackInfo_AgreesWithIsCapGap(int?[] heights)
     {
-        var filter = new ResolutionCapFilter(Mock.Of<ILogger<ResolutionCapFilter>>(), Mock.Of<IMediaSourceManager>());
+        var filter = new ResolutionCapFilter(
+            Mock.Of<ILogger<ResolutionCapFilter>>(),
+            Mock.Of<IMediaSourceManager>(),
+            Mock.Of<ILibraryManager>(),
+            Mock.Of<IUserManager>());
         var policy = new QualityPolicy { Id = "p1", Name = "Capped", MaxHeight = Cap };
         var response = new PlaybackInfoResponse
         {

@@ -4,17 +4,24 @@ using System.IO;
 using System.Linq;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.QualityGate.Configuration;
 using Jellyfin.Plugin.QualityGate.Filters;
 using Jellyfin.Plugin.QualityGate.Services;
+using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Common.Configuration;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Dlna;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
 using MediaBrowser.Model.Serialization;
+using MediaBrowser.Model.Session;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
@@ -22,6 +29,7 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace Jellyfin.Plugin.QualityGate.Tests;
@@ -37,6 +45,8 @@ public class ResolutionCapFilterTests : IDisposable
     private readonly string _tempDir;
     private readonly Mock<ILogger<ResolutionCapFilter>> _loggerMock;
     private readonly Mock<IMediaSourceManager> _mediaSourceManagerMock;
+    private readonly Mock<ILibraryManager> _libraryManagerMock;
+    private readonly Mock<IUserManager> _userManagerMock;
     private readonly ResolutionCapFilter _filter;
 
     public ResolutionCapFilterTests()
@@ -53,7 +63,13 @@ public class ResolutionCapFilterTests : IDisposable
 
         _loggerMock = new Mock<ILogger<ResolutionCapFilter>>();
         _mediaSourceManagerMock = new Mock<IMediaSourceManager>();
-        _filter = new ResolutionCapFilter(_loggerMock.Object, _mediaSourceManagerMock.Object);
+        _libraryManagerMock = new Mock<ILibraryManager>();
+        _userManagerMock = new Mock<IUserManager>();
+        _filter = new ResolutionCapFilter(
+            _loggerMock.Object,
+            _mediaSourceManagerMock.Object,
+            _libraryManagerMock.Object,
+            _userManagerMock.Object);
     }
 
     public void Dispose()
@@ -1048,4 +1064,363 @@ public class ResolutionCapFilterTests : IDisposable
         Assert.Equal(Body, ReadBody(httpContext));
     }
 
+    // --- negotiation: within-cap versions played as they are ---
+    //
+    // These run Jellyfin's own StreamBuilder over the device profile the filter rewrote, with the
+    // ceiling MediaInfoController would hand it, so they show what the client is actually told.
+
+    private const string OverCapId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    private const string WithinCapId = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+    private static readonly JsonSerializerOptions ProfileJson = new() { Converters = { new JsonStringEnumConverter() } };
+
+    /// <summary>A browser-like profile: plays h264/aac in mp4, transcodes to HLS, 4 Mbps ceiling.</summary>
+    private const string BrowserBody = """
+        {
+          "MaxStreamingBitrate": 4000000,
+          "DeviceProfile": {
+            "MaxStreamingBitrate": 4000000,
+            "DirectPlayProfiles": [ { "Container": "mp4", "Type": "Video", "VideoCodec": "h264", "AudioCodec": "aac" } ],
+            "TranscodingProfiles": [ { "Container": "ts", "Type": "Video", "VideoCodec": "h264", "AudioCodec": "aac", "Protocol": "hls", "Context": "Streaming" } ],
+            "CodecProfiles": [],
+            "SubtitleProfiles": []
+          }
+        }
+        """;
+
+    private static MediaSourceInfo Version(
+        string id,
+        int? height,
+        int bitrate,
+        string container = "mp4",
+        string videoCodec = "h264",
+        int videoBitrate = 0,
+        int audioBitrate = 192000)
+    {
+        return new MediaSourceInfo
+        {
+            Id = id,
+            Path = $"/media/Show A (2001)/{id}.{container}",
+            Protocol = MediaProtocol.File,
+            Container = container,
+            Bitrate = bitrate,
+            RunTimeTicks = TimeSpan.FromMinutes(90).Ticks,
+            SupportsDirectPlay = true,
+            SupportsDirectStream = true,
+            SupportsTranscoding = true,
+            DefaultAudioStreamIndex = 1,
+            MediaStreams = new List<MediaStream>
+            {
+                new()
+                {
+                    Type = MediaStreamType.Video,
+                    Index = 0,
+                    Codec = videoCodec,
+                    Height = height,
+                    Width = height.HasValue ? height.Value * 16 / 9 : null,
+                    BitRate = videoBitrate > 0 ? videoBitrate : bitrate - audioBitrate,
+                    BitDepth = 8,
+                    IsDefault = true,
+                },
+                new()
+                {
+                    Type = MediaStreamType.Audio,
+                    Index = 1,
+                    Codec = "aac",
+                    Channels = 2,
+                    SampleRate = 48000,
+                    BitRate = audioBitrate,
+                    IsDefault = true,
+                },
+            },
+        };
+    }
+
+    /// <summary>Applies a 720p policy with the option set as given.</summary>
+    private void UseDirectWithinCapPolicy(bool keepDirect)
+    {
+        SetConfig(new PluginConfiguration
+        {
+            Policies = new List<QualityPolicy>
+            {
+                new QualityPolicy { Id = "p1", Name = "720p tier", Enabled = true, MaxHeight = Cap, KeepWithinCapVersionsDirect = keepDirect },
+            },
+            DefaultPolicyId = "p1",
+        });
+    }
+
+    /// <summary>Makes the item carry exactly these versions.</summary>
+    private void SetItemVersions(params MediaSourceInfo[] versions)
+    {
+        _libraryManagerMock.Setup(l => l.GetItemById(ItemId)).Returns(new Movie { Id = ItemId, Name = "Show A" });
+        _mediaSourceManagerMock
+            .Setup(m => m.GetStaticMediaSources(It.IsAny<BaseItem>(), false, It.IsAny<User?>()))
+            .Returns(versions);
+    }
+
+    private async Task<HttpContext> NegotiateAsync(string body, Dictionary<string, string>? query = null)
+    {
+        var httpContext = CreatePlaybackInfoPost(Guid.NewGuid(), body);
+        if (query != null)
+        {
+            // Through the query string, so the collection is parsed the way a server parses it
+            // (keys case-insensitive), not built by hand.
+            httpContext.Request.QueryString = QueryString.Create(query!);
+        }
+
+        var (allowed, _) = await RunResourceAsync(httpContext);
+        Assert.True(allowed);
+        return httpContext;
+    }
+
+    /// <summary>
+    /// What the client would be told for one version: Jellyfin's StreamBuilder over the rewritten
+    /// profile, with the ceiling MediaInfoController.GetPostedPlaybackInfo passes on (query value,
+    /// else body value, else the profile's), and direct stream off as MediaInfoHelper sets it.
+    /// </summary>
+    private static StreamInfo Decide(HttpContext httpContext, MediaSourceInfo version)
+    {
+        var root = JsonNode.Parse(ReadBody(httpContext))!.AsObject();
+        var profile = root["DeviceProfile"].Deserialize<DeviceProfile>(ProfileJson)!;
+
+        int? ceiling = httpContext.Request.Query.TryGetValue("maxStreamingBitrate", out var q)
+            ? int.Parse(q.ToString(), System.Globalization.CultureInfo.InvariantCulture)
+            : root["MaxStreamingBitrate"]?.GetValue<int>() ?? profile.MaxStreamingBitrate;
+
+        var transcoder = new Mock<ITranscoderSupport>();
+        transcoder.Setup(t => t.CanEncodeToAudioCodec(It.IsAny<string>())).Returns(true);
+        transcoder.Setup(t => t.CanEncodeToSubtitleCodec(It.IsAny<string>())).Returns(true);
+        transcoder.Setup(t => t.CanExtractSubtitles(It.IsAny<string>())).Returns(true);
+
+        // A fresh copy per decision: StreamBuilder writes to the source it is given.
+        var copy = JsonSerializer.Deserialize<MediaSourceInfo>(JsonSerializer.SerializeToUtf8Bytes(version))!;
+        var options = new MediaOptions
+        {
+            Profile = profile,
+            MediaSources = new[] { copy },
+            ItemId = ItemId,
+            DeviceId = "test-device",
+            MaxBitrate = ceiling,
+            EnableDirectStream = false,
+        };
+
+        return new StreamBuilder(transcoder.Object, NullLogger.Instance).GetOptimalVideoStream(options)!;
+    }
+
+    private static long? BodyCeiling(HttpContext httpContext) =>
+        JsonNode.Parse(ReadBody(httpContext))!["MaxStreamingBitrate"]?.GetValue<long>();
+
+    private static long? ProfileCeiling(HttpContext httpContext) =>
+        JsonNode.Parse(ReadBody(httpContext))!["DeviceProfile"]!["MaxStreamingBitrate"]?.GetValue<long>();
+
+    [Fact]
+    public async Task WithinCapVersion_HeldBackOnlyByBitrate_IsTranscoded_WhenTheOptionIsOff()
+    {
+        // The control for the next test: without the option a 4 Mbps client gets the 8 Mbps
+        // 720p version as a transcode, for a bitrate reason and nothing else.
+        UseDirectWithinCapPolicy(keepDirect: false);
+        var withinCap = Version(WithinCapId, 720, 8_000_000);
+        SetItemVersions(Version(OverCapId, 2160, 40_000_000, "mkv", "hevc"), withinCap);
+
+        var httpContext = await NegotiateAsync(BrowserBody);
+        var decision = Decide(httpContext, withinCap);
+
+        Assert.Equal(PlayMethod.Transcode, decision.PlayMethod);
+        Assert.Equal(TranscodeReason.ContainerBitrateExceedsLimit, decision.TranscodeReasons);
+        Assert.Equal(4_000_000, BodyCeiling(httpContext));
+        Assert.Equal(4_000_000, ProfileCeiling(httpContext));
+    }
+
+    [Fact]
+    public async Task WithinCapVersion_HeldBackOnlyByBitrate_DirectPlays_WhenTheOptionIsOn()
+    {
+        UseDirectWithinCapPolicy(keepDirect: true);
+        var withinCap = Version(WithinCapId, 720, 8_000_000);
+        SetItemVersions(Version(OverCapId, 2160, 40_000_000, "mkv", "hevc"), withinCap);
+
+        var httpContext = await NegotiateAsync(
+            BrowserBody,
+            new Dictionary<string, string> { ["maxStreamingBitrate"] = "4000000" });
+        var decision = Decide(httpContext, withinCap);
+
+        Assert.Equal(PlayMethod.DirectPlay, decision.PlayMethod);
+
+        // Raised to exactly what the within-cap version needs, everywhere the client set it, and
+        // never to the over-cap version's 40 Mbps.
+        Assert.Equal("8000000", httpContext.Request.Query["maxStreamingBitrate"].ToString());
+        Assert.Equal(8_000_000, BodyCeiling(httpContext));
+        Assert.Equal(8_000_000, ProfileCeiling(httpContext));
+    }
+
+    [Fact]
+    public async Task WithinCapVersion_WithACodecTheClientCannotPlay_StillTranscodes()
+    {
+        UseDirectWithinCapPolicy(keepDirect: true);
+        var withinCap = Version(WithinCapId, 720, 8_000_000, "mkv", "hevc");
+        SetItemVersions(withinCap);
+
+        var httpContext = await NegotiateAsync(BrowserBody);
+        var decision = Decide(httpContext, withinCap);
+
+        Assert.Equal(PlayMethod.Transcode, decision.PlayMethod);
+        Assert.NotEqual(0, (int)(decision.TranscodeReasons & (TranscodeReason.ContainerNotSupported | TranscodeReason.VideoCodecNotSupported)));
+        Assert.Equal(0, (int)(decision.TranscodeReasons & TranscodeReason.ContainerBitrateExceedsLimit));
+    }
+
+    [Fact]
+    public async Task ItemWithNoWithinCapVersion_KeepsTheClientCeiling()
+    {
+        UseDirectWithinCapPolicy(keepDirect: true);
+        var overCap = Version(OverCapId, 1080, 12_000_000);
+        SetItemVersions(overCap);
+
+        var httpContext = await NegotiateAsync(
+            BrowserBody,
+            new Dictionary<string, string> { ["maxStreamingBitrate"] = "4000000" });
+        var decision = Decide(httpContext, overCap);
+
+        Assert.Equal("4000000", httpContext.Request.Query["maxStreamingBitrate"].ToString());
+        Assert.Equal(4_000_000, BodyCeiling(httpContext));
+        Assert.Equal(4_000_000, ProfileCeiling(httpContext));
+        Assert.Equal(PlayMethod.Transcode, decision.PlayMethod);
+        Assert.Equal(Cap, decision.MaxHeight);
+    }
+
+    [Fact]
+    public async Task RequestNamingTheOverCapVersion_KeepsTheClientCeiling()
+    {
+        // The within-cap sibling exists, but this answer carries only the over-cap version, so
+        // phase 2 cannot drop it and a raised ceiling would reach it.
+        UseDirectWithinCapPolicy(keepDirect: true);
+        SetItemVersions(Version(OverCapId, 2160, 40_000_000, "mkv", "hevc"), Version(WithinCapId, 720, 8_000_000));
+
+        var httpContext = await NegotiateAsync(
+            BrowserBody.Replace("\"MaxStreamingBitrate\": 4000000,\n  \"DeviceProfile\"", "\"MaxStreamingBitrate\": 4000000, \"MediaSourceId\": \"" + OverCapId + "\",\n  \"DeviceProfile\"", StringComparison.Ordinal));
+
+        Assert.Equal(OverCapId, JsonNode.Parse(ReadBody(httpContext))!["MediaSourceId"]!.GetValue<string>());
+        Assert.Equal(4_000_000, BodyCeiling(httpContext));
+        Assert.Equal(4_000_000, ProfileCeiling(httpContext));
+    }
+
+    [Fact]
+    public async Task RequestNamingTheWithinCapVersion_InTheQuery_RaisesToThatVersion()
+    {
+        UseDirectWithinCapPolicy(keepDirect: true);
+        SetItemVersions(
+            Version(OverCapId, 2160, 40_000_000, "mkv", "hevc"),
+            Version(WithinCapId, 720, 8_000_000),
+            Version("cccccccccccccccccccccccccccccccc", 480, 3_000_000));
+
+        var httpContext = await NegotiateAsync(
+            BrowserBody,
+            new Dictionary<string, string> { ["mediaSourceId"] = WithinCapId });
+
+        Assert.Equal(8_000_000, BodyCeiling(httpContext));
+    }
+
+    [Fact]
+    public async Task CeilingIsRaisedToTheLargestWithinCapNeed_AndNoFurther()
+    {
+        UseDirectWithinCapPolicy(keepDirect: true);
+        SetItemVersions(
+            Version(OverCapId, 1080, 25_000_000),
+            Version(WithinCapId, 720, 8_000_000),
+            Version("cccccccccccccccccccccccccccccccc", 480, 3_000_000));
+
+        var httpContext = await NegotiateAsync(BrowserBody);
+
+        Assert.Equal(8_000_000, BodyCeiling(httpContext));
+        Assert.Equal(8_000_000, ProfileCeiling(httpContext));
+    }
+
+    [Fact]
+    public async Task CeilingAlreadyAboveTheNeed_IsNeverLowered()
+    {
+        UseDirectWithinCapPolicy(keepDirect: true);
+        SetItemVersions(Version(WithinCapId, 720, 8_000_000));
+
+        var httpContext = await NegotiateAsync(BrowserBody.Replace("4000000", "20000000", StringComparison.Ordinal));
+
+        Assert.Equal(20_000_000, BodyCeiling(httpContext));
+        Assert.Equal(20_000_000, ProfileCeiling(httpContext));
+    }
+
+    [Fact]
+    public async Task VersionWithNoKnownHeight_RaisesNothing()
+    {
+        UseDirectWithinCapPolicy(keepDirect: true);
+        SetItemVersions(Version(WithinCapId, null, 8_000_000));
+
+        var httpContext = await NegotiateAsync(BrowserBody);
+
+        Assert.Equal(4_000_000, BodyCeiling(httpContext));
+    }
+
+    [Fact]
+    public async Task VideoBitrateCondition_IsRaisedToTheWithinCapStream_SoItDirectPlays()
+    {
+        const string Body = """
+            {
+              "DeviceProfile": {
+                "DirectPlayProfiles": [ { "Container": "mp4", "Type": "Video", "VideoCodec": "h264", "AudioCodec": "aac" } ],
+                "TranscodingProfiles": [ { "Container": "ts", "Type": "Video", "VideoCodec": "h264", "AudioCodec": "aac", "Protocol": "hls", "Context": "Streaming" } ],
+                "CodecProfiles": [
+                  { "Type": "Video", "Codec": "h264", "Conditions": [ { "Condition": "LessThanEqual", "Property": "VideoBitrate", "Value": "3000000", "IsRequired": false } ] }
+                ]
+              }
+            }
+            """;
+        var withinCap = Version(WithinCapId, 720, 8_000_000, videoBitrate: 7_500_000);
+        SetItemVersions(Version(OverCapId, 2160, 40_000_000, "mkv", "hevc", videoBitrate: 39_000_000), withinCap);
+
+        UseDirectWithinCapPolicy(keepDirect: false);
+        var before = await NegotiateAsync(Body);
+        Assert.Equal(PlayMethod.Transcode, Decide(before, withinCap).PlayMethod);
+        Assert.True(Decide(before, withinCap).TranscodeReasons.HasFlag(TranscodeReason.VideoBitrateNotSupported));
+
+        UseDirectWithinCapPolicy(keepDirect: true);
+        var after = await NegotiateAsync(Body);
+        Assert.Equal(PlayMethod.DirectPlay, Decide(after, withinCap).PlayMethod);
+
+        var condition = JsonNode.Parse(ReadBody(after))!["DeviceProfile"]!["CodecProfiles"]![0]!["Conditions"]![0]!;
+        Assert.Equal("7500000", condition["Value"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task VersionTheUserCannotSee_DoesNotSetTheCeiling()
+    {
+        // Jellyfin answers with the versions this user can see. When the only within-cap version
+        // is hidden from them, the answer is the over-cap version alone, and nothing is raised.
+        UseDirectWithinCapPolicy(keepDirect: true);
+        var userId = Guid.NewGuid();
+        var viewer = new User("viewer", "provider", "reset");
+        _userManagerMock.Setup(u => u.GetUserById(userId)).Returns(viewer);
+        _libraryManagerMock.Setup(l => l.GetItemById(ItemId)).Returns(new Movie { Id = ItemId, Name = "Show A" });
+        _mediaSourceManagerMock
+            .Setup(m => m.GetStaticMediaSources(It.IsAny<BaseItem>(), false, It.IsAny<User?>()))
+            .Returns(new[] { Version(OverCapId, 2160, 40_000_000, "mkv", "hevc"), Version(WithinCapId, 720, 8_000_000) });
+        _mediaSourceManagerMock
+            .Setup(m => m.GetStaticMediaSources(It.IsAny<BaseItem>(), false, viewer))
+            .Returns(new[] { Version(OverCapId, 2160, 40_000_000, "mkv", "hevc") });
+
+        var httpContext = CreatePlaybackInfoPost(userId, BrowserBody);
+        await RunResourceAsync(httpContext);
+
+        Assert.Equal(4_000_000, BodyCeiling(httpContext));
+    }
+
+    [Fact]
+    public async Task WhenTheVersionsCannotBeRead_TheHeightCapStillReachesTheProfile()
+    {
+        UseDirectWithinCapPolicy(keepDirect: true);
+        _libraryManagerMock.Setup(l => l.GetItemById(ItemId)).Throws(new InvalidOperationException("library unavailable"));
+
+        var httpContext = await NegotiateAsync(BrowserBody);
+
+        var root = JsonNode.Parse(ReadBody(httpContext))!;
+        var condition = root["DeviceProfile"]!["CodecProfiles"]![0]!["Conditions"]![0]!;
+        Assert.Equal("Height", condition["Property"]!.GetValue<string>());
+        Assert.Equal(4_000_000, BodyCeiling(httpContext));
+        AssertLoggedAtLeastOnce(LogLevel.Error);
+    }
 }
