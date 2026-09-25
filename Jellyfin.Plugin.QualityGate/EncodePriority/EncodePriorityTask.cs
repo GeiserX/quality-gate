@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Jellyfin.Data;
 using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Database.Implementations.Enums;
+using Jellyfin.Plugin.QualityGate.Configuration;
 using Jellyfin.Plugin.QualityGate.Services;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Library;
@@ -137,8 +138,25 @@ public sealed class EncodePriorityTask : IScheduledTask
     }
 
     /// <inheritdoc />
-    public Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
-        => RunAsync(EncodePriorityRuntime.TakeTrigger(), progress, cancellationToken);
+    public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
+    {
+        var trigger = EncodePriorityRuntime.TakeTrigger();
+        if (EncodePriorityRuntime.TakePreview())
+        {
+            await PreviewAsync(progress, cancellationToken).ConfigureAwait(false);
+
+            // A trigger that arrived together with the preview still gets its real run.
+            var rest = string.Join(", ", trigger.Split(", ").Where(t => t != EncodePriorityRuntime.PreviewTrigger));
+            if (rest.Length == 0)
+            {
+                return;
+            }
+
+            trigger = rest;
+        }
+
+        await RunAsync(trigger, progress, cancellationToken).ConfigureAwait(false);
+    }
 
     /// <summary>One run. See the class remarks.</summary>
     /// <param name="trigger">What started it.</param>
@@ -155,26 +173,11 @@ public sealed class EncodePriorityTask : IScheduledTask
 
         var started = Stopwatch.StartNew();
         var now = _clock();
-        var options = EncodePriorityOptions.From(config);
-        foreach (var warning in options.Warnings)
-        {
-            if (LoggedWarnings.TryAdd(warning, 0))
-            {
-                _logger.LogWarning("QualityGate: encode priority setting corrected: {Warning}", warning);
-            }
-        }
-
+        var options = ReadOptions(config);
         var dataPath = _applicationPaths.DataPath;
         var statePath = EncodePriorityPaths.StateFile(dataPath);
-        var state = EncodePriorityState.Load(statePath, out var stateError);
-        if (stateError is not null)
-        {
-            _logger.LogWarning("QualityGate: encode priority state could not be read and starts empty: {Error}", stateError);
-        }
-
-        var libraries = _libraryManager.GetVirtualFolders()
-            .Select(f => new LibraryFolder(f.Name ?? string.Empty, (IReadOnlyList<string>?)f.Locations ?? Array.Empty<string>()))
-            .ToList();
+        var state = LoadState(statePath);
+        var libraries = ReadLibraries();
         var locations = libraries.SelectMany(l => l.Locations).ToList();
 
         // Which file each writing target claims. Two targets may not write one file.
@@ -234,60 +237,12 @@ public sealed class EncodePriorityTask : IScheduledTask
 
         progress?.Report(5);
 
-        var allUsers = _userManager.GetUsers().ToList();
-        var viewers = allUsers.Select(ToViewer).ToList();
-        var union = PriorityListBuilder.AudienceUnion(options, viewers, now);
-        var users = allUsers.Where(u => union.Contains(u.Id)).ToList();
+        var coveredByTarget = new Dictionary<string, List<CoveredRecord>>(StringComparer.Ordinal);
+        var built = CollectAndBuild(options, runnable, config, libraries, now, progress, cancellationToken, (target, build, token) =>
+            coveredByTarget[target.Id] = FindCovered(target, build, state, now, token));
 
-        using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        budget.CancelAfter(BudgetOverride ?? options.RunBudget);
-
-        var demand = new CollectedDemand();
-        var builds = new List<(EncodeTargetOptions Target, TargetBuild Build, List<CoveredRecord> Covered)>();
-        var failed = new Dictionary<string, string>(StringComparer.Ordinal);
-        try
+        if (built.TimedOut is { } timedOut)
         {
-            _collector.Collect(options, users, now, budget.Token, demand);
-            progress?.Report(60);
-
-            var input = new BuildInput
-            {
-                Options = options,
-                Viewers = viewers,
-                Demand = demand,
-                Libraries = libraries,
-                Policies = config.Policies.Where(p => p.Enabled).Select(p => new PolicySummary(p.Name, p.MaxHeight)).ToList(),
-                NowUtc = now,
-                DirectoryExists = DirectoryExists,
-                ResolveLink = ResolveLink,
-            };
-
-            foreach (var target in runnable)
-            {
-                budget.Token.ThrowIfCancellationRequested();
-                try
-                {
-                    var build = PriorityListBuilder.Build(target, input);
-                    var covered = FindCovered(target, build, state, now, budget.Token);
-                    builds.Add((target, build, covered));
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    _logger.LogError(ex, "QualityGate: building the priority list for {Target} failed; its previous list is kept", target.Name);
-                    failed[target.Id] = ex.Message;
-                }
-            }
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            _logger.LogWarning(
-                "QualityGate: encode priority run went over its {Budget}s budget after {Processed} of {Total} viewers; every previous list is kept",
-                (BudgetOverride ?? options.RunBudget).TotalSeconds,
-                demand.UsersProcessed,
-                users.Count);
-            var timedOut = new Finding(
-                "TimedOut",
-                $"Previous list kept. {demand.UsersProcessed} of {users.Count} viewers processed. Lower Next up shows per viewer or depth.");
             foreach (var target in runnable)
             {
                 var previous = state.Targets.GetValueOrDefault(target.Id) ?? new TargetState();
@@ -323,7 +278,7 @@ public sealed class EncodePriorityTask : IScheduledTask
                 OutputPath = outputs.GetValueOrDefault(target.Id),
             };
 
-            if (failed.TryGetValue(target.Id, out var error))
+            if (built.Failed.TryGetValue(target.Id, out var error))
             {
                 next.Result = "Error";
                 next.Error = error;
@@ -334,13 +289,14 @@ public sealed class EncodePriorityTask : IScheduledTask
                 continue;
             }
 
-            var (_, build, covered) = builds.Single(b => b.Target.Id == target.Id);
+            var build = built.Builds[target.Id];
             var findings = new List<Finding>(build.Findings);
             if (outputProblems.TryGetValue(target.Id, out var problem))
             {
                 findings.Add(problem);
             }
 
+            var covered = coveredByTarget.GetValueOrDefault(target.Id) ?? new List<CoveredRecord>();
             foreach (var record in covered)
             {
                 state.Covered.Add(record);
@@ -420,6 +376,194 @@ public sealed class EncodePriorityTask : IScheduledTask
         SaveState(state, statePath);
         progress?.Report(100);
     }
+
+    /// <summary>
+    /// Builds every enabled encoder's list as a dry run, whether or not the feature is switched on,
+    /// and keeps the result in the state's preview slot.
+    /// </summary>
+    /// <remarks>
+    /// It writes no list, removes no list, writes no activity entry and leaves every target's real
+    /// last run alone, so the next real run compares against what the encoder actually has.
+    /// </remarks>
+    /// <param name="progress">Progress, 0 to 100.</param>
+    /// <param name="cancellationToken">The task's own cancellation.</param>
+    /// <returns>A task that completes when the preview is saved.</returns>
+    internal Task PreviewAsync(IProgress<double>? progress, CancellationToken cancellationToken)
+    {
+        var config = Plugin.Instance?.Configuration;
+        if (config is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        var started = Stopwatch.StartNew();
+        var now = _clock();
+        var options = ReadOptions(config);
+        var dataPath = _applicationPaths.DataPath;
+        var statePath = EncodePriorityPaths.StateFile(dataPath);
+        var state = LoadState(statePath);
+        var libraries = ReadLibraries();
+        var locations = libraries.SelectMany(l => l.Locations).ToList();
+        var targets = options.RunnableTargets.ToList();
+
+        var preview = new PreviewState { RanAtUtc = now, Result = "OK" };
+        var built = targets.Count == 0
+            ? new BuiltLists()
+            : CollectAndBuild(options, targets, config, libraries, now, progress, cancellationToken, null);
+        if (built.TimedOut is not null)
+        {
+            preview.Result = "TimedOut";
+        }
+
+        foreach (var target in targets)
+        {
+            var real = state.Targets.GetValueOrDefault(target.Id);
+            var next = new TargetState
+            {
+                Name = target.Name,
+                LastRunUtc = now,
+                Trigger = EncodePriorityRuntime.PreviewTrigger,
+                OutputPath = EncodePriorityPaths.TryResolveOutput(target, dataPath, locations, out var output, out _) ? output : null,
+            };
+
+            if (built.TimedOut is { } timedOut)
+            {
+                next.Result = "TimedOut";
+                next.Findings = new List<Finding> { timedOut };
+            }
+            else if (built.Failed.TryGetValue(target.Id, out var error))
+            {
+                next.Result = "Error";
+                next.Error = error;
+            }
+            else
+            {
+                var build = built.Builds[target.Id];
+                next.Result = "DryRun";
+                next.Entries = ToStateEntries(build, real, now);
+                next.Counts = build.Counts;
+                next.Findings = new List<Finding>(build.Findings);
+            }
+
+            next.DurationMs = started.ElapsedMilliseconds;
+            preview.Targets[target.Id] = next;
+        }
+
+        preview.DurationMs = started.ElapsedMilliseconds;
+        state.Preview = preview;
+        SaveState(state, statePath);
+        _logger.LogInformation(
+            "QualityGate: encode priority preview built {Targets} lists in {Ms} ms ({Result}); nothing was written",
+            targets.Count,
+            preview.DurationMs,
+            preview.Result);
+        progress?.Report(100);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Collects demand once for every viewer the given targets count, then builds each target's
+    /// list. A target whose build throws is reported in <see cref="BuiltLists.Failed"/> and the
+    /// others still build. Going over the run budget stops everything and is reported in
+    /// <see cref="BuiltLists.TimedOut"/>; the task's own cancellation is not swallowed.
+    /// </summary>
+    private BuiltLists CollectAndBuild(
+        EncodePriorityOptions options,
+        IReadOnlyList<EncodeTargetOptions> targets,
+        PluginConfiguration config,
+        IReadOnlyList<LibraryFolder> libraries,
+        DateTime now,
+        IProgress<double>? progress,
+        CancellationToken cancellationToken,
+        Action<EncodeTargetOptions, TargetBuild, CancellationToken>? afterBuild)
+    {
+        var allUsers = _userManager.GetUsers().ToList();
+        var viewers = allUsers.Select(ToViewer).ToList();
+        var union = PriorityListBuilder.AudienceUnion(options, viewers, now);
+        var users = allUsers.Where(u => union.Contains(u.Id)).ToList();
+
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        budget.CancelAfter(BudgetOverride ?? options.RunBudget);
+
+        var demand = new CollectedDemand();
+        var result = new BuiltLists();
+        try
+        {
+            _collector.Collect(options, users, now, budget.Token, demand);
+            progress?.Report(60);
+
+            var input = new BuildInput
+            {
+                Options = options,
+                Viewers = viewers,
+                Demand = demand,
+                Libraries = libraries,
+                Policies = config.Policies.Where(p => p.Enabled).Select(p => new PolicySummary(p.Name, p.MaxHeight)).ToList(),
+                NowUtc = now,
+                DirectoryExists = DirectoryExists,
+                ResolveLink = ResolveLink,
+            };
+
+            foreach (var target in targets)
+            {
+                budget.Token.ThrowIfCancellationRequested();
+                try
+                {
+                    var build = PriorityListBuilder.Build(target, input);
+                    afterBuild?.Invoke(target, build, budget.Token);
+                    result.Builds[target.Id] = build;
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _logger.LogError(ex, "QualityGate: building the priority list for {Target} failed; its previous list is kept", target.Name);
+                    result.Failed[target.Id] = ex.Message;
+                }
+            }
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning(
+                "QualityGate: encode priority run went over its {Budget}s budget after {Processed} of {Total} viewers; every previous list is kept",
+                (BudgetOverride ?? options.RunBudget).TotalSeconds,
+                demand.UsersProcessed,
+                users.Count);
+            result.TimedOut = new Finding(
+                "TimedOut",
+                $"Previous list kept. {demand.UsersProcessed} of {users.Count} viewers processed. Lower Next up shows per viewer or depth.");
+        }
+
+        return result;
+    }
+
+    private EncodePriorityOptions ReadOptions(PluginConfiguration config)
+    {
+        var options = EncodePriorityOptions.From(config);
+        foreach (var warning in options.Warnings)
+        {
+            if (LoggedWarnings.TryAdd(warning, 0))
+            {
+                _logger.LogWarning("QualityGate: encode priority setting corrected: {Warning}", warning);
+            }
+        }
+
+        return options;
+    }
+
+    private EncodePriorityState LoadState(string statePath)
+    {
+        var state = EncodePriorityState.Load(statePath, out var stateError);
+        if (stateError is not null)
+        {
+            _logger.LogWarning("QualityGate: encode priority state could not be read and starts empty: {Error}", stateError);
+        }
+
+        return state;
+    }
+
+    private List<LibraryFolder> ReadLibraries()
+        => _libraryManager.GetVirtualFolders()
+            .Select(f => new LibraryFolder(f.Name ?? string.Empty, (IReadOnlyList<string>?)f.Locations ?? Array.Empty<string>()))
+            .ToList();
 
     /// <summary>Turns a Jellyfin user into what the builder needs, resolving their policy the way playback does.</summary>
     /// <param name="user">The user.</param>
@@ -593,4 +737,17 @@ public sealed class EncodePriorityTask : IScheduledTask
     }
 
     private static string Truncate(string value, int max) => value.Length <= max ? value : value[..(max - 1)] + "…";
+
+    /// <summary>What one collect-and-build pass produced.</summary>
+    private sealed class BuiltLists
+    {
+        /// <summary>Gets each target's list, keyed by target id.</summary>
+        public Dictionary<string, TargetBuild> Builds { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>Gets the error of each target whose build threw.</summary>
+        public Dictionary<string, string> Failed { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>Gets or sets the finding when the pass went over its budget; null when it did not.</summary>
+        public Finding? TimedOut { get; set; }
+    }
 }

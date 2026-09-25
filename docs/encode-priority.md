@@ -187,6 +187,7 @@ card.
 | Settings saved | Every save. |
 | Library scan | After every scan, so a new copy takes its item off the list soon after it appears. |
 | **Run now** | The button in the Refresh block. It uses the saved settings, so save first. |
+| **Preview (dry run)** | Builds every enabled encoder's list and writes nothing, even while encode priority is saved as off. The result shows under Status. A real run it coincides with still happens. |
 
 A run that goes over its budget writes nothing and keeps every previous list. The budget is
 180 seconds by default, set under Advanced. So does a run that fails. The file is rewritten only when its list
@@ -207,12 +208,14 @@ stopped.
 
 ## Checking it works
 
-The Status block on the page shows, per encoder, the last run, what changed and any findings,
-each with its fix. To follow one item end to end:
+The Status block on the page shows, per encoder, the last run and what started it, the counts,
+the findings with their fixes, and the current list: rank, title, the path as the encoder sees
+it, the height and why each entry is there. After **Preview (dry run)** it also shows the list
+a run would write now. To follow one item end to end:
 
-1. **Listed.** Open the encoder's list file and pick one entry. To try a configuration first,
-   tick **Dry run** under the card's Advanced. Runs then report counts and findings in the
-   Status block and write no file.
+1. **Listed.** Open **Current list** under Status and pick one entry. To try a configuration
+   first, click **Preview (dry run)**, or tick **Dry run** under the card's Advanced so that
+   encoder's runs report and write no file.
 2. **Picked up.** Watch the encoder's log for the line it writes when it reloads the list:
 
    ```text
@@ -243,6 +246,12 @@ each with its fix. To follow one item end to end:
 | `WriteFailed` | The file could not be written, often a read-only media mount. Switch to the Data folder. |
 | `Stuck` | The same list has sat unchanged for two days and none of its items was covered. Check `PRIORITY_FILE`, `SOURCE_FOLDER` and the encoder's reload line above. |
 | `TimedOut` | The run went over its budget and kept the previous list. Lower Next Up shows per viewer or depth. |
+
+The page reads two admin-only routes the plugin adds. `GET /QualityGate/EncodePriority/Status`
+returns what the scheduled task keeps in
+`<Jellyfin data folder>/quality-gate/encode-priority/state.json`, with titles added.
+`POST /QualityGate/EncodePriority/Preview` queues the preview. A script can read the status the
+same way, with an administrator's token.
 
 Every finding is also written to the Jellyfin log with the `QualityGate: ` prefix, and to the
 activity log under the type `QualityGate.EncodePriority`, once per change.

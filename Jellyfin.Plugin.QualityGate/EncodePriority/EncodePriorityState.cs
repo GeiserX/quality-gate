@@ -30,6 +30,12 @@ internal sealed class EncodePriorityState
     /// <summary>Gets or sets the listed items that have since gained a within-cap version, newest last.</summary>
     public List<CoveredRecord> Covered { get; set; } = new();
 
+    /// <summary>
+    /// Gets or sets the last preview: every enabled encoder's list built as a dry run. Null until
+    /// the admin asks for one. It never replaces a target's real last run.
+    /// </summary>
+    public PreviewState? Preview { get; set; }
+
     /// <summary>Loads the state, or starts empty when there is none or it cannot be read.</summary>
     /// <param name="path">The state file.</param>
     /// <param name="error">Why an existing file could not be read.</param>
@@ -75,7 +81,12 @@ internal sealed class EncodePriorityState
         WrittenFiles = (WrittenFiles ?? new List<string>()).Where(p => !string.IsNullOrEmpty(p)).Distinct(StringComparer.Ordinal).ToList();
         Targets ??= new Dictionary<string, TargetState>();
         Covered = (Covered ?? new List<CoveredRecord>()).Where(c => c is not null).ToList();
-        foreach (var target in Targets.Values.Where(t => t is not null))
+        if (Preview is not null)
+        {
+            Preview.Targets ??= new Dictionary<string, TargetState>();
+        }
+
+        foreach (var target in Targets.Values.Concat(Preview?.Targets.Values ?? Enumerable.Empty<TargetState>()).Where(t => t is not null))
         {
             target.Entries ??= new List<StateEntry>();
             target.Findings ??= new List<Finding>();
@@ -162,6 +173,22 @@ internal sealed class TargetState
 
     /// <summary>Gets or sets the findings.</summary>
     public List<Finding> Findings { get; set; } = new();
+}
+
+/// <summary>The last preview run, which built every enabled encoder's list and wrote nothing.</summary>
+internal sealed class PreviewState
+{
+    /// <summary>Gets or sets when the preview ran.</summary>
+    public DateTime RanAtUtc { get; set; }
+
+    /// <summary>Gets or sets how long it took.</summary>
+    public long DurationMs { get; set; }
+
+    /// <summary>Gets or sets the outcome: OK or TimedOut.</summary>
+    public string Result { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets each encoder's would-be list, keyed by target id.</summary>
+    public Dictionary<string, TargetState> Targets { get; set; } = new();
 }
 
 /// <summary>One listed file in the state, with when it first appeared.</summary>

@@ -134,10 +134,19 @@ When all sources are blocked and fallback transcode is disabled, the filter retu
 
 ### API Endpoints
 
-The plugin ships **no** API controller. `QualityGateController` was deleted in v3.4.0.0 — its
-only job was MediaSource filtering, the admin page never called it, and controllers mount by
-assembly scanning so leaving it in the tree would remount it. A stale copy still sits untracked
-in some working copies and is excluded from compilation in the csproj.
+The plugin ships one controller, `EncodePriority/EncodePriorityController.cs`, for the encode
+priority status panel. Both routes are admin only (`Policies.RequiresElevation` on the class) and
+neither is on the playback path:
+
+- `GET /QualityGate/EncodePriority/Status` returns the state the scheduled task keeps, with item
+  titles looked up at request time.
+- `POST /QualityGate/EncodePriority/Preview` queues a run that builds every enabled encoder's
+  list as a dry run and writes nothing.
+
+Controllers mount by assembly scanning, so any new controller class is a new endpoint (still an
+ask-first change). `QualityGateController` was deleted in v3.4.0.0 because its only job was
+MediaSource filtering and the admin page never called it. A stale copy still sits untracked in
+some working copies and is excluded from compilation in the csproj.
 
 ### UserId Resolution
 

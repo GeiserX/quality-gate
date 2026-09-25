@@ -276,6 +276,67 @@ public sealed class ConfigPageEncodePriorityTests : IDisposable
         Assert.Contains("(12 s)", html, StringComparison.Ordinal);
     }
 
+    private const string StatusJson =
+        "{DataPath:'/config/data',Targets:[{Id:'t1',Name:'Shows',OutputPath:'/media/tv/.encoder-priority.json',LastRunUtc:'2026-09-25T10:00:00Z',Trigger:'playback',DurationMs:4200,Result:'Unchanged'," +
+        "LastWriteUtc:'2026-09-25T09:00:00Z',Counts:{Viewers:7,DemandItems:30,Gaps:12,Listed:2,Covered:1,HeightUnknown:0,Unmapped:3,CutByLimit:0}," +
+        "Findings:[{Code:'MostlyUnmapped',Message:'3 of 12 watched gaps are elsewhere.',Examples:['/media/other/x.mkv']}]," +
+        "Entries:[{Rank:1,Title:'Show A S01E02 <b>Pilot</b>',Path:'Show A/Season 1/Show A S01E02.mkv',Height:1080,Users:2,Reasons:['next up']}," +
+        "{Rank:2,Title:null,Path:'Gone/x.mkv',Height:null,Users:1,Reasons:['continue watching']}]}]," +
+        "Preview:{RanAtUtc:'2026-09-25T11:00:00Z',Result:'OK',Targets:[{Id:'t1',Name:'Shows',Result:'DryRun',Counts:{Listed:1},Findings:[],Entries:[{Rank:1,Title:'Film A (2001)',Path:'Film A (2001)/Film A (2001).mkv',Height:2160,Users:1,Reasons:['favourite']}]}]},Covered:[]}";
+
+    [Fact]
+    public void StatusPanels_WithTheStatusEndpoint_ShowTheRunCountsFindingsAndList()
+    {
+        var html = Eval<string>(
+            "page.buildStatusPanels({EnableEncodePriority:true,EncodeTargets:[{Id:'t1',Name:'Shows'},{Id:'t2',Name:'Films'}]}, " +
+            "{LastExecutionResult:{Status:'Completed',EndTimeUtc:'2026-09-25T10:00:04Z'}}, [], " + StatusJson + ")");
+
+        Assert.Contains(">OK, unchanged<", html, StringComparison.Ordinal);
+        Assert.Contains("(4 s, playback)", html, StringComparison.Ordinal);
+        Assert.Contains("7 viewers · 30 demand items · 12 gaps · 2 listed · 1 covered · 0 height unknown · 3 unmapped · 0 cut by the limit", html, StringComparison.Ordinal);
+        Assert.Contains("<strong>MostlyUnmapped</strong>: 3 of 12 watched gaps are elsewhere.", html, StringComparison.Ordinal);
+        Assert.Contains("<code>/media/other/x.mkv</code>", html, StringComparison.Ordinal);
+        Assert.Contains("Current list (2 entries)", html, StringComparison.Ordinal);
+        Assert.Contains("<code>Show A/Season 1/Show A S01E02.mkv</code>", html, StringComparison.Ordinal);
+        Assert.Contains("Show A S01E02 &lt;b&gt;Pilot&lt;/b&gt;", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("<b>Pilot", html, StringComparison.Ordinal);
+        Assert.Contains("<td>1080p</td>", html, StringComparison.Ordinal);
+        Assert.Contains("<span class=\"ep-chip\">2 viewers</span>", html, StringComparison.Ordinal);
+        Assert.Contains("Item no longer in the library", html, StringComparison.Ordinal);
+        Assert.Contains("<td>unknown</td>", html, StringComparison.Ordinal);
+        Assert.Contains("(1 entries, nothing written)", html, StringComparison.Ordinal);
+        Assert.Contains("<code>Film A (2001)/Film A (2001).mkv</code>", html, StringComparison.Ordinal);
+
+        // The encoder the status does not know yet falls back to the scheduled task and activity log.
+        Assert.Contains("<strong>Films</strong><span class=\"ep-badge ep-badge-ok\">OK, unchanged</span>", html, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("OK", "OK")]
+    [InlineData("Warning", "Warning")]
+    [InlineData("Error", "Error")]
+    [InlineData("TimedOut", "Timed out, previous list kept")]
+    [InlineData("DryRun", "Dry run")]
+    public void StatusPanels_TheBadgeComesFromTheLastRun(string result, string badge)
+    {
+        var html = Eval<string>(
+            "page.buildStatusPanels({EnableEncodePriority:true,EncodeTargets:[{Id:'t1',Name:'Shows'}]}, null, [], " +
+            "{Targets:[{Id:'t1',Name:'Shows',Result:'" + result + "',Counts:{},Findings:[],Entries:[]}],Preview:null,Covered:[]})");
+
+        Assert.Contains(">" + badge + "<", html, StringComparison.Ordinal);
+        Assert.Contains("The list is empty", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void StatusPanels_ForAnEncoderThatIsOff_SayOffWhateverTheLastRun()
+    {
+        var html = Eval<string>(
+            "page.buildStatusPanels({EnableEncodePriority:true,EncodeTargets:[{Id:'t1',Name:'Shows',Enabled:false}]}, null, [], " +
+            "{Targets:[{Id:'t1',Name:'Shows',Result:'OK',Counts:{},Findings:[],Entries:[]}],Preview:null,Covered:[]})");
+
+        Assert.Contains(">Off<", html, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void StatusPanels_BeforeTheFirstRun_SayWaiting()
     {

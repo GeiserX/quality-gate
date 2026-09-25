@@ -561,6 +561,20 @@
             background: rgba(239, 83, 80, .4);
         }
 
+        .ep-chip {
+            display: inline-block;
+            margin: 0 .2rem .2rem 0;
+            padding: 0 .45rem;
+            border-radius: 999px;
+            font-size: .85em;
+            background: rgba(127, 127, 127, .25);
+        }
+
+        .ep-list > summary {
+            cursor: pointer;
+            margin: .4rem 0;
+        }
+
         .ep-preview-table {
             width: 100%;
             border-collapse: collapse;
@@ -777,6 +791,10 @@
                                     <button is="emby-button" type="button" class="raised" id="btnEncodePriorityRunNow">
                                         <span>Run now</span>
                                     </button>
+                                    <button is="emby-button" type="button" class="raised" id="btnEncodePriorityPreview">
+                                        <span>Preview (dry run)</span>
+                                    </button>
+                                    <p class="fieldDescription">Preview builds every enabled encoder's list from the saved settings and writes no file. It also works while encode priority is saved as off, so you can check the lists before switching it on.</p>
                                 </div>
 
                                 <details class="ep-block" id="epAdvanced">

@@ -329,6 +329,102 @@ public sealed class EncodePriorityTaskTests : IDisposable
         Assert.Contains(State().Targets["aaaaaaaa-shows"].Findings, f => f.Code == "Stuck");
     }
 
+    [Fact]
+    public async Task Preview_BuildsAsADryRunAndLeavesTheRealListAlone()
+    {
+        EncodePriorityRuntime.Reset();
+        Wants(Path.Combine(_tv, "Show A", "x.mkv"), 1080);
+        await NewTask().RunAsync("test", null, CancellationToken.None);
+        var before = File.ReadAllText(ShowsFile);
+        var realRun = State().Targets["aaaaaaaa-shows"];
+        _entries.Clear();
+
+        Wants(Path.Combine(_tv, "Show B", "x.mkv"), 1080, DemandTier.ContinueWatching, 0);
+        _now = Now.AddHours(1);
+        EncodePriorityRuntime.RequestPreview();
+        await NewTask().ExecuteAsync(new Progress<double>(), CancellationToken.None);
+
+        Assert.Equal(before, File.ReadAllText(ShowsFile));
+        Assert.Empty(_entries);
+        var state = State();
+        Assert.Equal(realRun.LastRunUtc, state.Targets["aaaaaaaa-shows"].LastRunUtc);
+        Assert.Equal(new[] { "Show A/x.mkv" }, state.Targets["aaaaaaaa-shows"].Entries.Select(e => e.Path));
+        var preview = Assert.IsType<PreviewState>(state.Preview);
+        Assert.Equal("OK", preview.Result);
+        Assert.Equal(Now.AddHours(1), preview.RanAtUtc);
+        var target = preview.Targets["aaaaaaaa-shows"];
+        Assert.Equal("DryRun", target.Result);
+        Assert.Equal("preview", target.Trigger);
+        Assert.Equal(ShowsFile, target.OutputPath);
+        Assert.Equal(new[] { "Show B/x.mkv", "Show A/x.mkv" }, target.Entries.Select(e => e.Path));
+        Assert.Equal(Now, target.Entries[1].FirstListedAt);
+    }
+
+    [Fact]
+    public async Task Preview_WithTheFeatureOff_BuildsAndRemovesNothing()
+    {
+        EncodePriorityRuntime.Reset();
+        Wants(Path.Combine(_tv, "Show A", "x.mkv"), 1080);
+        await NewTask().RunAsync("test", null, CancellationToken.None);
+        _plugin.Configuration.EnableEncodePriority = false;
+
+        EncodePriorityRuntime.RequestPreview();
+        await NewTask().ExecuteAsync(new Progress<double>(), CancellationToken.None);
+
+        Assert.True(File.Exists(ShowsFile));
+        Assert.Equal(new[] { ShowsFile }, State().WrittenFiles);
+        Assert.Equal(1, State().Preview!.Targets["aaaaaaaa-shows"].Counts.Listed);
+    }
+
+    [Fact]
+    public async Task Preview_OnATargetWithNoFile_WritesNone()
+    {
+        EncodePriorityRuntime.Reset();
+        Wants(Path.Combine(_tv, "Show A", "x.mkv"), 1080);
+
+        EncodePriorityRuntime.RequestPreview();
+        await NewTask().ExecuteAsync(new Progress<double>(), CancellationToken.None);
+
+        Assert.False(File.Exists(ShowsFile));
+        Assert.Empty(Directory.GetFiles(_tv, "*", SearchOption.AllDirectories));
+        Assert.Empty(State().WrittenFiles);
+        Assert.Empty(State().Targets);
+        Assert.Equal(1, State().Preview!.Targets["aaaaaaaa-shows"].Counts.Listed);
+    }
+
+    [Fact]
+    public async Task Preview_ThatTimesOut_SaysSoAndWritesNothing()
+    {
+        EncodePriorityRuntime.Reset();
+        Wants(Path.Combine(_tv, "Show A", "x.mkv"), 1080);
+        _collector.BlockUntilCancelled = true;
+        var task = NewTask();
+        task.BudgetOverride = TimeSpan.FromMilliseconds(50);
+
+        EncodePriorityRuntime.RequestPreview();
+        await task.ExecuteAsync(new Progress<double>(), CancellationToken.None);
+
+        Assert.False(File.Exists(ShowsFile));
+        Assert.Equal("TimedOut", State().Preview!.Result);
+        Assert.Equal("TimedOut", Assert.Single(State().Preview!.Targets["aaaaaaaa-shows"].Findings).Code);
+    }
+
+    [Fact]
+    public async Task Preview_QueuedWithAnotherTrigger_AlsoRunsForReal()
+    {
+        EncodePriorityRuntime.Reset();
+        Wants(Path.Combine(_tv, "Show A", "x.mkv"), 1080);
+
+        EncodePriorityRuntime.RequestRun("playback");
+        EncodePriorityRuntime.RequestPreview();
+        await NewTask().ExecuteAsync(new Progress<double>(), CancellationToken.None);
+
+        Assert.True(File.Exists(ShowsFile));
+        Assert.Equal("playback", State().Targets["aaaaaaaa-shows"].Trigger);
+        Assert.NotNull(State().Preview);
+        Assert.False(EncodePriorityRuntime.TakePreview());
+    }
+
     private static void SetMode(string dir, UnixFileMode mode)
     {
         if (!OperatingSystem.IsWindows())

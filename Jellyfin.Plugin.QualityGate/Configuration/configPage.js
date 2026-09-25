@@ -1183,6 +1183,7 @@ var OUTPUT_HEIGHT_PRESETS = [480, 576, 720, 1080, 1440, 2160];
 var SAMPLE_FILE = 'Show Name/Season 2/Show Name S02E05.mkv';
 var libraryLocations = [];
 var epCardState = {};
+var epDataPath = '';
 
 function orDefault(value, fallback) {
     return value === undefined || value === null ? fallback : value;
@@ -1665,7 +1666,7 @@ function buildFolderRows(target, index) {
 
 function buildTargetCard(target, index) {
     var audience = targetAudience(target, config, users);
-    var output = resolveOutputPath(target, '');
+    var output = resolveOutputPath(target, epDataPath);
     var example = target.Folders.length
         ? mapToEncoderPath(joinPath(target.Folders[0].JellyfinPath, SAMPLE_FILE), target.Folders, false)
         : null;
@@ -1709,7 +1710,7 @@ function buildTargetCard(target, index) {
         '<div class="ep-setup">' +
             (output.error
                 ? '<span class="ep-error">' + escapeHtml(output.error) + '</span>'
-                : 'Writes <code class="ep-resolved-path" data-index="' + index + '">' + escapeHtml(output.path) + '</code><br />' + escapeHtml(encoderSetupText(target, output.path))) +
+                : 'Writes <code class="ep-resolved-path">' + escapeHtml(output.path) + '</code><br /><span class="ep-setup-text">' + escapeHtml(encoderSetupText(target, output.path)) + '</span>') +
         '</div>' +
         '<div class="ep-derived">' +
             (audience.serves.length ? 'Serves: ' + serves + '.' : '<span class="ep-warning">Serves nobody yet: no capped viewer has a cap at or above ' + toInt(target.OutputHeight, 720) + 'p.</span>') +
@@ -1933,6 +1934,15 @@ function formatTime(value) {
     return isNaN(date.getTime()) ? String(value) : date.toLocaleString();
 }
 
+var RESULT_BADGES = {
+    OK: 'OK',
+    Unchanged: 'OK, unchanged',
+    Warning: 'Warning',
+    Error: 'Error',
+    TimedOut: 'Timed out, previous list kept',
+    DryRun: 'Dry run'
+};
+
 function badgeClass(badge) {
     if (badge === 'OK' || badge === 'OK, unchanged') {
         return 'ep-badge ep-badge-ok';
@@ -1945,12 +1955,61 @@ function badgeClass(badge) {
     return badge === 'Error' ? 'ep-badge ep-badge-error' : 'ep-badge';
 }
 
+function findStatusTarget(targets, id) {
+    return (targets || []).find(function (candidate) {
+        return candidate.Id === id;
+    }) || null;
+}
+
+function formatDuration(ms) {
+    return Math.max(0, Math.round((ms || 0) / 1000)) + ' s';
+}
+
+function countsLine(counts) {
+    var c = counts || {};
+    return [
+        [c.Viewers, 'viewers'],
+        [c.DemandItems, 'demand items'],
+        [c.Gaps, 'gaps'],
+        [c.Listed, 'listed'],
+        [c.Covered, 'covered'],
+        [c.HeightUnknown, 'height unknown'],
+        [c.Unmapped, 'unmapped'],
+        [c.CutByLimit, 'cut by the limit']
+    ].map(function (pair) {
+        return (pair[0] || 0) + ' ' + pair[1];
+    }).join(' · ');
+}
+
+/** The list as a table: rank, title, the path as the encoder sees it, the height, why. */
+export function buildListTable(entries) {
+    if (!(entries || []).length) {
+        return '<p class="fieldDescription">The list is empty: nothing capped viewers are watching needs an encode.</p>';
+    }
+
+    return '<table class="ep-preview-table"><thead><tr><th>#</th><th>Title</th><th>Path as the encoder sees it</th><th>Height</th><th>Why</th></tr></thead><tbody>' +
+        entries.map(function (entry) {
+            return '<tr>' +
+                '<td>' + escapeHtml(entry.Rank) + '</td>' +
+                '<td>' + escapeHtml(entry.Title || 'Item no longer in the library') + '</td>' +
+                '<td><code>' + escapeHtml(entry.Path) + '</code></td>' +
+                '<td>' + (entry.Height ? escapeHtml(entry.Height) + 'p' : 'unknown') + '</td>' +
+                '<td>' + (entry.Reasons || []).map(function (reason) {
+                    return '<span class="ep-chip">' + escapeHtml(reason) + '</span>';
+                }).join(' ') + (entry.Users > 1 ? ' <span class="ep-chip">' + escapeHtml(entry.Users) + ' viewers</span>' : '') + '</td>' +
+            '</tr>';
+        }).join('') +
+        '</tbody></table>';
+}
+
 /**
- * The status panel per target, from what Jellyfin already ships: the scheduled task's last
- * result and the activity entries the task writes.
+ * The status panel per target. With the plugin's status endpoint it shows the last run, the
+ * counts, the findings, the current list and the last preview; without it, it falls back to
+ * what Jellyfin already ships: the scheduled task's last result and the task's activity entries.
  */
-export function buildStatusPanels(cfg, task, entries) {
+export function buildStatusPanels(cfg, task, entries, status) {
     var result = task && task.LastExecutionResult;
+    var preview = status && status.Preview;
 
     if (!(cfg.EncodeTargets || []).length) {
         return '<p class="fieldDescription">No encoder configured.</p>';
@@ -1961,10 +2020,15 @@ export function buildStatusPanels(cfg, task, entries) {
             return entry.Type === ENCODE_PRIORITY_ACTIVITY_TYPE && String(entry.ShortOverview || '').indexOf((target.Name || '') + ':') === 0;
         });
         var latest = mine[0];
+        var state = status ? findStatusTarget(status.Targets, target.Id) : null;
+        var previewed = preview ? findStatusTarget(preview.Targets, target.Id) : null;
         var badge;
+        var html;
 
         if (!cfg.EnableEncodePriority || target.Enabled === false) {
             badge = 'Off';
+        } else if (state && state.Result) {
+            badge = RESULT_BADGES[state.Result] || state.Result;
         } else if (!result) {
             badge = 'Waiting for first run';
         } else if (result.Status === 'Failed' || result.Status === 'Aborted') {
@@ -1977,23 +2041,57 @@ export function buildStatusPanels(cfg, task, entries) {
             badge = latest ? 'OK' : 'OK, unchanged';
         }
 
-        return '<div class="ep-status-panel">' +
+        html = '<div class="ep-status-panel">' +
             '<strong>' + escapeHtml(target.Name || 'Unnamed encoder') + '</strong>' +
-            '<span class="' + badgeClass(badge) + '">' + escapeHtml(badge) + '</span>' +
-            '<div class="fieldDescription">Last run: ' + escapeHtml(formatTime(result && result.EndTimeUtc)) +
-                (result && result.StartTimeUtc && result.EndTimeUtc
-                    ? ' (' + Math.max(0, Math.round((new Date(result.EndTimeUtc) - new Date(result.StartTimeUtc)) / 1000)) + ' s)'
+            '<span class="' + badgeClass(badge) + '">' + escapeHtml(badge) + '</span>';
+
+        if (state) {
+            html += '<div class="fieldDescription">Last run: ' + escapeHtml(formatTime(state.LastRunUtc)) +
+                    ' (' + formatDuration(state.DurationMs) + ', ' + escapeHtml(state.Trigger || 'scheduled') + ')' +
+                    ' · last write: ' + escapeHtml(formatTime(state.LastWriteUtc)) +
+                    (state.OutputPath ? ' · ' + escapeHtml(state.OutputPath) : '') +
+                    (state.Error ? ' · ' + escapeHtml(state.Error) : '') +
+                '</div>' +
+                '<div>' + escapeHtml(countsLine(state.Counts)) + '</div>' +
+                ((state.Findings || []).length
+                    ? '<ul>' + state.Findings.map(function (finding) {
+                        return '<li><strong>' + escapeHtml(finding.Code) + '</strong>: ' + escapeHtml(finding.Message) +
+                            ((finding.Examples || []).length ? '<br /><code>' + finding.Examples.map(escapeHtml).join('</code><br /><code>') + '</code>' : '') +
+                            '</li>';
+                    }).join('') + '</ul>'
                     : '') +
-                (result && result.ErrorMessage ? ' · ' + escapeHtml(result.ErrorMessage) : '') +
-                (latest ? ' · last change: ' + escapeHtml(formatTime(latest.Date)) : '') +
-            '</div>' +
-            (latest ? '<div>' + escapeHtml(latest.ShortOverview) + '</div>' : '') +
-            (latest && latest.Overview
-                ? '<ul>' + latest.Overview.split('\n').map(function (line) {
-                    return '<li>' + escapeHtml(line) + '</li>';
-                }).join('') + '</ul>'
-                : '') +
-        '</div>';
+                '<details class="ep-list"><summary>Current list (' + (state.Entries || []).length + ' entries)</summary>' + buildListTable(state.Entries) + '</details>';
+        } else {
+            html += '<div class="fieldDescription">Last run: ' + escapeHtml(formatTime(result && result.EndTimeUtc)) +
+                    (result && result.StartTimeUtc && result.EndTimeUtc
+                        ? ' (' + Math.max(0, Math.round((new Date(result.EndTimeUtc) - new Date(result.StartTimeUtc)) / 1000)) + ' s)'
+                        : '') +
+                    (result && result.ErrorMessage ? ' · ' + escapeHtml(result.ErrorMessage) : '') +
+                    (latest ? ' · last change: ' + escapeHtml(formatTime(latest.Date)) : '') +
+                '</div>' +
+                (latest ? '<div>' + escapeHtml(latest.ShortOverview) + '</div>' : '') +
+                (latest && latest.Overview
+                    ? '<ul>' + latest.Overview.split('\n').map(function (line) {
+                        return '<li>' + escapeHtml(line) + '</li>';
+                    }).join('') + '</ul>'
+                    : '');
+        }
+
+        if (previewed) {
+            html += '<details class="ep-list"><summary>Preview from ' + escapeHtml(formatTime(preview.RanAtUtc)) +
+                (previewed.Result === 'TimedOut' ? ', timed out' : ' (' + (previewed.Entries || []).length + ' entries, nothing written)') +
+                '</summary>' +
+                '<div>' + escapeHtml(countsLine(previewed.Counts)) + '</div>' +
+                ((previewed.Findings || []).length
+                    ? '<ul>' + previewed.Findings.map(function (finding) {
+                        return '<li><strong>' + escapeHtml(finding.Code) + '</strong>: ' + escapeHtml(finding.Message) + '</li>';
+                    }).join('') + '</ul>'
+                    : '') +
+                buildListTable(previewed.Entries) +
+                '</details>';
+        }
+
+        return html + '</div>';
     }).join('');
 }
 
@@ -2019,9 +2117,18 @@ function loadEncodePriorityStatus(view) {
         findEncodePriorityTask(),
         getJson('System/ActivityLog/Entries', { type: ENCODE_PRIORITY_ACTIVITY_TYPE, limit: 100 }).catch(function () {
             return { Items: [] };
+        }),
+        getJson('QualityGate/EncodePriority/Status').catch(function () {
+            return null;
         })
     ]).then(function (results) {
-        container.innerHTML = buildStatusPanels(config, results[0], (results[1] && results[1].Items) || []);
+        var status = results[2];
+        if (status && status.DataPath && status.DataPath !== epDataPath) {
+            epDataPath = status.DataPath;
+            updateResolvedPaths(view);
+        }
+
+        container.innerHTML = buildStatusPanels(config, results[0], (results[1] && results[1].Items) || [], status);
     }).catch(function (err) {
         container.innerHTML = '<p class="fieldDescription ep-error">Could not load the status: ' + escapeHtml(err && err.message ? err.message : String(err)) + '</p>';
     });
@@ -2041,6 +2148,36 @@ function runEncodePriorityNow(view) {
         }, 3000);
     }).catch(function (err) {
         Dashboard.alert('Could not start the run: ' + (err && err.message ? err.message : String(err)));
+    });
+}
+
+/** Shows the real Data folder path on each card once the status has told the page where it is. */
+function updateResolvedPaths(view) {
+    view.querySelectorAll('#encodeTargetsContainer .ep-card').forEach(function (card) {
+        var target = config.EncodeTargets[parseInt(card.dataset.index, 10)];
+        var path = card.querySelector('.ep-resolved-path');
+        var setup = card.querySelector('.ep-setup-text');
+        var output;
+        if (!target || !path || target.OutputMode !== 'DataFolder') {
+            return;
+        }
+
+        output = resolveOutputPath(target, epDataPath);
+        path.textContent = output.path;
+        if (setup) {
+            setup.textContent = encoderSetupText(target, output.path);
+        }
+    });
+}
+
+function previewEncodePriority(view) {
+    ApiClient.ajax({ type: 'POST', url: ApiClient.getUrl('QualityGate/EncodePriority/Preview') }).then(function () {
+        Dashboard.alert('Preview queued. It builds every enabled encoder\'s list from the saved settings and writes nothing. It appears under Status when it finishes.');
+        setTimeout(function () {
+            loadEncodePriorityStatus(view);
+        }, 3000);
+    }).catch(function (err) {
+        Dashboard.alert('Could not queue the preview: ' + (err && err.message ? err.message : (err && err.status ? 'HTTP ' + err.status : String(err))));
     });
 }
 
@@ -2079,6 +2216,10 @@ export default function (view) {
 
     view.querySelector('#btnEncodePriorityRunNow').addEventListener('click', function () {
         runEncodePriorityNow(view);
+    });
+
+    view.querySelector('#btnEncodePriorityPreview').addEventListener('click', function () {
+        previewEncodePriority(view);
     });
 
     view.querySelector('#encodeTargetsContainer').addEventListener('click', function (event) {

@@ -24,12 +24,16 @@ internal static class EncodePriorityRuntime
     /// <summary>The label for a run nobody asked for explicitly: the interval or startup trigger.</summary>
     public const string ScheduledTrigger = "scheduled";
 
+    /// <summary>The label for a run the admin asked for as a preview.</summary>
+    public const string PreviewTrigger = "preview";
+
     /// <summary>The most plays held between two runs; older ones are dropped first.</summary>
     public const int ServedQueueMax = 1000;
 
     private static readonly object Gate = new();
     private static readonly Queue<ServedPlay> Served = new();
     private static string? _pendingTrigger;
+    private static bool _previewPending;
     private static HashSet<Guid> _coveredIds = new();
 
     /// <summary>Records why the next run is happening.</summary>
@@ -41,6 +45,29 @@ internal static class EncodePriorityRuntime
             _pendingTrigger = _pendingTrigger is null || _pendingTrigger == trigger
                 ? trigger
                 : _pendingTrigger + ", " + trigger;
+        }
+    }
+
+    /// <summary>Asks the next run to build every enabled encoder's list as a dry run first.</summary>
+    public static void RequestPreview()
+    {
+        lock (Gate)
+        {
+            _previewPending = true;
+        }
+
+        RequestRun(PreviewTrigger);
+    }
+
+    /// <summary>Takes and clears the preview request.</summary>
+    /// <returns>True when a preview was asked for since the last run took it.</returns>
+    public static bool TakePreview()
+    {
+        lock (Gate)
+        {
+            var pending = _previewPending;
+            _previewPending = false;
+            return pending;
         }
     }
 
@@ -123,6 +150,7 @@ internal static class EncodePriorityRuntime
         lock (Gate)
         {
             _pendingTrigger = null;
+            _previewPending = false;
             _coveredIds = new HashSet<Guid>();
             Served.Clear();
         }
