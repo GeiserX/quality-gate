@@ -81,7 +81,7 @@ string field falls back to its default. Each correction is logged once as a warn
 
 | Field | Type | Default | Range | Effect |
 |---|---|---|---|---|
-| `Id` | string | new GUID | unique | Stable key for state and logs. Its first 8 characters name the Data folder file |
+| `Id` | string | empty (the page mints a GUID) | unique, required | Stable key for state and logs. Its first 8 characters name the Data folder file. A target with no id is ignored with a warning until it is saved from the page |
 | `Name` | string | empty | 1 to 64 characters, unique | Label on the page, in the logs and in the file |
 | `Enabled` | bool | `true` | | A disabled encoder gets no list, and its old file is removed |
 | `Folders` | list | empty | at least one when enabled | Folder mappings, described below |

@@ -152,6 +152,32 @@ public sealed class EncodePriorityConfigTests : IDisposable
     }
 
     [Fact]
+    public void AHandWrittenTargetWithNoId_KeepsNoIdAcrossRestarts_AndIsIgnoredWithAWarning()
+    {
+        _store.WriteXml("""
+            <?xml version="1.0" encoding="utf-8"?>
+            <PluginConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+              <EnableEncodePriority>true</EnableEncodePriority>
+              <EncodeTargets>
+                <EncodeTarget>
+                  <Name>A</Name>
+                  <Folders><EncodeFolderMapping><JellyfinPath>/media/tv</JellyfinPath></EncodeFolderMapping></Folders>
+                  <OutputMode>DataFolder</OutputMode>
+                </EncodeTarget>
+              </EncodeTargets>
+            </PluginConfiguration>
+            """);
+
+        var first = _store.Load();
+        var second = _store.Load();
+
+        Assert.Equal(first.EncodeTargets[0].Id, second.EncodeTargets[0].Id);
+        var options = EncodePriorityOptions.From(second);
+        Assert.Empty(options.Targets);
+        Assert.Contains(options.Warnings, w => w.Contains("missing or repeated id", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void ConfigFromBeforeEncodePriority_LoadsWithTheFeatureOff()
     {
         _store.WriteXml("""
@@ -201,7 +227,7 @@ public sealed class EncodePriorityConfigTests : IDisposable
     {
         var target = new EncodeTarget();
 
-        Assert.False(string.IsNullOrEmpty(target.Id));
+        Assert.Equal(string.Empty, target.Id);
         Assert.True(target.Enabled);
         Assert.Empty(target.Folders);
         Assert.Equal(720, target.OutputHeight);

@@ -16,7 +16,13 @@ namespace Jellyfin.Plugin.QualityGate.Configuration;
 public class EncodeTarget
 {
     /// <summary>Gets or sets the stable key for state, logs and the Data folder file name.</summary>
-    public string Id { get; set; } = Guid.NewGuid().ToString();
+    /// <remarks>
+    /// Empty by default; the settings page mints it. A random default would give a hand-written
+    /// target with no <c>Id</c> element a new id on every load, dropping its state and renaming
+    /// its Data folder file on each restart. A target with no id is ignored with a warning
+    /// instead, until it is saved from the page.
+    /// </remarks>
+    public string Id { get; set; } = string.Empty;
 
     /// <summary>Gets or sets the label shown on the page, in the logs and in the file.</summary>
     public string Name { get; set; } = string.Empty;
