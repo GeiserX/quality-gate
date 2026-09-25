@@ -194,7 +194,7 @@ Every query is an `InternalItemsQuery(user)`, so each user's library access and 
 
 The lookahead runs without a user and is cached on `(series key, season, episode, depth)`, so ten viewers of one show cost one query. It only orders encodes and never shows anything to anyone.
 
-Candidates are keyed by item id and carry `{ tier, depth, users, lastActivity }`. A duplicate keeps its best tier and depth and adds to the user set. `depth` is 1 for the next-up episode and 2 or more for the lookahead; tier 0 and 1 items have depth 0.
+Candidates are keyed by item id and carry `{ tier, depth, users, lastActivity }`. A duplicate keeps its best tier and depth and adds to the user set. Only the demand of viewers for whom the item is a gap (section 4.3) is merged: a viewer who already has a version within their cap does not need the encode, so their signal neither ranks the item nor gives it a reason, and does not count as one of its users. `depth` is 1 for the next-up episode and 2 or more for the lookahead; tier 0 and 1 items have depth 0.
 
 ### 4.3 Gap test
 

@@ -276,8 +276,8 @@ internal static class PriorityListBuilder
                 $"{belowOutput} chosen viewers are capped below this encoder's {target.OutputHeight}p output, so its copies cannot help them. Those viewers keep getting live transcodes."));
         }
 
-        // One candidate per item, holding the best tier and depth and every counted viewer.
-        var candidates = new Dictionary<Guid, Candidate>();
+        // What every counted viewer asked for, per item.
+        var demanded = new Dictionary<Guid, List<DemandSignal>>();
         foreach (var signal in input.Demand.Signals)
         {
             if (!audience.ContainsKey(signal.UserId))
@@ -285,34 +285,40 @@ internal static class PriorityListBuilder
                 continue;
             }
 
-            if (!candidates.TryGetValue(signal.ItemId, out var candidate))
+            if (!demanded.TryGetValue(signal.ItemId, out var signals))
             {
-                candidate = new Candidate(signal.ItemId);
-                candidates[signal.ItemId] = candidate;
+                signals = new List<DemandSignal>();
+                demanded[signal.ItemId] = signals;
             }
 
-            candidate.Merge(signal);
+            signals.Add(signal);
         }
 
-        build.Counts.DemandItems = candidates.Count;
+        build.Counts.DemandItems = demanded.Count;
 
         var listed = new List<(Candidate Candidate, List<ListedEntry> Entries)>();
         var unmapped = new List<string>();
-        foreach (var candidate in candidates.Values)
+        foreach (var (itemId, signals) in demanded)
         {
-            var versions = input.Demand.Versions.GetValueOrDefault(candidate.ItemId) ?? Array.Empty<VersionInfo>();
+            var versions = input.Demand.Versions.GetValueOrDefault(itemId) ?? Array.Empty<VersionInfo>();
             var heights = versions.Select(v => v.Height).ToArray();
             if (heights.Length > 0 && heights.All(h => !h.HasValue))
             {
                 build.Counts.HeightUnknown++;
             }
 
+            // One candidate per item, holding the best tier and depth of the viewers for whom the
+            // item is a gap, tested at each viewer's own cap. A viewer who already has a version
+            // within their cap does not need the encode, so their demand does not rank it or
+            // give it a reason.
+            var candidate = new Candidate(itemId);
             var gapCap = 0;
-            foreach (var userId in candidate.UserIds)
+            foreach (var signal in signals)
             {
-                var cap = audience[userId];
+                var cap = audience[signal.UserId];
                 if (QualityGateService.IsCapGap(heights, cap, options.UnprobedNeedsEncode))
                 {
+                    candidate.Merge(signal);
                     gapCap = Math.Max(gapCap, cap);
                 }
             }

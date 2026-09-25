@@ -363,6 +363,28 @@ public class PriorityListBuilderTests
     }
 
     [Fact]
+    public void Order_AndReasons_ComeOnlyFromViewersForWhomTheItemIsAGap()
+    {
+        // The 1080p viewer playing M already has a 1080p version, so M is a gap only for the
+        // 720p viewer who favourited it. It must not rank as "playing" above N, that viewer's
+        // own continue-watching gap.
+        var demand = new Demand();
+        var m = demand.Item("/media/tv/M/m.mkv", 2160, 1080);
+        var n = demand.Item("/media/tv/N/n.mkv", 2160);
+        demand.Ask(m, V1080, DemandTier.NowPlaying, 0)
+            .Ask(m, V720, DemandTier.Favourite, 1)
+            .Ask(n, V720, DemandTier.ContinueWatching, 0);
+
+        var build = Build(Target(), demand);
+
+        Assert.Equal(n, build.Entries[0].ItemId);
+        var forM = build.Entries.Where(e => e.ItemId == m).ToList();
+        Assert.NotEmpty(forM);
+        Assert.All(forM, e => Assert.Equal((DemandTier.Favourite, 1, 1), (e.Tier, e.Depth, e.Users)));
+        Assert.All(forM, e => Assert.Equal(new[] { DemandTier.Reason(DemandTier.Favourite) }, e.Reasons));
+    }
+
+    [Fact]
     public void Dedupe_KeepsTheFirstPosition_AndTheCutIsCounted()
     {
         var demand = new Demand();
