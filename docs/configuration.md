@@ -118,6 +118,7 @@ specific one.
 | `MaxHeight` | int | `0` | **The cap.** Maximum video height in pixels. `0` disables enforcement |
 | `Enabled` | bool | `true` | A disabled policy does not resolve. See the warning below |
 | `IntroVideoPath` | string | empty | Intro for users under this policy |
+| `KeepWithinCapVersionsDirect` | bool | `false` | Shown as **Play within-cap versions as they are**. A version within `MaxHeight` is not transcoded when a client's bitrate limit is the only reason; a codec, container, audio or subtitle reason still transcodes it. See [how it works](how-it-works.md#within-cap-versions-played-as-they-are) |
 
 `MaxHeight` is measured against the item's actual video stream height, never its filename.
 Rename a file and the cap is unchanged. That is deliberate: on a library whose lower-quality
