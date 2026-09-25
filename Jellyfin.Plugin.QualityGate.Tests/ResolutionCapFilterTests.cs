@@ -1424,6 +1424,19 @@ public class ResolutionCapFilterTests : IDisposable
         AssertLoggedAtLeastOnce(LogLevel.Error);
     }
 
+    [Theory]
+    [InlineData(false, 0)]
+    [InlineData(true, 1)]
+    public async Task TheOption_CostsOneMediaSourceReadPerNegotiation_AndNoneWhenOff(bool keepDirect, int reads)
+    {
+        UseDirectWithinCapPolicy(keepDirect);
+        SetItemVersions(Version(WithinCapId, 720, 8_000_000));
+
+        await NegotiateAsync(BrowserBody);
+
+        _mediaSourceManagerMock.Verify(m => m.GetStaticMediaSources(It.IsAny<BaseItem>(), false, It.IsAny<User?>()), Times.Exactly(reads));
+    }
+
     [Fact]
     public async Task WhenAClientConditionIsMalformed_TheHeightCapStillReachesTheProfile()
     {

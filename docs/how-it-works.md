@@ -96,6 +96,10 @@ version, are negotiated exactly as before. If measuring the versions or raising 
 for example on a malformed condition in the client's profile, the error is logged, the ceilings
 stay as far as they got, and the `Height` cap is still written.
 
+The option has a small cost on each play start of a user under that policy: one item lookup, one
+user lookup and one read of the item's media sources, streams included, before Jellyfin reads
+the same sources again to build its answer. Policies without the option pay nothing.
+
 The option cannot lift Jellyfin's remote client bitrate limit, set per user or for the whole
 server. That limit is not part of the request. The server applies it after reading the request,
 so a remote viewer still gets a within-cap file as a bitrate transcode when the file is above
