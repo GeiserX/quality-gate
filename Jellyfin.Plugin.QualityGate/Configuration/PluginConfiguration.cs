@@ -75,6 +75,61 @@ public class PluginConfiguration : BasePluginConfiguration
     /// empty: XmlSerializer adds loaded items to whatever an initialiser put there.
     /// </summary>
     public List<string> VersionGroupingSuffixes { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets a value indicating whether Quality Gate writes a list of what capped viewers
+    /// are watching for an encoder to make first. Off by default. When off nothing is built, and
+    /// any file the plugin wrote earlier is removed. Playback is never changed by this feature.
+    /// </summary>
+    public bool EnableEncodePriority { get; set; }
+
+    /// <summary>Gets or sets one entry per encoder. Starts empty; see <see cref="EncodeTarget"/>.</summary>
+    public List<EncodeTarget> EncodeTargets { get; set; } = new();
+
+    /// <summary>Gets or sets a value indicating whether items a capped viewer is playing right now count.</summary>
+    public bool PriorityNowPlaying { get; set; } = true;
+
+    /// <summary>Gets or sets a value indicating whether resumable items per capped viewer count.</summary>
+    public bool PriorityContinueWatching { get; set; } = true;
+
+    /// <summary>Gets or sets the most resumable items considered per viewer (1 to 100).</summary>
+    public int PriorityContinueWatchingPerUser { get; set; } = 20;
+
+    /// <summary>Gets or sets a value indicating whether the next episodes of shows a capped viewer follows count.</summary>
+    public bool PriorityNextUp { get; set; } = true;
+
+    /// <summary>Gets or sets the episodes ahead per show, counting the next-up episode itself (1 to 20).</summary>
+    public int PriorityNextUpDepth { get; set; } = 3;
+
+    /// <summary>Gets or sets the most shows considered per viewer, most recently played first (1 to 50).</summary>
+    public int PriorityNextUpShowsPerUser { get; set; } = 10;
+
+    /// <summary>Gets or sets a value indicating whether season 0 is included in the lookahead.</summary>
+    public bool PriorityNextUpIncludeSpecials { get; set; }
+
+    /// <summary>Gets or sets a value indicating whether favourite movies and shows count.</summary>
+    public bool PriorityFavourites { get; set; }
+
+    /// <summary>Gets or sets the most favourites considered per viewer (1 to 200).</summary>
+    public int PriorityFavouritesPerUser { get; set; } = 25;
+
+    /// <summary>Gets or sets how many days of activity count (1 to 365).</summary>
+    public int PriorityWatchedWithinDays { get; set; } = 30;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether a version with no known height counts as over the
+    /// cap when the list is built. Playback is not affected.
+    /// </summary>
+    public bool PriorityUnprobedNeedsEncode { get; set; }
+
+    /// <summary>Gets or sets a value indicating whether a run is queued shortly after a capped viewer starts playback.</summary>
+    public bool PriorityRefreshOnPlayback { get; set; } = true;
+
+    /// <summary>Gets or sets the minimum gap in minutes between playback-triggered runs (1 to 240).</summary>
+    public int PriorityDebounceMinutes { get; set; } = 10;
+
+    /// <summary>Gets or sets the hard runtime cap in seconds for one run (10 to 1800).</summary>
+    public int PriorityRunBudgetSeconds { get; set; } = 180;
 }
 
 /// <summary>
