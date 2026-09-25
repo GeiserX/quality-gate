@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Plugin.QualityGate.Configuration;
 using Jellyfin.Plugin.QualityGate.EncodePriority;
+using Jellyfin.Plugin.QualityGate.Tests.Harness;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Activity;
@@ -282,6 +283,11 @@ public sealed class EncodePriorityTaskTests : IDisposable
     [Fact]
     public async Task AReadOnlyMediaFolder_IsAWriteFailedFindingAndOtherTargetsStillWrite()
     {
+        if (!ReadOnlyFolders.AreEnforced)
+        {
+            return;
+        }
+
         _plugin.Configuration.EncodeTargets.Add(new EncodeTarget
         {
             Id = "cccccccc-films",
