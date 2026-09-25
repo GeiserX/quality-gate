@@ -146,6 +146,34 @@ public sealed class ConfigPageEncodePriorityTests : IDisposable
     }
 
     [Fact]
+    public void AHandEditedModeInAnotherCase_IsReadAsTheServerReadsIt()
+    {
+        // The server ignores case and spaces; the page compares exactly. Without this a stored
+        // "datafolder" fell through to Source folder and blocked every save.
+        var target = JsonDocument.Parse(_page.Json(
+            "page.normalizeEncodeTarget({Id:'abcdef12',Name:'X',OutputMode:' datafolder ',AudienceMode:'policies',Folders:[{JellyfinPath:'/media/tv',EncoderPath:'tv'}]})")).RootElement;
+
+        Assert.Equal("DataFolder", target.GetProperty("OutputMode").GetString());
+        Assert.Equal("Policies", target.GetProperty("AudienceMode").GetString());
+        Assert.Equal("SourceFolder", _page.Json("page.normalizeEncodeTarget({OutputMode:'nonsense'}).OutputMode").Trim('"'));
+        Assert.Empty(Eval<string[]>(
+            "page.validateEncodeTargets({EnableEncodePriority:true,Policies:[],EncodeTargets:[page.normalizeEncodeTarget({Id:'abcdef12',Name:'X',OutputMode:'datafolder',Folders:[{JellyfinPath:'/media/tv',EncoderPath:'tv'}]})]}, ['/media/tv'])"));
+    }
+
+    [Theory]
+    [InlineData(0, 144)]
+    [InlineData(-5, 144)]
+    [InlineData(9000, 4320)]
+    [InlineData(1080, 1080)]
+    public void AStoredOutputHeightOutsideTheServersRange_IsClampedAsTheServerClampsIt(int stored, int shown)
+    {
+        // Out of range, no option was selected and the select fell back to its first, 480p,
+        // which a save then wrote over a field the admin never touched.
+        Assert.Equal(shown, Eval<int>($"page.normalizeEncodeTarget({{OutputHeight:{stored}}}).OutputHeight"));
+        Assert.Contains($"value=\"{shown}\" selected", Eval<string>($"page.outputHeightOptions(page.normalizeEncodeTarget({{OutputHeight:{stored}}}).OutputHeight)"), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Validate_NamesAndOutputFilesMustBeUnique()
     {
         var errors = Eval<string[]>(

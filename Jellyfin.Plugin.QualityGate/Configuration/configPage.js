@@ -1194,6 +1194,21 @@ function toInt(value, fallback) {
     return isFinite(parsed) ? parsed : fallback;
 }
 
+/**
+ * A stored mode as the server reads it: trimmed, case ignored, an unknown value the default.
+ * The page compares modes exactly, so a hand-edited "datafolder" must become "DataFolder" here.
+ */
+function canonicalMode(value, names, fallback) {
+    var wanted = String(value === undefined || value === null ? '' : value).trim().toLowerCase();
+    for (var i = 0; i < names.length; i++) {
+        if (names[i].toLowerCase() === wanted) {
+            return names[i];
+        }
+    }
+
+    return fallback;
+}
+
 /** Fills in every encode priority field a config from an older release or a hand edit lacks. */
 export function normalizeEncodePriority(cfg) {
     cfg.EnableEncodePriority = Boolean(cfg.EnableEncodePriority);
@@ -1224,10 +1239,11 @@ export function normalizeEncodeTarget(target) {
     t.Folders = (t.Folders || []).map(function (folder) {
         return { JellyfinPath: (folder && folder.JellyfinPath) || '', EncoderPath: (folder && folder.EncoderPath) || '' };
     });
-    t.OutputHeight = orDefault(t.OutputHeight, 720);
-    t.OutputMode = t.OutputMode || 'SourceFolder';
+    // Read the way the server reads them, so the page shows and saves what the server uses.
+    t.OutputHeight = Math.min(Math.max(toInt(orDefault(t.OutputHeight, 720), 720), 144), 4320);
+    t.OutputMode = canonicalMode(t.OutputMode, ['SourceFolder', 'DataFolder', 'Custom'], 'SourceFolder');
     t.OutputPath = t.OutputPath || '';
-    t.AudienceMode = t.AudienceMode || 'Auto';
+    t.AudienceMode = canonicalMode(t.AudienceMode, ['Auto', 'Policies', 'Users'], 'Auto');
     t.AudiencePolicyIds = (t.AudiencePolicyIds || []).slice();
     t.AudienceUserIds = (t.AudienceUserIds || []).slice();
     t.ExcludedUserIds = (t.ExcludedUserIds || []).slice();
