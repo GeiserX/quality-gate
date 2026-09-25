@@ -186,6 +186,40 @@ public static class QualityGateService
     }
 
     /// <summary>
+    /// True when a viewer capped at <paramref name="cap"/> would get a forced live transcode:
+    /// at least one source, and none within the cap.
+    /// </summary>
+    /// <remarks>
+    /// This is the one predicate for "every version is above the cap". Playback uses it to decide
+    /// on a capped transcode, and the encode priority list uses it to decide what needs an encode,
+    /// so the two cannot drift apart. By default an unknown height is within the cap, exactly as
+    /// <see cref="ExceedsHeightCap(QualityPolicy?, int?)"/> treats it. Only the list builder passes
+    /// <paramref name="unprobedIsOverCap"/>; playback never does.
+    /// </remarks>
+    /// <param name="sourceHeights">The height of every version, null where it was never probed.</param>
+    /// <param name="cap">The viewer's height cap; zero or less means uncapped.</param>
+    /// <param name="unprobedIsOverCap">Count an unknown height as over the cap.</param>
+    /// <returns>True when the cap is set, there is a version, and none is within the cap.</returns>
+    public static bool IsCapGap(IReadOnlyList<int?> sourceHeights, int cap, bool unprobedIsOverCap = false)
+    {
+        if (cap <= 0 || sourceHeights is null || sourceHeights.Count == 0)
+        {
+            return false;
+        }
+
+        foreach (var height in sourceHeights)
+        {
+            var overCap = height.HasValue ? height.Value > cap : unprobedIsOverCap;
+            if (!overCap)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// Resolves a path, following symlinks to get the actual target path.
     /// </summary>
     /// <param name="path">The path to resolve.</param>
