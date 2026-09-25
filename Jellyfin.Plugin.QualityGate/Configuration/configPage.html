@@ -439,6 +439,143 @@
             }
         }
 
+        .ep-body[data-off="true"] {
+            opacity: .45;
+        }
+
+        .ep-body[data-off="true"] .ep-collapsible {
+            display: none;
+        }
+
+        .ep-block {
+            margin-top: 1.4rem;
+        }
+
+        .ep-block-title {
+            margin: 0 0 .6rem;
+            font-size: .92em;
+            font-weight: 800;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+
+        .ep-signal-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: .6rem;
+            margin-bottom: .5rem;
+        }
+
+        .ep-signal-row .checkboxContainer {
+            margin: 0;
+        }
+
+        .ep-number {
+            width: 5.5rem;
+        }
+
+        .ep-card {
+            margin: 0 0 1rem;
+            padding: .8rem 1.1rem 1rem;
+            border: 1px solid rgba(127, 127, 127, .4);
+            border-left: .45rem solid #52b54b;
+            border-radius: 1rem;
+            background: rgba(255, 255, 255, .045);
+        }
+
+        .ep-card > summary {
+            cursor: pointer;
+            font-weight: 600;
+            overflow-wrap: anywhere;
+        }
+
+        .ep-folder-row {
+            display: flex;
+            gap: .6rem;
+            align-items: flex-end;
+        }
+
+        .ep-folder-row .inputContainer {
+            flex: 1;
+            margin-bottom: .4rem;
+        }
+
+        .ep-card:not(.ep-show-advanced) .ep-encoder-col {
+            display: none;
+        }
+
+        .ep-derived,
+        .ep-example,
+        .ep-setup {
+            margin: .5rem 0;
+            padding: .6rem .8rem;
+            border-radius: .6rem;
+            background: rgba(255, 255, 255, .04);
+            overflow-wrap: anywhere;
+        }
+
+        .ep-warning {
+            color: #ffb74d;
+        }
+
+        .ep-error {
+            color: #ef5350;
+        }
+
+        .ep-checklist label {
+            display: block;
+            margin: .2rem 0;
+        }
+
+        .ep-checklist label[data-greyed="true"] {
+            opacity: .5;
+        }
+
+        .ep-status-panel {
+            margin-bottom: 1rem;
+            padding: .8rem 1rem;
+            border: 1px solid rgba(127, 127, 127, .3);
+            border-radius: .8rem;
+        }
+
+        .ep-badge {
+            display: inline-block;
+            margin-left: .5rem;
+            padding: 0 .6rem;
+            border-radius: 999px;
+            font-size: .82em;
+            font-weight: 700;
+            background: rgba(127, 127, 127, .25);
+        }
+
+        .ep-badge-ok {
+            background: rgba(82, 181, 75, .35);
+        }
+
+        .ep-badge-warning {
+            background: rgba(255, 183, 77, .35);
+        }
+
+        .ep-badge-error {
+            background: rgba(239, 83, 80, .4);
+        }
+
+        .ep-preview-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: .9em;
+        }
+
+        .ep-preview-table th,
+        .ep-preview-table td {
+            padding: .3rem .5rem;
+            text-align: left;
+            vertical-align: top;
+            border-bottom: 1px solid rgba(127, 127, 127, .2);
+            overflow-wrap: anywhere;
+        }
+
         @media (max-width: 760px) {
             .qg-section-head,
             .qg-policy-card-header {
@@ -572,6 +709,108 @@
                                       placeholder="/media/Movies"></textarea>
                             <div class="fieldDescription">
                                 One per line. Leave empty to apply to every movie library.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="verticalSection" id="encodePrioritySection">
+                        <h2 class="sectionTitle">Encode Priority</h2>
+                        <label class="checkboxContainer">
+                            <input is="emby-checkbox" type="checkbox" id="enableEncodePriority" />
+                            <span>Prioritise encodes for capped viewers</span>
+                        </label>
+                        <p class="fieldDescription">
+                            Writes a list of what capped viewers are watching so your encoder makes those copies first.
+                            Works with jellyfin-encoder 1.5.4 or newer. Playback is not changed.
+                            <a href="https://github.com/GeiserX/quality-gate/blob/main/docs/encode-priority.md" target="_blank" rel="noopener">Setup guide</a>
+                        </p>
+                        <div id="encodePriorityBody" class="ep-body" data-off="true">
+                            <div class="ep-collapsible">
+                                <div class="ep-block">
+                                    <h3 class="ep-block-title">What counts as being watched</h3>
+                                    <p class="fieldDescription">In rank order: the list puts everything from the first line before anything from the second.</p>
+                                    <div class="ep-signal-row">
+                                        <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="epNowPlaying" /><span>1. Playing right now</span></label>
+                                    </div>
+                                    <div class="ep-signal-row">
+                                        <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="epContinueWatching" /><span>2. Continue watching</span></label>
+                                    </div>
+                                    <div class="ep-signal-row">
+                                        <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="epNextUp" /><span>3. Next up,</span></label>
+                                        <input type="number" id="epNextUpDepth" class="emby-input ep-number" min="1" max="20" step="1" aria-label="Episodes ahead" />
+                                        <span>episodes ahead</span>
+                                    </div>
+                                    <div class="ep-signal-row">
+                                        <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="epFavourites" /><span>4. Favourites</span></label>
+                                    </div>
+                                    <div class="ep-signal-row">
+                                        <span>Only count activity from the last</span>
+                                        <input type="number" id="epWatchedWithinDays" class="emby-input ep-number" min="1" max="365" step="1" aria-label="Days of activity" />
+                                        <span>days</span>
+                                    </div>
+                                </div>
+
+                                <div class="ep-block">
+                                    <div class="qg-section-head">
+                                        <div class="qg-section-copy">
+                                            <h3 class="ep-block-title">Encoders</h3>
+                                            <p class="fieldDescription">One per encoder process. Each gets its own list.</p>
+                                        </div>
+                                        <button is="emby-button" type="button" class="raised qg-section-action" id="btnAddEncodeTarget">
+                                            <span>Add encoder</span>
+                                        </button>
+                                    </div>
+                                    <datalist id="epLibraryLocations"></datalist>
+                                    <div id="encodeTargetsContainer"></div>
+                                </div>
+
+                                <div class="ep-block">
+                                    <h3 class="ep-block-title">Refresh</h3>
+                                    <div class="ep-signal-row">
+                                        <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="epRefreshOnPlayback" /><span>Refresh when a capped viewer starts playing, minimum gap</span></label>
+                                        <input type="number" id="epDebounceMinutes" class="emby-input ep-number" min="1" max="240" step="1" aria-label="Minimum gap in minutes" />
+                                        <span>minutes</span>
+                                    </div>
+                                    <p class="fieldDescription">
+                                        Scheduled runs: edit under Dashboard › Scheduled Tasks › <em>Quality Gate: build encode priority lists</em>.
+                                    </p>
+                                    <button is="emby-button" type="button" class="raised" id="btnEncodePriorityRunNow">
+                                        <span>Run now</span>
+                                    </button>
+                                </div>
+
+                                <details class="ep-block" id="epAdvanced">
+                                    <summary class="ep-block-title">Advanced</summary>
+                                    <div class="ep-signal-row">
+                                        <span>Most resumable items per viewer</span>
+                                        <input type="number" id="epContinueWatchingPerUser" class="emby-input ep-number" min="1" max="100" step="1" />
+                                    </div>
+                                    <div class="ep-signal-row">
+                                        <span>Most shows per viewer for next up</span>
+                                        <input type="number" id="epNextUpShowsPerUser" class="emby-input ep-number" min="1" max="50" step="1" />
+                                    </div>
+                                    <div class="ep-signal-row">
+                                        <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="epNextUpIncludeSpecials" /><span>Include specials (season 0) in the lookahead</span></label>
+                                    </div>
+                                    <div class="ep-signal-row">
+                                        <span>Most favourites per viewer</span>
+                                        <input type="number" id="epFavouritesPerUser" class="emby-input ep-number" min="1" max="200" step="1" />
+                                    </div>
+                                    <div class="ep-signal-row">
+                                        <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="epUnprobedNeedsEncode" /><span>Treat a version with no known height as needing an encode (playback is not affected)</span></label>
+                                    </div>
+                                    <div class="ep-signal-row">
+                                        <span>Run budget</span>
+                                        <input type="number" id="epRunBudgetSeconds" class="emby-input ep-number" min="10" max="1800" step="1" />
+                                        <span>seconds; a run that goes over writes nothing and keeps the previous lists</span>
+                                    </div>
+                                </details>
+
+                                <div class="ep-block">
+                                    <h3 class="ep-block-title">Status</h3>
+                                    <div id="encodePriorityStatus"><p class="fieldDescription">Loading status...</p></div>
+                                    <p class="fieldDescription">The encoder applies a new list the next time it picks a file. A running encode is never interrupted.</p>
+                                </div>
                             </div>
                         </div>
                     </div>
