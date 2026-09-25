@@ -33,6 +33,7 @@ instead of appearing twice.
 | [Configuration](docs/configuration.md) | Every setting, how a user's policy is chosen, **and the fields that do not restrict playback** |
 | [How it works](docs/how-it-works.md) | The routes covered, the one that is not, and what to trust |
 | [One library, two qualities](docs/one-library.md) | Keeping a smaller encode beside each original |
+| [Encode priority](docs/encode-priority.md) | Having the encoder make the copies capped viewers are about to watch first |
 | [Troubleshooting](docs/troubleshooting.md) | When it is not behaving |
 
 ## Read this before configuring anything
