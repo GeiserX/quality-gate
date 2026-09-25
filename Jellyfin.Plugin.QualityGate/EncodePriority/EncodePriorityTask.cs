@@ -258,7 +258,7 @@ public sealed class EncodePriorityTask : IScheduledTask
 
         progress?.Report(5);
 
-        var coveredByTarget = new Dictionary<string, List<CoveredRecord>>(StringComparer.Ordinal);
+        var coveredByTarget = new Dictionary<string, (List<CoveredRecord> Covered, List<PendingCover> Pending)>(StringComparer.Ordinal);
         var built = CollectAndBuild(options, runnable, config, libraries, now, progress, cancellationToken, (target, build, token) =>
             coveredByTarget[target.Id] = FindCovered(target, build, state, now, token));
 
@@ -304,6 +304,7 @@ public sealed class EncodePriorityTask : IScheduledTask
                 next.Error = error;
                 next.Entries = previous?.Entries ?? new List<StateEntry>();
                 next.Counts = previous?.Counts ?? new TargetCounts();
+                next.PendingCover = previous?.PendingCover ?? new List<PendingCover>();
                 next.DurationMs = started.ElapsedMilliseconds;
                 state.Targets[target.Id] = next;
                 continue;
@@ -316,11 +317,15 @@ public sealed class EncodePriorityTask : IScheduledTask
                 findings.Add(problem);
             }
 
-            var covered = coveredByTarget.GetValueOrDefault(target.Id) ?? new List<CoveredRecord>();
+            var (covered, pending) = coveredByTarget.TryGetValue(target.Id, out var found)
+                ? found
+                : (new List<CoveredRecord>(), new List<PendingCover>());
             foreach (var record in covered)
             {
                 state.Covered.Add(record);
             }
+
+            next.PendingCover = pending;
 
             build.Counts.Covered = covered.Count;
             var paths = build.Paths;
@@ -677,46 +682,63 @@ public sealed class EncodePriorityTask : IScheduledTask
     /// Finds the items on the previous list that dropped off it because a within-cap version now
     /// exists, as opposed to dropping off because nobody asks for them any more.
     /// </summary>
-    private List<CoveredRecord> FindCovered(EncodeTargetOptions target, TargetBuild build, EncodePriorityState state, DateTime now, CancellationToken cancellationToken)
+    /// <remarks>
+    /// A new version with no height yet counts as within the cap, so the item leaves the list
+    /// before the version is measured. Such an item is kept as pending and checked again on
+    /// later runs, for up to <see cref="CoveredKeptFor"/>, until the height is known.
+    /// </remarks>
+    private (List<CoveredRecord> Covered, List<PendingCover> Pending) FindCovered(EncodeTargetOptions target, TargetBuild build, EncodePriorityState state, DateTime now, CancellationToken cancellationToken)
     {
         var covered = new List<CoveredRecord>();
+        var pending = new List<PendingCover>();
         if (state.Targets.GetValueOrDefault(target.Id) is not { } previous)
         {
-            return covered;
+            return (covered, pending);
         }
 
         var stillListed = build.Entries.Select(e => e.ItemId).ToHashSet();
         var alreadyCovered = state.Covered.Where(c => c.TargetId == target.Id).Select(c => c.ItemId).ToHashSet();
-        foreach (var dropped in previous.Entries.Where(e => !stillListed.Contains(e.ItemId)).GroupBy(e => e.ItemId))
+        var dropped = previous.Entries
+            .Where(e => !stillListed.Contains(e.ItemId))
+            .GroupBy(e => e.ItemId)
+            .Select(g => new PendingCover { ItemId = g.Key, GapCap = g.Max(e => e.GapCap), ListedAt = g.Min(e => e.FirstListedAt), DroppedAt = now })
+            .Concat(previous.PendingCover.Where(p => !stillListed.Contains(p.ItemId) && now - p.DroppedAt < CoveredKeptFor))
+            .DistinctBy(p => p.ItemId);
+        foreach (var item in dropped)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (alreadyCovered.Contains(dropped.Key))
+            if (alreadyCovered.Contains(item.ItemId))
             {
                 continue;
             }
 
-            var gapCap = dropped.Max(e => e.GapCap);
-            var within = _collector.GetVersions(dropped.Key)
-                .Where(v => v.Height is int h && h <= gapCap)
+            var versions = _collector.GetVersions(item.ItemId);
+            var within = versions
+                .Where(v => v.Height is int h && h <= item.GapCap)
                 .OrderByDescending(v => v.Height)
                 .FirstOrDefault();
             if (within is null)
             {
+                if (versions.Any(v => v.Height is null))
+                {
+                    pending.Add(item);
+                }
+
                 continue;
             }
 
             covered.Add(new CoveredRecord
             {
-                ItemId = dropped.Key,
+                ItemId = item.ItemId,
                 TargetId = target.Id,
-                ListedAt = dropped.Min(e => e.FirstListedAt),
+                ListedAt = item.ListedAt,
                 CoveredAt = now,
                 CoveredVersionId = within.Id,
-                GapCap = gapCap,
+                GapCap = item.GapCap,
             });
         }
 
-        return covered;
+        return (covered, pending);
     }
 
     /// <summary>

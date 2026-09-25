@@ -315,6 +315,53 @@ public sealed class EncodePriorityTaskTests : IDisposable
     }
 
     [Fact]
+    public async Task ACopyMeasuredOneRunLate_IsStillRecordedAsCovered()
+    {
+        // A run between the copy appearing and its probe finishing sees no height. The item
+        // leaves the list (an unknown height counts as within the cap) and must be checked
+        // again once the height is known.
+        var original = Path.Combine(_tv, "Show A", "x.mkv");
+        var item = Wants(original, 1080);
+        await NewTask().RunAsync("test", null, CancellationToken.None);
+
+        var copy = Guid.NewGuid();
+        var copyPath = Path.Combine(_tv, "Show A", "x - 720p.mkv");
+        _collector.Demand.Versions[item] = new[] { new VersionInfo(item, original, 1080), new VersionInfo(copy, copyPath, null) };
+        _now = Now.AddHours(1);
+        await NewTask().RunAsync("test", null, CancellationToken.None);
+        Assert.Empty(State().Covered);
+        Assert.Equal(item, Assert.Single(State().Targets["aaaaaaaa-shows"].PendingCover).ItemId);
+
+        _collector.Demand.Versions[item] = new[] { new VersionInfo(item, original, 1080), new VersionInfo(copy, copyPath, 720) };
+        _now = Now.AddHours(2);
+        await NewTask().RunAsync("test", null, CancellationToken.None);
+
+        var covered = Assert.Single(State().Covered);
+        Assert.Equal((item, copy, Now, Now.AddHours(2)), (covered.ItemId, covered.CoveredVersionId, covered.ListedAt, covered.CoveredAt));
+        Assert.Empty(State().Targets["aaaaaaaa-shows"].PendingCover);
+    }
+
+    [Fact]
+    public async Task APendingItemWhoseHeightNeverArrives_IsDroppedAfterAWeek()
+    {
+        var original = Path.Combine(_tv, "Show A", "x.mkv");
+        var item = Wants(original, 1080);
+        await NewTask().RunAsync("test", null, CancellationToken.None);
+
+        _collector.Demand.Versions[item] = new[] { new VersionInfo(item, original, 1080), new VersionInfo(Guid.NewGuid(), Path.Combine(_tv, "Show A", "x - 720p.mkv"), null) };
+        _now = Now.AddHours(1);
+        await NewTask().RunAsync("test", null, CancellationToken.None);
+        _now = Now.AddDays(6);
+        await NewTask().RunAsync("test", null, CancellationToken.None);
+        Assert.Single(State().Targets["aaaaaaaa-shows"].PendingCover);
+
+        _now = Now.AddDays(8);
+        await NewTask().RunAsync("test", null, CancellationToken.None);
+        Assert.Empty(State().Targets["aaaaaaaa-shows"].PendingCover);
+        Assert.Empty(State().Covered);
+    }
+
+    [Fact]
     public async Task AnUnchangedListWithNoCoverForTwoDays_IsFlaggedStuck()
     {
         Wants(Path.Combine(_tv, "Show A", "x.mkv"), 1080);

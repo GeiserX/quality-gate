@@ -91,6 +91,7 @@ internal sealed class EncodePriorityState
             target.Entries ??= new List<StateEntry>();
             target.Findings ??= new List<Finding>();
             target.Counts ??= new TargetCounts();
+            target.PendingCover = (target.PendingCover ?? new List<PendingCover>()).Where(p => p is not null).ToList();
         }
 
         return this;
@@ -173,6 +174,29 @@ internal sealed class TargetState
 
     /// <summary>Gets or sets the findings.</summary>
     public List<Finding> Findings { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets the items that dropped off the list while a version of them had no known
+    /// height yet, so the run could not tell whether they were covered. Each later run checks
+    /// them again until the height is known.
+    /// </summary>
+    public List<PendingCover> PendingCover { get; set; } = new();
+}
+
+/// <summary>An item that left the list before its new version was measured.</summary>
+internal sealed class PendingCover
+{
+    /// <summary>Gets or sets the item.</summary>
+    public Guid ItemId { get; set; }
+
+    /// <summary>Gets or sets the tallest cap for which the item was a gap.</summary>
+    public int GapCap { get; set; }
+
+    /// <summary>Gets or sets when it was first listed.</summary>
+    public DateTime ListedAt { get; set; }
+
+    /// <summary>Gets or sets when it dropped off the list.</summary>
+    public DateTime DroppedAt { get; set; }
 }
 
 /// <summary>The last preview run, which built every enabled encoder's list and wrote nothing.</summary>
