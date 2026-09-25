@@ -170,6 +170,7 @@ Editable via **Dashboard -> Plugins -> Quality Gate**.
 | **Custom Intro Video** | Optional path to intro video for users under this policy. |
 | **If No Match Found** | Dropdown: Block playback (default), or transcode to 480p/720p/1080p/1440p/4K/no cap. Maps to `FallbackTranscode` (bool) + `FallbackMaxHeight` (int) in config. |
 | **Enabled** | Toggle policy on/off |
+| **Play within-cap versions as they are** | Maps to `KeepWithinCapVersionsDirect` (bool, default false). PlaybackInfo phase 1 raises the request's bitrate ceilings to what the item's within-cap versions need, so a bitrate limit alone never transcodes them. Cannot lift Jellyfin's remote client bitrate limit, which is not in the request |
 
 ### Config Model Fields Not Currently Enforced
 

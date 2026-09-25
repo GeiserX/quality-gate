@@ -9,8 +9,10 @@ using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.QualityGate.Configuration;
 using Jellyfin.Plugin.QualityGate.Services;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Dto;
+using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
 using MediaBrowser.Model.Querying;
 using Microsoft.AspNetCore.Http;
@@ -49,6 +51,14 @@ namespace Jellyfin.Plugin.QualityGate.Filters;
 /// or for a transcode that is not held to the cap. A properly negotiated request carries
 /// <c>MaxHeight</c> at or below the cap and passes untouched.
 ///
+/// A policy with <see cref="QualityPolicy.KeepWithinCapVersionsDirect"/> also has phase 1 raise
+/// the client's bitrate ceilings to what the item's within-cap versions need, so a bitrate limit
+/// alone never turns a within-cap file into a smaller transcode of itself. There is deliberately
+/// no delivery-side counterpart that refuses a bitrate-only transcode of a within-cap file:
+/// Jellyfin itself still negotiates one whenever its remote client bitrate limit applies, which
+/// no request can lift, so refusing it would turn a downscale into playback that fails. And such a
+/// transcode never delivers more than the cap, so there is nothing for a refusal to protect.
+///
 /// One route is deliberately NOT covered: the legacy HLS segment route
 /// /Videos/{itemId}/hls/{playlistId}/{segmentId}.{container}. Its <c>itemId</c> is declared but
 /// never read — the file is located purely by <c>segmentId</c>, an MD5 of media path, user
@@ -82,20 +92,31 @@ public class ResolutionCapFilter : IAsyncResourceFilter, IAsyncResultFilter
     /// <summary>Index of the max height inside the legacy <c>params</c> blob.</summary>
     private const int ParamsMaxHeightIndex = 13;
 
+    /// <summary>The PlaybackInfo query parameter and body field that carry the client's ceiling.</summary>
+    private const string MaxStreamingBitrateKey = "MaxStreamingBitrate";
+
     private readonly ILogger<ResolutionCapFilter> _logger;
     private readonly IMediaSourceManager _mediaSourceManager;
+    private readonly ILibraryManager _libraryManager;
+    private readonly IUserManager _userManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ResolutionCapFilter"/> class.
     /// </summary>
     /// <param name="logger">Instance of the <see cref="ILogger{TCategoryName}"/> interface.</param>
     /// <param name="mediaSourceManager">Instance of the <see cref="IMediaSourceManager"/> interface.</param>
+    /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
+    /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     public ResolutionCapFilter(
         ILogger<ResolutionCapFilter> logger,
-        IMediaSourceManager mediaSourceManager)
+        IMediaSourceManager mediaSourceManager,
+        ILibraryManager libraryManager,
+        IUserManager userManager)
     {
         _logger = logger;
         _mediaSourceManager = mediaSourceManager;
+        _libraryManager = libraryManager;
+        _userManager = userManager;
     }
 
     /// <summary>
@@ -442,6 +463,11 @@ public class ResolutionCapFilter : IAsyncResourceFilter, IAsyncResultFilter
                 }),
         });
 
+        if (policy.KeepWithinCapVersionsDirect)
+        {
+            LiftBitrateCeilings(httpContext, root, profile, codecProfiles, policy, userId);
+        }
+
         var bytes = Encoding.UTF8.GetBytes(root.ToJsonString());
         httpContext.Request.Body = new MemoryStream(bytes);
         httpContext.Request.ContentLength = bytes.Length;
@@ -449,6 +475,251 @@ public class ResolutionCapFilter : IAsyncResourceFilter, IAsyncResultFilter
         _logger.LogInformation(
             "QualityGate: capped the negotiated device profile at {Cap}p for user {User} (policy: {Policy})",
             policy.MaxHeight, (object)userId, policy.Name);
+    }
+
+    /// <summary>
+    /// Raises every bitrate ceiling the request itself sets to what the item's within-cap
+    /// versions need, so StreamBuilder judges them on codec, container, audio and subtitles alone.
+    ///
+    /// StreamBuilder's bitrate check comes before everything else: a source above the ceiling is
+    /// ruled out of direct play (<c>ContainerBitrateExceedsLimit</c>) before its codecs are even
+    /// looked at, and a <c>VideoBitrate</c> or <c>AudioBitrate</c> codec condition does the same
+    /// per stream. Relabelling the answer afterwards is therefore not possible, because a
+    /// bitrate-only verdict says nothing about whether the codecs would have played. The ceiling
+    /// has to be lifted before StreamBuilder runs.
+    ///
+    /// Three places set the client's ceiling, and MediaInfoController takes the first present:
+    /// the <c>maxStreamingBitrate</c> query parameter, the body's <c>MaxStreamingBitrate</c>, then
+    /// the device profile's. Each present one below the need is raised to it, never higher, and
+    /// none is ever lowered. A ceiling of zero means none at all and is left alone.
+    ///
+    /// Only within-cap versions set the need, and only versions this request will actually be
+    /// answered with count: the one named by <c>mediaSourceId</c> when there is one, otherwise
+    /// every version the user can see. When an over-cap version shares the answer, phase 2 drops
+    /// it, because a within-cap sibling exists; so the raised ceiling never reaches a version
+    /// above the cap. A request naming an over-cap version gets nothing raised.
+    ///
+    /// StreamBuilder uses the one ceiling for both decisions, so when a codec, container, audio or
+    /// subtitle reason still transcodes a within-cap version, that transcode runs at up to the
+    /// version's own bitrate rather than the client's lower ceiling.
+    ///
+    /// The server's remote client bitrate limit is not in the request, so it cannot be lifted
+    /// here: Jellyfin applies it afterwards, in MediaInfoHelper.GetMaxBitrate.
+    /// </summary>
+    private void LiftBitrateCeilings(
+        HttpContext httpContext,
+        JsonObject root,
+        JsonObject profile,
+        JsonArray codecProfiles,
+        QualityPolicy policy,
+        Guid userId)
+    {
+        // The whole lift is guarded, not only the lookup. The raise steps are the first code to
+        // read the client's own condition objects, and a malformed one (a duplicate key throws on
+        // first access) must not stop the Height condition reaching the body: losing this option
+        // costs a transcode, losing the cap would cost the cap. A raise that already happened is
+        // kept; it only ever raises a ceiling to what a within-cap version needs.
+        try
+        {
+            RaiseForWithinCapVersions(httpContext, root, profile, codecProfiles, policy, userId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "QualityGate: could not lift the bitrate ceiling for the within-cap versions of {Path}; the Height cap still applies",
+                httpContext.Request.Path.Value);
+        }
+    }
+
+    private void RaiseForWithinCapVersions(
+        HttpContext httpContext,
+        JsonObject root,
+        JsonObject profile,
+        JsonArray codecProfiles,
+        QualityPolicy policy,
+        Guid userId)
+    {
+        var withinCap = GetWithinCapSources(httpContext, root, policy, userId);
+        if (withinCap.Count == 0)
+        {
+            return;
+        }
+
+        var raised = false;
+
+        var needed = withinCap.Max(s => s.Bitrate);
+        if (needed.HasValue)
+        {
+            raised |= RaiseQueryCeiling(httpContext, needed.Value);
+            raised |= RaiseNumber(root, MaxStreamingBitrateKey, needed.Value);
+            raised |= RaiseNumber(profile, MaxStreamingBitrateKey, needed.Value);
+        }
+
+        var streams = withinCap.SelectMany(s => s.MediaStreams ?? new List<MediaStream>()).ToArray();
+        raised |= RaiseConditions(codecProfiles, "VideoBitrate", MaxStreamBitrate(streams, MediaStreamType.Video));
+        raised |= RaiseConditions(codecProfiles, "AudioBitrate", MaxStreamBitrate(streams, MediaStreamType.Audio));
+
+        if (raised)
+        {
+            _logger.LogInformation(
+                "QualityGate: raised the bitrate ceiling to what the within-cap versions need ({Bitrate} bps) for user {User} (policy: {Policy}), so a bitrate limit alone does not transcode them",
+                needed, (object)userId, policy.Name);
+        }
+    }
+
+    /// <summary>
+    /// Finds the versions this PlaybackInfo request will be answered with whose known height is
+    /// within the cap. A version with no known height is left out: the required Height condition
+    /// transcodes it at the cap anyway, so it has no ceiling worth raising.
+    /// </summary>
+    private IReadOnlyList<MediaSourceInfo> GetWithinCapSources(
+        HttpContext httpContext,
+        JsonObject root,
+        QualityPolicy policy,
+        Guid userId)
+    {
+        var path = httpContext.Request.Path.Value ?? string.Empty;
+        var itemId = ResolveRouteItemId(httpContext, path);
+        var item = itemId == Guid.Empty ? null : _libraryManager.GetItemById(itemId);
+        if (item is not IHasMediaSources)
+        {
+            return Array.Empty<MediaSourceInfo>();
+        }
+
+        // The same user filter Jellyfin applies when it builds the answer, so a version this user
+        // cannot see never sets the ceiling for the versions they can.
+        var user = userId == Guid.Empty ? null : _userManager.GetUserById(userId);
+        var sources = _mediaSourceManager.GetStaticMediaSources(item, false, user);
+
+        var requested = ReadRequestedMediaSourceId(httpContext.Request.Query, root);
+
+        return sources
+            .Where(s => string.IsNullOrEmpty(requested) || string.Equals(s.Id, requested, StringComparison.OrdinalIgnoreCase))
+            .Where(s => QualityGateService.GetVideoHeight(s) is int height && height <= policy.MaxHeight)
+            .ToArray();
+    }
+
+    /// <summary>
+    /// Reads the version a PlaybackInfo request asks about. MediaInfoController takes the query
+    /// value and falls back to the body's only when the query carries none.
+    /// </summary>
+    private static string? ReadRequestedMediaSourceId(IQueryCollection query, JsonObject root)
+    {
+        if (query.TryGetValue("mediaSourceId", out var fromQuery) && !string.IsNullOrEmpty(fromQuery.FirstOrDefault()))
+        {
+            return fromQuery.FirstOrDefault();
+        }
+
+        return ReadString(root["MediaSourceId"]);
+    }
+
+    private static int? MaxStreamBitrate(IEnumerable<MediaStream> streams, MediaStreamType type)
+    {
+        return streams.Where(s => s != null && s.Type == type).Max(s => s.BitRate);
+    }
+
+    /// <summary>
+    /// Raises the <c>maxStreamingBitrate</c> query value when it is present and below the need.
+    /// Model binding reads <see cref="HttpRequest.Query"/> after this filter, so replacing the
+    /// collection here is what the action binds.
+    /// </summary>
+    private static bool RaiseQueryCeiling(HttpContext httpContext, int needed)
+    {
+        var query = httpContext.Request.Query;
+        if (!query.TryGetValue(MaxStreamingBitrateKey, out var values)
+            || !long.TryParse(values.FirstOrDefault(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var current)
+            || current <= 0
+            || current >= needed)
+        {
+            return false;
+        }
+
+        var rewritten = query.ToDictionary(kvp => kvp.Key, kvp => kvp.Value, StringComparer.OrdinalIgnoreCase);
+        rewritten[MaxStreamingBitrateKey] = needed.ToString(CultureInfo.InvariantCulture);
+        httpContext.Request.Query = new QueryCollection(rewritten);
+        return true;
+    }
+
+    /// <summary>
+    /// Raises a numeric ceiling on a JSON object when it is present, positive and below the need.
+    /// </summary>
+    private static bool RaiseNumber(JsonObject owner, string property, int needed)
+    {
+        var current = ReadNumber(owner[property]);
+        if (current is not > 0 || current.Value >= needed)
+        {
+            return false;
+        }
+
+        owner[property] = needed;
+        return true;
+    }
+
+    /// <summary>
+    /// Raises every <c>LessThanEqual</c> condition on <paramref name="property"/> in the codec
+    /// profiles to <paramref name="needed"/> when it is below it. Only <c>Conditions</c> are
+    /// touched: <c>ApplyConditions</c> decide which profile applies, not what it allows.
+    /// </summary>
+    private static bool RaiseConditions(JsonArray codecProfiles, string property, int? needed)
+    {
+        if (!needed.HasValue)
+        {
+            return false;
+        }
+
+        var raised = false;
+        foreach (var codecProfile in codecProfiles.OfType<JsonObject>())
+        {
+            if (codecProfile["Conditions"] is not JsonArray conditions)
+            {
+                continue;
+            }
+
+            foreach (var condition in conditions.OfType<JsonObject>())
+            {
+                if (!string.Equals(ReadString(condition["Property"]), property, StringComparison.OrdinalIgnoreCase)
+                    || !string.Equals(ReadString(condition["Condition"]), "LessThanEqual", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var current = ReadNumber(condition["Value"]);
+                if (current.HasValue && current.Value < needed.Value)
+                {
+                    condition["Value"] = needed.Value.ToString(CultureInfo.InvariantCulture);
+                    raised = true;
+                }
+            }
+        }
+
+        return raised;
+    }
+
+    private static string? ReadString(JsonNode? node)
+    {
+        return node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
+    }
+
+    /// <summary>
+    /// Reads a JSON number, or a string holding one: Jellyfin reads numbers from strings too.
+    /// </summary>
+    private static long? ReadNumber(JsonNode? node)
+    {
+        if (node is not JsonValue value)
+        {
+            return null;
+        }
+
+        if (value.TryGetValue<long>(out var number))
+        {
+            return number;
+        }
+
+        return value.TryGetValue<string>(out var text)
+               && long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out number)
+            ? number
+            : null;
     }
 
     /// <summary>

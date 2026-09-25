@@ -68,6 +68,52 @@ the 720p encode ahead of the original plays the encode, which is the opposite of
 unrestricted user should get. The same order is applied to the item response, because that list
 is what fills the version picker.
 
+### Within-cap versions played as they are
+
+A per-policy option, off by default, changes one thing about negotiation. It is
+`KeepWithinCapVersionsDirect` in the config and **Play within-cap versions as they are** on the
+policy card.
+
+Without it, a client whose maximum streaming bitrate is below a within-cap file's bitrate gets
+that file as a smaller transcode of itself. Jellyfin's `StreamBuilder` checks the bitrate before
+it looks at codecs, and rules the file out of direct play for `ContainerBitrateExceedsLimit`
+alone. A `VideoBitrate` or `AudioBitrate` codec condition does the same per stream, as
+`VideoBitrateNotSupported` or `AudioBitrateNotSupported`.
+
+With it on, the body rewrite also raises every bitrate ceiling the request sets to exactly what
+the item's within-cap versions need: the `maxStreamingBitrate` query value, the body's
+`MaxStreamingBitrate`, the device profile's, and any `VideoBitrate` or `AudioBitrate` codec
+condition. A ceiling already high enough is left as it is, and none is lowered. The file then
+direct plays unless a codec, container, audio or subtitle reason remains. When one does, it
+still transcodes, at up to the file's own bitrate rather than the client's lower ceiling, because
+`StreamBuilder` uses one ceiling for both decisions.
+
+Only versions with a known height within the cap set the ceiling, and only versions the answer
+will contain: the one named by `mediaSourceId`, or otherwise every version the user can see. An
+over-cap version in the same answer is dropped by the response rewrite below, so the raised
+ceiling never reaches it. A request naming an over-cap version, and an item with no within-cap
+version, are negotiated exactly as before. If measuring the versions or raising a ceiling fails,
+for example on a malformed condition in the client's profile, the error is logged, the ceilings
+stay as far as they got, and the `Height` cap is still written.
+
+The option has a small cost on each play start of a user under that policy: one item lookup, one
+user lookup and one read of the item's media sources, streams included, before Jellyfin reads
+the same sources again to build its answer. Policies without the option pay nothing.
+
+The option cannot lift Jellyfin's remote client bitrate limit, set per user or for the whole
+server. That limit is not part of the request. The server applies it after reading the request,
+so a remote viewer still gets a within-cap file as a bitrate transcode when the file is above
+the limit. Raise or clear the limit if within-cap files should reach remote viewers as they are.
+
+Delivery has no matching refusal. A transcode URL carries its `TranscodeReasons`, so the filter
+could recognise a bitrate-only HLS request for a within-cap file and refuse it. It does not.
+Jellyfin negotiates exactly that URL whenever the remote limit applies, so a refusal would turn
+a smaller picture into playback that fails. Such a transcode also never delivers more than the
+cap, so a refusal would protect nothing.
+
+A player's manual quality choice reaches the server as the same ceiling, so with the option on,
+picking a lower quality no longer shrinks a within-cap file.
+
 ### Direct delivery
 
 These routes hand back bytes without asking anything, so negotiation cannot gate them. They are
