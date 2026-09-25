@@ -82,8 +82,9 @@ internal interface ICandidateCollector
     /// <param name="users">The viewers to query; idle ones are skipped.</param>
     /// <param name="nowUtc">The current time.</param>
     /// <param name="cancellationToken">Stops the run between viewers and between items.</param>
+    /// <param name="into">The demand to fill, so a caller still sees how far a cancelled run got.</param>
     /// <returns>The demand.</returns>
-    CollectedDemand Collect(EncodePriorityOptions options, IReadOnlyList<User> users, DateTime nowUtc, CancellationToken cancellationToken);
+    CollectedDemand Collect(EncodePriorityOptions options, IReadOnlyList<User> users, DateTime nowUtc, CancellationToken cancellationToken, CollectedDemand? into = null);
 
     /// <summary>Measures every version of one item, for the check that a listed item is now covered.</summary>
     /// <param name="itemId">The item.</param>
@@ -138,9 +139,9 @@ internal sealed class CandidateCollector : ICandidateCollector
     internal static bool IsIdle(DateTime? lastActivity, DateTime cutoffUtc) => !lastActivity.HasValue || lastActivity.Value < cutoffUtc;
 
     /// <inheritdoc />
-    public CollectedDemand Collect(EncodePriorityOptions options, IReadOnlyList<User> users, DateTime nowUtc, CancellationToken cancellationToken)
+    public CollectedDemand Collect(EncodePriorityOptions options, IReadOnlyList<User> users, DateTime nowUtc, CancellationToken cancellationToken, CollectedDemand? into = null)
     {
-        var demand = new CollectedDemand();
+        var demand = into ?? new CollectedDemand();
         var cutoff = nowUtc.AddDays(-options.WatchedWithinDays);
         var run = new Run(this, options, demand);
         var sessions = options.NowPlaying ? _sessionManager.Sessions.ToList() : new List<SessionInfo>();

@@ -24,6 +24,12 @@ internal sealed class EncodePriorityState
     /// <summary>Gets or sets every priority file the plugin has written and not yet removed.</summary>
     public List<string> WrittenFiles { get; set; } = new();
 
+    /// <summary>Gets or sets the last run of each target, keyed by target id.</summary>
+    public Dictionary<string, TargetState> Targets { get; set; } = new();
+
+    /// <summary>Gets or sets the listed items that have since gained a within-cap version, newest last.</summary>
+    public List<CoveredRecord> Covered { get; set; } = new();
+
     /// <summary>Loads the state, or starts empty when there is none or it cannot be read.</summary>
     /// <param name="path">The state file.</param>
     /// <param name="error">Why an existing file could not be read.</param>
@@ -67,6 +73,15 @@ internal sealed class EncodePriorityState
     internal EncodePriorityState Normalized()
     {
         WrittenFiles = (WrittenFiles ?? new List<string>()).Where(p => !string.IsNullOrEmpty(p)).Distinct(StringComparer.Ordinal).ToList();
+        Targets ??= new Dictionary<string, TargetState>();
+        Covered = (Covered ?? new List<CoveredRecord>()).Where(c => c is not null).ToList();
+        foreach (var target in Targets.Values.Where(t => t is not null))
+        {
+            target.Entries ??= new List<StateEntry>();
+            target.Findings ??= new List<Finding>();
+            target.Counts ??= new TargetCounts();
+        }
+
         return this;
     }
 }
@@ -107,4 +122,100 @@ internal static class CleanupPass
 
         return results;
     }
+}
+
+/// <summary>The last run of one target, as the status panel shows it.</summary>
+internal sealed class TargetState
+{
+    /// <summary>Gets or sets the target's name at the time of the run.</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the file the target writes, as Jellyfin sees it.</summary>
+    public string? OutputPath { get; set; }
+
+    /// <summary>Gets or sets when the last run started.</summary>
+    public DateTime? LastRunUtc { get; set; }
+
+    /// <summary>Gets or sets what started it: scheduled, startup, library scan, playback, settings saved.</summary>
+    public string Trigger { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets how long the run took.</summary>
+    public long DurationMs { get; set; }
+
+    /// <summary>Gets or sets the badge: OK, Unchanged, Warning, Error, TimedOut or DryRun.</summary>
+    public string Result { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the error, when the result is Error.</summary>
+    public string? Error { get; set; }
+
+    /// <summary>Gets or sets when the file was last written, heartbeat included.</summary>
+    public DateTime? LastWriteUtc { get; set; }
+
+    /// <summary>Gets or sets when the list's paths last changed.</summary>
+    public DateTime? LastChangeUtc { get; set; }
+
+    /// <summary>Gets or sets the list as last built, in file order.</summary>
+    public List<StateEntry> Entries { get; set; } = new();
+
+    /// <summary>Gets or sets the counts.</summary>
+    public TargetCounts Counts { get; set; } = new();
+
+    /// <summary>Gets or sets the findings.</summary>
+    public List<Finding> Findings { get; set; } = new();
+}
+
+/// <summary>One listed file in the state, with when it first appeared.</summary>
+internal sealed class StateEntry
+{
+    /// <summary>Gets or sets the path as the encoder sees it.</summary>
+    public string Path { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the item a viewer asked for.</summary>
+    public Guid ItemId { get; set; }
+
+    /// <summary>Gets or sets the version the file is.</summary>
+    public Guid VersionId { get; set; }
+
+    /// <summary>Gets or sets that version's height.</summary>
+    public int? Height { get; set; }
+
+    /// <summary>Gets or sets the tallest cap for which the item was a gap.</summary>
+    public int GapCap { get; set; }
+
+    /// <summary>Gets or sets the tier.</summary>
+    public int Tier { get; set; }
+
+    /// <summary>Gets or sets the depth.</summary>
+    public int Depth { get; set; }
+
+    /// <summary>Gets or sets how many viewers asked for it.</summary>
+    public int Users { get; set; }
+
+    /// <summary>Gets or sets when it was first listed.</summary>
+    public DateTime FirstListedAt { get; set; }
+
+    /// <summary>Gets or sets why it is listed.</summary>
+    public List<string> Reasons { get; set; } = new();
+}
+
+/// <summary>A listed item that gained a within-cap version.</summary>
+internal sealed class CoveredRecord
+{
+    /// <summary>Gets or sets the item.</summary>
+    public Guid ItemId { get; set; }
+
+    /// <summary>Gets or sets the target whose list it was on.</summary>
+    public string TargetId { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets when it was first listed.</summary>
+    public DateTime ListedAt { get; set; }
+
+    /// <summary>Gets or sets when a run found the within-cap version.</summary>
+    public DateTime CoveredAt { get; set; }
+
+    /// <summary>Gets or sets the within-cap version playback is expected to serve.</summary>
+    public Guid CoveredVersionId { get; set; }
+
+    /// <summary>Gets or sets the tallest cap for which the item was a gap.</summary>
+    public int GapCap { get; set; }
 }
