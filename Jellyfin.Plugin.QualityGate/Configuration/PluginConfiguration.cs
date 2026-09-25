@@ -226,6 +226,16 @@ public class QualityPolicy
     /// Only applies when <see cref="FallbackTranscode"/> is enabled.
     /// </summary>
     public int FallbackMaxBitrateKbps { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether a version within <see cref="MaxHeight"/> is played
+    /// as it is when a bitrate limit is the only thing that would transcode it.
+    /// A client's maximum streaming bitrate would otherwise turn a within-cap file into a smaller
+    /// transcode of itself. A codec, container, audio or subtitle the client cannot handle still
+    /// transcodes, and a version above the cap is never affected. Off by default, so upgrading
+    /// changes no playback until an admin turns it on.
+    /// </summary>
+    public bool KeepWithinCapVersionsDirect { get; set; }
 }
 
 /// <summary>

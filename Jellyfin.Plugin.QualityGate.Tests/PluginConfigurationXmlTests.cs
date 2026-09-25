@@ -59,6 +59,37 @@ public sealed class PluginConfigurationXmlTests : IDisposable
         Assert.Equal(userId, assignment.UserId);
     }
 
+    [Fact]
+    public void KeepWithinCapVersionsDirect_SurvivesRepeatedRestarts_PerPolicy()
+    {
+        var config = new PluginConfiguration
+        {
+            Policies = new List<QualityPolicy>
+            {
+                new() { Id = "on", Name = "Direct", MaxHeight = 720, KeepWithinCapVersionsDirect = true },
+                new() { Id = "off", Name = "Default", MaxHeight = 720 },
+            },
+        };
+
+        for (var i = 0; i < 3; i++)
+        {
+            config = _store.SaveAndReload(config);
+        }
+
+        Assert.True(config.Policies.Single(p => p.Id == "on").KeepWithinCapVersionsDirect);
+        Assert.False(config.Policies.Single(p => p.Id == "off").KeepWithinCapVersionsDirect);
+    }
+
+    [Fact]
+    public void ConfigFromBeforeKeepWithinCapVersionsDirect_LoadsWithTheOptionOff()
+    {
+        _store.WriteXml(ReleaseXml(string.Empty));
+
+        var policy = Assert.Single(_store.Load().Policies);
+
+        Assert.False(policy.KeepWithinCapVersionsDirect);
+    }
+
     // XmlSerializer adds loaded items to a list its initialiser already filled, so a list that
     // starts with the default gains another copy of it on every save and restart.
     [Fact]
