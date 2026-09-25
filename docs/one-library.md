@@ -39,8 +39,8 @@ In **Dashboard, Plugins, QualityGate**, under **Version Grouping**:
 
 1. Tick **Enable version grouping**.
 2. Optionally list **library paths**, one per line. Leave empty to apply to every movie library.
-3. Set the **suffixes** that mark an encoded copy, one per line. The default is ` - 720p`,
-   including the leading space and hyphen.
+3. Set the **suffixes** that mark an encoded copy, one per line. Leave the box empty to use the
+   default, ` - 720p`, including the leading space and hyphen.
 4. Save, then run a library scan.
 
 It is off by default because it changes how a library resolves, which should be a deliberate
@@ -95,7 +95,6 @@ these is true:
 - The library is not a **movies** library.
 - The folder is not under one of your configured paths.
 - The folder holds fewer than two files.
-- Your suffix list is empty.
 - The folder contains a `.iso`, `.img` or `.strm` file. Jellyfin inspects these to set
   `VideoType` and `IsoType`, so the whole folder is left alone.
 - After ignoring samples, fewer than two candidate files remain.
