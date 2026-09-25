@@ -93,6 +93,20 @@ public sealed class ConfigPageHeightOptionsTests : IDisposable
         Assert.Equal("off", SelectedValue(options));
     }
 
+    // The within-cap toggle sits in the same Playback Behavior footer as the dropdowns above.
+    [Fact]
+    public void KeepDirectToggle_ShowsTheSavedValue()
+    {
+        var on = Evaluate("page.buildKeepDirectToggle({ KeepWithinCapVersionsDirect: true }, 2)");
+        var off = Evaluate("page.buildKeepDirectToggle({ KeepWithinCapVersionsDirect: false }, 2)");
+        var older = Evaluate("page.buildKeepDirectToggle({}, 2)");
+
+        Assert.Contains("Play within-cap versions as they are", on, StringComparison.Ordinal);
+        Assert.Contains("id=\"policy-keep-direct-2\" checked", on, StringComparison.Ordinal);
+        Assert.DoesNotContain("checked", off, StringComparison.Ordinal);
+        Assert.DoesNotContain("checked", older, StringComparison.Ordinal);
+    }
+
     /// <summary>Reads the value the browser would report for a rendered dropdown.</summary>
     private static string SelectedValue(string options)
     {

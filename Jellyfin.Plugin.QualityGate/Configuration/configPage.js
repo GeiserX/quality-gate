@@ -281,6 +281,20 @@ export function buildFallbackOptions(policy) {
     return html + buildOption(0, 'Transcode (no resolution cap)', enabled && selected === 0);
 }
 
+/** Builds the per-policy toggle that keeps within-cap versions out of bitrate-only transcodes. */
+export function buildKeepDirectToggle(policy, index) {
+    var id = 'policy-keep-direct-' + index;
+
+    return '<div class="checkboxContainer checkboxContainer-withDescription qg-policy-toggle">' +
+        '<label>' +
+            '<input is="emby-checkbox" type="checkbox" class="policy-keep-direct" id="' + id + '" ' +
+                (policy.KeepWithinCapVersionsDirect ? 'checked' : '') + ' />' +
+            '<span>Play within-cap versions as they are</span>' +
+        '</label>' +
+        '<div class="fieldDescription">A version already within the maximum resolution is no longer transcoded just to meet a client\'s bitrate limit; a codec, audio or subtitle the client cannot play still transcodes it.</div>' +
+    '</div>';
+}
+
 function buildPathField(policy, policyIndex, listName) {
     var key = getFieldKey(listName);
     var rows = getPathRows(policy[key] || []);
@@ -560,6 +574,7 @@ function renderPolicies(view) {
                         '</label>' +
                         '<div class="fieldDescription">Disable this policy without deleting its rules.</div>' +
                     '</div>' +
+                    buildKeepDirectToggle(policy, index) +
                     '<div class="qg-policy-actions">' +
                         '<button is="emby-button" type="button" class="raised qg-delete-btn btnDeletePolicy qg-policy-delete" ' +
                             'style="background:#c62828 !important;color:#fff !important;border-color:#c62828 !important;" ' +
@@ -907,6 +922,7 @@ function collectFromDOM(view) {
         config.Policies[index].FallbackMaxHeight = fallbackVal !== 'off' ? toHeight(fallbackVal) : 0;
         config.Policies[index].FallbackMaxBitrateKbps = parseInt(card.querySelector('.policy-fallback-bitrate').value, 10) || 0;
         config.Policies[index].Enabled = card.querySelector('.policy-enabled').checked;
+        config.Policies[index].KeepWithinCapVersionsDirect = card.querySelector('.policy-keep-direct').checked;
     });
 
     config.DefaultPolicyId = view.querySelector('#defaultPolicySelect').value;
@@ -957,6 +973,7 @@ function addPolicy(view) {
         FallbackTranscode: false,
         FallbackMaxHeight: 0,
         FallbackMaxBitrateKbps: 0,
+        KeepWithinCapVersionsDirect: false,
         BlockedMessageHeader: 'Quality Restricted',
         BlockedMessageText: 'This quality version is not available for your account.',
         BlockedMessageTimeoutMs: 8000,
@@ -1076,6 +1093,7 @@ function loadConfig(view) {
             policy.FallbackTranscode = policy.FallbackTranscode || false;
             policy.FallbackMaxHeight = policy.FallbackMaxHeight || 0;
             policy.FallbackMaxBitrateKbps = policy.FallbackMaxBitrateKbps || 0;
+            policy.KeepWithinCapVersionsDirect = policy.KeepWithinCapVersionsDirect || false;
         });
         normalizeEncodePriority(config);
         return Promise.all([ApiClient.getUsers(), loadLibraryLocations()]);
