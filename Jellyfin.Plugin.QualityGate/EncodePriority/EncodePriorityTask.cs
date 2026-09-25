@@ -770,16 +770,20 @@ public sealed class EncodePriorityTask : IScheduledTask
     }
 
     /// <summary>
-    /// Folds the plays the playback handler noted into the covered records: a play on a version
-    /// within the viewer's cap is the end-to-end proof (served); a play on a version above it means
-    /// Quality Gate did not offer the within-cap version, which is a bug worth flagging.
+    /// Folds the plays the playback handler noted into the covered records: a play of the covered
+    /// version within the viewer's cap is the end-to-end proof (served); a play on a version above
+    /// the viewer's cap, when the item has a version within it, means Quality Gate did not offer
+    /// that version, which is a bug worth flagging.
     /// </summary>
     /// <remarks>
     /// Each version's height is measured the way playback measures it, once per item per run. A
     /// version with no known height counts as within the cap, as it does in playback. A play that
     /// does not say which version it used, names a version the item does not have, or happened
-    /// before the item was covered proves nothing and is dropped. The first served play and the
-    /// first over-cap play of each record are kept.
+    /// before the item was covered proves nothing and is dropped. So does a within-cap play of
+    /// another version (a viewer with a higher cap on the original), which says nothing about the
+    /// copy, and an over-cap play by a viewer capped below every version the item has, which is a
+    /// correct transcode. The first served play and the first over-cap play of each record are
+    /// kept.
     /// </remarks>
     /// <param name="state">The state, updated in place.</param>
     /// <param name="plays">The plays, oldest first.</param>
@@ -809,10 +813,13 @@ public sealed class EncodePriorityTask : IScheduledTask
 
                 if (version.Height is not int height || height <= play.Cap)
                 {
-                    record.ServedAt ??= play.PlayedAt;
-                    record.ServedVersionId ??= played;
+                    if (played == record.CoveredVersionId)
+                    {
+                        record.ServedAt ??= play.PlayedAt;
+                        record.ServedVersionId ??= played;
+                    }
                 }
-                else if (record.ServedOverCapAt is null)
+                else if (record.ServedOverCapAt is null && known.Any(v => v.Height is int h && h <= play.Cap))
                 {
                     record.ServedOverCapAt = play.PlayedAt;
                     record.ServedOverCapVersionId = played;

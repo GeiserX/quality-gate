@@ -233,14 +233,16 @@ a run would write now. To follow one item end to end:
 The plugin tracks the last three steps itself. A run that finds a listed item has gained a
 version within the cap records it as covered. When a capped viewer then starts that item, the
 plugin notes which version was played, and the next run records it as served if that version is
-within the viewer's cap. Each encoder's status shows the result:
+the new copy and it is within the viewer's cap. Each encoder's status shows the result:
 
 ```text
 Last 7 days: 34 listed · 29 covered (median 3 h 10 m) · 21 served within cap · 0 played over the cap
 ```
 
 "Played over the cap" should stay at 0. A covered item played on a version above the viewer's
-cap means Quality Gate did not offer the smaller version, and the run reports `ServedOverCap`.
+cap, when the item has a version within it, means Quality Gate did not offer that version, and
+the run reports `ServedOverCap`. A viewer capped below every version (a 480p viewer on an item
+whose smallest copy is 720p) gets a transcode, which is correct and is not counted.
 Plays are held in memory until the next run, so a restart in between loses them; the item still
 counts as covered.
 
@@ -260,7 +262,7 @@ counts as covered.
 | `WriteFailed` | The file could not be written, often a read-only media mount. Switch to the Data folder. |
 | `Stuck` | The same list has sat unchanged for two days and none of its items was covered. Check `PRIORITY_FILE`, `SOURCE_FOLDER` and the encoder's reload line above. |
 | `TimedOut` | The run went over its budget and kept the previous list. Lower Next Up shows per viewer or depth. |
-| `ServedOverCap` | A capped viewer played a covered item on a version above their cap, although a smaller version exists. That is a Quality Gate bug; report it with the item ids the finding lists. It stays for 7 days after the item was covered. |
+| `ServedOverCap` | A capped viewer played a covered item on a version above their cap, although a version within their cap exists. That is a Quality Gate bug; report it with the item ids the finding lists. It stays for 7 days after the item was covered. |
 
 The page reads two admin-only routes the plugin adds. `GET /QualityGate/EncodePriority/Status`
 returns what the scheduled task keeps in

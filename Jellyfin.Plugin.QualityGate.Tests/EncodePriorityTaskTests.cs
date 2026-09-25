@@ -480,6 +480,44 @@ public sealed class EncodePriorityTaskTests : IDisposable
     }
 
     [Fact]
+    public async Task AViewerCappedBelowEveryVersion_IsACorrectTranscode_NotServedOverCap()
+    {
+        // Every capped viewer's play of a covered item is noted, not only the viewers the copy
+        // was made for. With no version within 480, a transcode of the 720p copy is correct.
+        var (item, copy) = await CoverAnItem();
+
+        EncodePriorityRuntime.RecordServed(new ServedPlay(item, copy, 480, Now.AddHours(4)));
+        EncodePriorityRuntime.RecordServed(new ServedPlay(item, item, 480, Now.AddHours(4)));
+        _now = Now.AddHours(5);
+        await NewTask().RunAsync("test", null, CancellationToken.None);
+
+        var covered = Assert.Single(State().Covered);
+        Assert.Null(covered.ServedOverCapAt);
+        Assert.Null(covered.ServedAt);
+        Assert.DoesNotContain(State().Targets["aaaaaaaa-shows"].Findings, f => f.Code == "ServedOverCap");
+    }
+
+    [Fact]
+    public async Task AWithinCapPlayOfAnotherVersion_DoesNotCountAsServed()
+    {
+        // A viewer capped at 1080 playing the 1080p original never needed the 720p copy, so
+        // the play proves nothing about it.
+        var (item, copy) = await CoverAnItem();
+
+        EncodePriorityRuntime.RecordServed(new ServedPlay(item, item, 1080, Now.AddHours(4)));
+        _now = Now.AddHours(5);
+        await NewTask().RunAsync("test", null, CancellationToken.None);
+        Assert.Null(Assert.Single(State().Covered).ServedAt);
+
+        EncodePriorityRuntime.RecordServed(new ServedPlay(item, copy, 720, Now.AddHours(6)));
+        _now = Now.AddHours(7);
+        await NewTask().RunAsync("test", null, CancellationToken.None);
+        var covered = Assert.Single(State().Covered);
+        Assert.Equal(Now.AddHours(6), covered.ServedAt);
+        Assert.Equal(copy, covered.ServedVersionId);
+    }
+
+    [Fact]
     public async Task APlayThatCannotProveAnything_IsDropped()
     {
         var (item, copy) = await CoverAnItem();
