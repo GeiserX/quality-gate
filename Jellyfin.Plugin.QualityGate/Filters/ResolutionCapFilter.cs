@@ -514,22 +514,33 @@ public class ResolutionCapFilter : IAsyncResourceFilter, IAsyncResultFilter
         QualityPolicy policy,
         Guid userId)
     {
-        IReadOnlyList<MediaSourceInfo> withinCap;
+        // The whole lift is guarded, not only the lookup. The raise steps are the first code to
+        // read the client's own condition objects, and a malformed one (a duplicate key throws on
+        // first access) must not stop the Height condition reaching the body: losing this option
+        // costs a transcode, losing the cap would cost the cap. A raise that already happened is
+        // kept; it only ever raises a ceiling to what a within-cap version needs.
         try
         {
-            withinCap = GetWithinCapSources(httpContext, root, policy, userId);
+            RaiseForWithinCapVersions(httpContext, root, profile, codecProfiles, policy, userId);
         }
         catch (Exception ex)
         {
-            // Nothing has been changed yet, and the Height condition must still reach the body:
-            // losing this option costs a transcode, losing the cap would cost the cap.
             _logger.LogError(
                 ex,
-                "QualityGate: could not measure the within-cap versions for {Path} — leaving the bitrate ceiling as the client sent it",
+                "QualityGate: could not lift the bitrate ceiling for the within-cap versions of {Path}; the Height cap still applies",
                 httpContext.Request.Path.Value);
-            return;
         }
+    }
 
+    private void RaiseForWithinCapVersions(
+        HttpContext httpContext,
+        JsonObject root,
+        JsonObject profile,
+        JsonArray codecProfiles,
+        QualityPolicy policy,
+        Guid userId)
+    {
+        var withinCap = GetWithinCapSources(httpContext, root, policy, userId);
         if (withinCap.Count == 0)
         {
             return;

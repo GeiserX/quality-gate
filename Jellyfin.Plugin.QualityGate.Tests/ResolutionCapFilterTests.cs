@@ -1423,4 +1423,26 @@ public class ResolutionCapFilterTests : IDisposable
         Assert.Equal(4_000_000, BodyCeiling(httpContext));
         AssertLoggedAtLeastOnce(LogLevel.Error);
     }
+
+    [Fact]
+    public async Task WhenAClientConditionIsMalformed_TheHeightCapStillReachesTheProfile()
+    {
+        // A duplicate key throws the first time the condition object is read, and the raise
+        // steps are the first code to read it. The cap must still be written.
+        UseDirectWithinCapPolicy(keepDirect: true);
+        SetItemVersions(Version(OverCapId, 2160, 40_000_000, "mkv", "hevc"), Version(WithinCapId, 720, 8_000_000));
+        var body = BrowserBody.Replace(
+            "\"CodecProfiles\": []",
+            "\"CodecProfiles\": [ { \"Type\": \"Video\", \"Conditions\": [ { \"Condition\": \"LessThanEqual\", \"Property\": \"VideoBitrate\", \"Value\": \"1\", \"Value\": \"2\" } ] } ]",
+            StringComparison.Ordinal);
+        Assert.NotEqual(BrowserBody, body);
+
+        var httpContext = await NegotiateAsync(body);
+
+        var written = ReadBody(httpContext);
+        Assert.NotEqual(body, written);
+        Assert.Contains("\"Property\":\"Height\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"Value\":\"720\"", written, StringComparison.Ordinal);
+        AssertLoggedAtLeastOnce(LogLevel.Error);
+    }
 }

@@ -92,7 +92,9 @@ Only versions with a known height within the cap set the ceiling, and only versi
 will contain: the one named by `mediaSourceId`, or otherwise every version the user can see. An
 over-cap version in the same answer is dropped by the response rewrite below, so the raised
 ceiling never reaches it. A request naming an over-cap version, and an item with no within-cap
-version, are negotiated exactly as before.
+version, are negotiated exactly as before. If measuring the versions or raising a ceiling fails,
+for example on a malformed condition in the client's profile, the error is logged, the ceilings
+stay as far as they got, and the `Height` cap is still written.
 
 The option cannot lift Jellyfin's remote client bitrate limit, set per user or for the whole
 server. That limit is not part of the request. The server applies it after reading the request,
