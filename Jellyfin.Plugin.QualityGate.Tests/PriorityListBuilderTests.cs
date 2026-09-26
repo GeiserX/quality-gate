@@ -374,6 +374,38 @@ public class PriorityListBuilderTests
     }
 
     [Fact]
+    public void Unmapped_GapAnotherEncoderMapsButDoesNotCountTheViewer_StillCounts()
+    {
+        // The film encoder serves only another viewer, so it never lists these films: its folder
+        // holding them does not make them its gaps.
+        var shows = new EncodeTarget { Id = "t1", Name = "Shows", Folders = new List<EncodeFolderMapping> { new() { JellyfinPath = "/media/tv" } } };
+        var films = new EncodeTarget
+        {
+            Id = "t2",
+            Name = "Films",
+            AudienceMode = "Users",
+            AudienceUserIds = new List<Guid> { V1080.Id },
+            Folders = new List<EncodeFolderMapping> { new() { JellyfinPath = "/media/films" } },
+        };
+        var options = Options(shows, films);
+        var demand = new Demand();
+        for (var i = 0; i < 7; i++)
+        {
+            demand.Ask(demand.Item($"/media/films/Film {i}.mkv", 1080), V720);
+        }
+
+        demand.Ask(demand.Item("/media/tv/Show A/x.mkv", 1080), V720);
+        var libraries = new[] { new LibraryFolder("Shows", new[] { "/media/tv" }), new LibraryFolder("Films", new[] { "/media/films" }) };
+
+        var showBuild = Build(options.Targets[0], demand, options, libraries);
+        var filmBuild = Build(options.Targets[1], demand, options, libraries);
+
+        Assert.Empty(filmBuild.Entries);
+        Assert.Equal((8, 7), (showBuild.Counts.Gaps, showBuild.Counts.Unmapped));
+        Assert.Single(showBuild.Findings, f => f.Code == "MostlyUnmapped");
+    }
+
+    [Fact]
     public void ResolveSymlinks_MapsTheTargetAndCountsFailures()
     {
         var demand = new Demand();

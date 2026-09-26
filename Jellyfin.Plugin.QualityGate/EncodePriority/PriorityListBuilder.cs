@@ -296,6 +296,14 @@ internal static class PriorityListBuilder
 
         build.Counts.DemandItems = demanded.Count;
 
+        // The encoders that write a list, with the viewers each counts, for telling this
+        // encoder's unmapped gaps from gaps another encoder lists.
+        var others = options.RunnableTargets
+            .Where(other => other.Id != target.Id && !other.DryRun)
+            .Select(other => (Target: other, Audience: ResolveAudience(other, input.Viewers, options, input.NowUtc, out _)))
+            .ToList();
+        var everyAsk = input.Demand.Signals.ToLookup(s => s.ItemId);
+
         var listed = new List<(Candidate Candidate, List<ListedEntry> Entries)>();
         var unmapped = new List<string>();
         foreach (var (itemId, signals) in demanded)
@@ -379,7 +387,7 @@ internal static class PriorityListBuilder
             {
                 // A gap another encoder makes the copy for is that encoder's gap. With one encoder
                 // per library, counting it here would flag every encoder for the others' libraries.
-                if (!MappedByAnotherEncoder(target, sources, gapCap, input))
+                if (!others.Any(other => ListsGap(other.Target, other.Audience, everyAsk[itemId], heights, versions, input)))
                 {
                     build.Counts.Gaps++;
                     build.Counts.Unmapped++;
@@ -460,17 +468,34 @@ internal static class PriorityListBuilder
     }
 
     /// <summary>
-    /// Whether another encoder that writes its list would take this gap: enabled, not a dry run,
-    /// producing a copy within the gap's cap, with a folder holding one of the sources.
+    /// Whether an encoder would list this item, by the same tests <see cref="Build"/> applies:
+    /// a viewer it counts asked for the item, the item is a gap at that viewer's cap, the copy
+    /// fits the largest such cap, and one of its folders holds a source to encode.
     /// </summary>
-    private static bool MappedByAnotherEncoder(EncodeTargetOptions target, IReadOnlyList<VersionInfo> sources, int gapCap, BuildInput input)
-        => input.Options.RunnableTargets
-            .Where(other => other.Id != target.Id && !other.DryRun && other.OutputHeight <= gapCap)
-            .Any(other => sources.Any(source =>
+    private static bool ListsGap(EncodeTargetOptions other, Dictionary<Guid, int> audience, IEnumerable<DemandSignal> signals, int?[] heights, IReadOnlyList<VersionInfo> versions, BuildInput input)
+    {
+        var gapCap = 0;
+        foreach (var signal in signals)
+        {
+            if (audience.TryGetValue(signal.UserId, out var cap) && QualityGateService.IsCapGap(heights, cap, input.Options.UnprobedNeedsEncode))
+            {
+                gapCap = Math.Max(gapCap, cap);
+            }
+        }
+
+        if (gapCap == 0 || other.OutputHeight > gapCap)
+        {
+            return false;
+        }
+
+        return versions
+            .Where(v => v.Height.HasValue ? v.Height.Value > other.OutputHeight : input.Options.UnprobedNeedsEncode)
+            .Any(source =>
             {
                 var path = other.ResolveSymlinks ? input.ResolveLink(source.Path) ?? source.Path : source.Path;
                 return MapToEncoderPath(path, other.Folders) is not null;
-            }));
+            });
+    }
 
     private static void AddFolderFindings(EncodeTargetOptions target, BuildInput input, TargetBuild build)
     {
