@@ -178,9 +178,12 @@ internal sealed class CandidateCollector : ICandidateCollector
 
             if (options.ContinueWatching)
             {
+                // Video only, as the home screen asks. Without it the query takes seconds per
+                // viewer and resumable folders and audiobooks fill the limit before any video.
                 var resumable = _libraryManager.GetItemList(new InternalItemsQuery(user)
                 {
                     IsResumable = true,
+                    MediaTypes = new[] { MediaType.Video },
                     Recursive = true,
                     IsVirtualItem = false,
                     OrderBy = new[] { (ItemSortBy.DatePlayed, SortOrder.Descending) },
