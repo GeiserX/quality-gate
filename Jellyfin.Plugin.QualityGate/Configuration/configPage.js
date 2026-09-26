@@ -1614,7 +1614,7 @@ export function encoderSetupText(target, resolvedPath) {
         return 'Set PRIORITY_FILE to this file as the encoder sees it.';
     }
 
-    return 'Nothing to set. jellyfin-encoder reads <SOURCE_FOLDER>/' + SOURCE_FOLDER_FILE + ' by default.';
+    return 'Nothing to set. quality-gate-encoder reads <SOURCE_FOLDER>/' + SOURCE_FOLDER_FILE + ' by default.';
 }
 
 /** The policy checklist for the Policies audience, keeping ids that no longer resolve. */
@@ -1731,7 +1731,7 @@ function buildTargetCard(target, index) {
         '<div class="selectContainer">' +
             '<label class="selectLabel" for="ep-height-' + index + '">Encoder output height</label>' +
             '<select is="emby-select" class="emby-select ep-output-height" id="ep-height-' + index + '" data-index="' + index + '">' + outputHeightOptions(target.OutputHeight) + '</select>' +
-            '<div class="fieldDescription">What the encoder produces. jellyfin-encoder always produces 720p.</div>' +
+            '<div class="fieldDescription">What the encoder produces. quality-gate-encoder always produces 720p.</div>' +
         '</div>' +
         '<h4 class="ep-block-title">Where to write</h4>' +
         modes.map(function (mode) {

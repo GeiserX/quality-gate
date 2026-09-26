@@ -5,7 +5,7 @@ Have your encoder make the copies capped viewers are about to watch first.
 ## What it does
 
 A capped viewer who opens an item with no version within their cap gets a live transcode. An
-encoder such as [jellyfin-encoder](https://github.com/GeiserX/jellyfin-encoder) removes those
+encoder such as [quality-gate-encoder](https://github.com/GeiserX/quality-gate-encoder) removes those
 transcodes by making a smaller copy of each file, but it works through the library in folder
 order. On a large library the next episode of the show someone is following can sit thousands
 of files down its queue.
@@ -23,10 +23,11 @@ those files before the rest.
 
 ## Requirements
 
-- **jellyfin-encoder 1.5.4 or newer.** 1.5.4 is the first release that reads a priority file,
-  set with `PRIORITY_FILE`. Older releases ignore the file and encode in folder order.
+- **quality-gate-encoder (formerly jellyfin-encoder) 1.5.4 or newer.** 1.5.4 is the first
+  release that reads a priority file, set with `PRIORITY_FILE`. Older releases ignore the file
+  and encode in folder order.
 - Jellyfin 12, like the rest of the plugin.
-- Your encoder's output height. jellyfin-encoder always produces 720p.
+- Your encoder's output height. quality-gate-encoder always produces 720p.
 
 Any encoder that reads the same format works. The file is UTF-8 JSON with no byte order mark:
 
@@ -70,7 +71,7 @@ In **Dashboard, Plugins, Quality Gate**, under **Encode Priority**:
 5. Check the example line under the folders. It shows a sample file as Jellyfin sees it and as
    it will be written in the list. The written form must be the file's path inside the
    encoder's `SOURCE_FOLDER`.
-6. Set **Encoder output height** to what the encoder produces: 720 for jellyfin-encoder.
+6. Set **Encoder output height** to what the encoder produces: 720 for quality-gate-encoder.
 7. Choose **Where to write**, described in the next section, and follow the **Encoder setup**
    text under it.
 8. Read the **Serves** line. It lists the policies whose viewers this encoder can help and how
@@ -106,7 +107,7 @@ resolved to its final target before it is mapped.
 ### Where to write, per output mode
 
 **Beside the media (source folder).** The default. The file is
-`<the folder with an empty encoder path>/.encoder-priority.json`, which is where jellyfin-encoder
+`<the folder with an empty encoder path>/.encoder-priority.json`, which is where quality-gate-encoder
 looks when `PRIORITY_FILE` is not set.
 
 - Encoder side: nothing to set.

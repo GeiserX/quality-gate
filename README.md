@@ -66,6 +66,17 @@ are coming from 3.3.x or earlier, translate your patterns into a height.
 - **Per-policy intro videos.** Optional. A different pre-roll for restricted users.
 - **Logging you can debug from.** Every decision names the cap, the user and the policy.
 
+## Companion: quality-gate-encoder
+
+A cap only helps a viewer if a version within it exists. Without one, Jellyfin transcodes live.
+[quality-gate-encoder](https://github.com/GeiserX/quality-gate-encoder) (Docker image
+[`drumsergio/quality-gate-encoder`](https://hub.docker.com/r/drumsergio/quality-gate-encoder),
+formerly jellyfin-encoder) pre-encodes a library into 720p versions such as `Film - 720p.mkv`.
+Quality Gate then serves those to capped users instead of a live transcode, and
+[version grouping](docs/one-library.md) shows each one beside its original.
+[Encode priority](docs/encode-priority.md) lets the plugin tell the encoder which files to make
+first: the ones capped viewers are about to watch.
+
 ## Requirements
 
 Jellyfin 12, on `net10.0`. Version 3.4.0.0 and later will not load on Jellyfin 10.x; 3.3.6.0 is
@@ -133,7 +144,7 @@ Pull requests are welcome. Fork, branch, and open a PR. CI has to be green and t
 
 - [smart-covers](https://github.com/GeiserX/smart-covers) provides cover extraction for books, audiobooks, comics, magazines and music libraries, with online fallback
 - [whisper-subs](https://github.com/GeiserX/whisper-subs) generates subtitles locally using Whisper
-- [jellyfin-encoder](https://github.com/GeiserX/jellyfin-encoder) does automatic 720p HEVC/AV1 transcoding, with optional symlinks for multi-version support
+- [quality-gate-encoder](https://github.com/GeiserX/quality-gate-encoder) (formerly jellyfin-encoder) does automatic 720p HEVC, H.264 or AV1 transcoding, with optional symlinks for multi-version support
 - [jellyfin-telegram-channel-sync](https://github.com/GeiserX/jellyfin-telegram-channel-sync) syncs Jellyfin access with Telegram channel membership
 
 ## License

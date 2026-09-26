@@ -1,7 +1,9 @@
 # One library, two qualities
 
 How to keep a smaller encode beside each original and have Jellyfin show them as one film with
-two versions, instead of two films.
+two versions, instead of two films. The encodes can come from any encoder;
+[quality-gate-encoder](https://github.com/GeiserX/quality-gate-encoder) makes them with the
+default ` - 720p` suffix.
 
 This is the feature that takes the longest to get right, so this page is long. The rules are
 strict on purpose: a resolver that guesses would re-identify your library differently on every

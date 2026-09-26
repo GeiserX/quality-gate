@@ -98,7 +98,7 @@ internal static class PriorityFileWriter
     /// <summary>The marker every file the plugin writes carries.</summary>
     public const string Producer = "quality-gate";
 
-    /// <summary>jellyfin-encoder's default <c>PRIORITY_FILE</c> name inside its source folder.</summary>
+    /// <summary>quality-gate-encoder's default <c>PRIORITY_FILE</c> name inside its source folder.</summary>
     public const string SourceFolderFileName = ".encoder-priority.json";
 
     /// <summary>How old an unchanged file may get before it is rewritten.</summary>
