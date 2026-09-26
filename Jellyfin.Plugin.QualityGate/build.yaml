@@ -1,6 +1,6 @@
 name: "QualityGate"
 guid: "9cab70ca-0af3-4d3a-adab-6a0df2496a33"
-version: "3.8.2.0"
+version: "3.9.0.0"
 targetAbi: "12.0.0.0"
 framework: "net10.0"
 owner: "GeiserX"
@@ -11,6 +11,13 @@ imageUrl: ""
 artifacts:
   - Jellyfin.Plugin.QualityGate.dll
 changelog: |
+  ## v3.9.0.0
+  - Encode priority: the plugin can write a list of what capped viewers are watching into each
+    encoder's source folder, so an encoder that reads it makes those copies first. Off by default
+  - New per-policy "Play within-cap versions as they are" setting: a version within the cap is
+    no longer transcoded when a client's bitrate limit is the only reason. A codec, container,
+    audio or subtitle reason still transcodes it. Off by default
+  - The copy suffix list no longer gains another " - 720p" on every server restart
   ## v3.8.2.0
   - A library that keeps one folder per season at its root gets one Series item per folder, and
     the intro's "once per show" rule was keyed on that per-folder SeriesId, so it played again on
