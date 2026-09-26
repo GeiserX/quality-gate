@@ -406,6 +406,32 @@ public class PriorityListBuilderTests
     }
 
     [Fact]
+    public void Unmapped_TallerEncoderListingForAHigherCappedViewer_DoesNotTakeTheLowerViewersGap()
+    {
+        // Both viewers ask for 2160p films. The 1080p film encoder lists them for the 1080p viewer,
+        // but its copy is still over the 720p viewer's cap, so for the 720p encoder they stay gaps
+        // nobody fixes.
+        var shows = new EncodeTarget { Id = "t1", Name = "Shows", Folders = new List<EncodeFolderMapping> { new() { JellyfinPath = "/media/tv" } } };
+        var films = new EncodeTarget { Id = "t2", Name = "Films", OutputHeight = 1080, Folders = new List<EncodeFolderMapping> { new() { JellyfinPath = "/media/films" } } };
+        var options = Options(shows, films);
+        var demand = new Demand();
+        for (var i = 0; i < 7; i++)
+        {
+            demand.Ask(demand.Item($"/media/films/Film {i}.mkv", 2160), V720).Ask(demand.Collected.Signals[^1].ItemId, V1080);
+        }
+
+        demand.Ask(demand.Item("/media/tv/Show A/x.mkv", 1080), V720);
+        var libraries = new[] { new LibraryFolder("Shows", new[] { "/media/tv" }), new LibraryFolder("Films", new[] { "/media/films" }) };
+
+        var showBuild = Build(options.Targets[0], demand, options, libraries);
+        var filmBuild = Build(options.Targets[1], demand, options, libraries);
+
+        Assert.Equal(7, filmBuild.Counts.Listed);
+        Assert.Equal((8, 7), (showBuild.Counts.Gaps, showBuild.Counts.Unmapped));
+        Assert.Single(showBuild.Findings, f => f.Code == "MostlyUnmapped");
+    }
+
+    [Fact]
     public void ResolveSymlinks_MapsTheTargetAndCountsFailures()
     {
         var demand = new Demand();

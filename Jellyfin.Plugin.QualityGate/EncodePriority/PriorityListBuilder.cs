@@ -321,6 +321,7 @@ internal static class PriorityListBuilder
             // give it a reason.
             var candidate = new Candidate(itemId);
             var gapCap = 0;
+            var lowestGapCap = int.MaxValue;
             foreach (var signal in signals)
             {
                 var cap = audience[signal.UserId];
@@ -328,6 +329,7 @@ internal static class PriorityListBuilder
                 {
                     candidate.Merge(signal);
                     gapCap = Math.Max(gapCap, cap);
+                    lowestGapCap = Math.Min(lowestGapCap, cap);
                 }
             }
 
@@ -387,7 +389,7 @@ internal static class PriorityListBuilder
             {
                 // A gap another encoder makes the copy for is that encoder's gap. With one encoder
                 // per library, counting it here would flag every encoder for the others' libraries.
-                if (!others.Any(other => ListsGap(other.Target, other.Audience, everyAsk[itemId], heights, versions, input)))
+                if (!others.Any(other => ListsGap(other.Target, other.Audience, everyAsk[itemId], heights, versions, lowestGapCap, input)))
                 {
                     build.Counts.Gaps++;
                     build.Counts.Unmapped++;
@@ -468,12 +470,19 @@ internal static class PriorityListBuilder
     }
 
     /// <summary>
-    /// Whether an encoder would list this item, by the same tests <see cref="Build"/> applies:
-    /// a viewer it counts asked for the item, the item is a gap at that viewer's cap, the copy
-    /// fits the largest such cap, and one of its folders holds a source to encode.
+    /// Whether an encoder would list this item, by the same tests <see cref="Build"/> applies,
+    /// with a copy every one of this encoder's gap viewers can use: a viewer it counts asked for
+    /// the item, the item is a gap at that viewer's cap, its copy fits the largest such cap and
+    /// the lowest cap here, and one of its folders holds a source to encode.
     /// </summary>
-    private static bool ListsGap(EncodeTargetOptions other, Dictionary<Guid, int> audience, IEnumerable<DemandSignal> signals, int?[] heights, IReadOnlyList<VersionInfo> versions, BuildInput input)
+    private static bool ListsGap(EncodeTargetOptions other, Dictionary<Guid, int> audience, IEnumerable<DemandSignal> signals, int?[] heights, IReadOnlyList<VersionInfo> versions, int lowestCapHere, BuildInput input)
     {
+        // A taller copy leaves the lower-capped viewers here on a live transcode.
+        if (other.OutputHeight > lowestCapHere)
+        {
+            return false;
+        }
+
         var gapCap = 0;
         foreach (var signal in signals)
         {
