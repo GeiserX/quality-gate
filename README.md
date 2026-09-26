@@ -71,7 +71,7 @@ are coming from 3.3.x or earlier, translate your patterns into a height.
 A cap only helps a viewer if a version within it exists. Without one, Jellyfin transcodes live.
 [quality-gate-encoder](https://github.com/GeiserX/quality-gate-encoder) (Docker image
 [`drumsergio/quality-gate-encoder`](https://hub.docker.com/r/drumsergio/quality-gate-encoder),
-formerly jellyfin-encoder) pre-encodes a library into 720p versions such as `Film - 720p.mp4`.
+formerly jellyfin-encoder) pre-encodes a library into 720p versions such as `Film - 720p.mkv`.
 Quality Gate then serves those to capped users instead of a live transcode, and
 [version grouping](docs/one-library.md) shows each one beside its original.
 [Encode priority](docs/encode-priority.md) lets the plugin tell the encoder which files to make

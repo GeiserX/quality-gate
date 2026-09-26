@@ -23,8 +23,9 @@ those files before the rest.
 
 ## Requirements
 
-- **quality-gate-encoder (formerly jellyfin-encoder) 1.5.4 or newer.** 1.5.4 is the first release that reads a priority file,
-  set with `PRIORITY_FILE`. Older releases ignore the file and encode in folder order.
+- **quality-gate-encoder (formerly jellyfin-encoder) 1.5.4 or newer.** 1.5.4 is the first
+  release that reads a priority file, set with `PRIORITY_FILE`. Older releases ignore the file
+  and encode in folder order.
 - Jellyfin 12, like the rest of the plugin.
 - Your encoder's output height. quality-gate-encoder always produces 720p.
 
