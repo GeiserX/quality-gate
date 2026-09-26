@@ -296,6 +296,14 @@ internal static class PriorityListBuilder
 
         build.Counts.DemandItems = demanded.Count;
 
+        // The encoders that write a list, with the viewers each counts, for telling this
+        // encoder's unmapped gaps from gaps another encoder lists.
+        var others = options.RunnableTargets
+            .Where(other => other.Id != target.Id && !other.DryRun)
+            .Select(other => (Target: other, Audience: ResolveAudience(other, input.Viewers, options, input.NowUtc, out _)))
+            .ToList();
+        var everyAsk = input.Demand.Signals.ToLookup(s => s.ItemId);
+
         var listed = new List<(Candidate Candidate, List<ListedEntry> Entries)>();
         var unmapped = new List<string>();
         foreach (var (itemId, signals) in demanded)
@@ -313,6 +321,7 @@ internal static class PriorityListBuilder
             // give it a reason.
             var candidate = new Candidate(itemId);
             var gapCap = 0;
+            var lowestGapCap = int.MaxValue;
             foreach (var signal in signals)
             {
                 var cap = audience[signal.UserId];
@@ -320,6 +329,7 @@ internal static class PriorityListBuilder
                 {
                     candidate.Merge(signal);
                     gapCap = Math.Max(gapCap, cap);
+                    lowestGapCap = Math.Min(lowestGapCap, cap);
                 }
             }
 
@@ -327,8 +337,6 @@ internal static class PriorityListBuilder
             {
                 continue;
             }
-
-            build.Counts.Gaps++;
 
             // Every version the encoder could start from, the cheapest (lowest) first. Listing the
             // others is harmless: the encoder skips a file whose output already exists.
@@ -339,6 +347,7 @@ internal static class PriorityListBuilder
                 .ToList();
 
             var entries = new List<ListedEntry>();
+            var missed = new List<string>();
             foreach (var source in sources)
             {
                 var path = source.Path;
@@ -357,7 +366,7 @@ internal static class PriorityListBuilder
 
                 if (MapToEncoderPath(path, target.Folders) is not { } encoderPath)
                 {
-                    unmapped.Add(path);
+                    missed.Add(path);
                     continue;
                 }
 
@@ -378,10 +387,19 @@ internal static class PriorityListBuilder
 
             if (entries.Count == 0)
             {
-                build.Counts.Unmapped++;
+                // A gap another encoder makes the copy for is that encoder's gap. With one encoder
+                // per library, counting it here would flag every encoder for the others' libraries.
+                if (!others.Any(other => ListsGap(other.Target, other.Audience, everyAsk[itemId], heights, versions, lowestGapCap, input)))
+                {
+                    build.Counts.Gaps++;
+                    build.Counts.Unmapped++;
+                    unmapped.AddRange(missed);
+                }
+
                 continue;
             }
 
+            build.Counts.Gaps++;
             listed.Add((candidate, entries));
         }
 
@@ -449,6 +467,43 @@ internal static class PriorityListBuilder
 
         var prefix = folders[index].EncoderPath;
         return prefix.Length == 0 ? remainder : prefix + "/" + remainder;
+    }
+
+    /// <summary>
+    /// Whether an encoder would list this item, by the same tests <see cref="Build"/> applies,
+    /// with a copy every one of this encoder's gap viewers can use: a viewer it counts asked for
+    /// the item, the item is a gap at that viewer's cap, its copy fits the largest such cap and
+    /// the lowest cap here, and one of its folders holds a source to encode.
+    /// </summary>
+    private static bool ListsGap(EncodeTargetOptions other, Dictionary<Guid, int> audience, IEnumerable<DemandSignal> signals, int?[] heights, IReadOnlyList<VersionInfo> versions, int lowestCapHere, BuildInput input)
+    {
+        // A taller copy leaves the lower-capped viewers here on a live transcode.
+        if (other.OutputHeight > lowestCapHere)
+        {
+            return false;
+        }
+
+        var gapCap = 0;
+        foreach (var signal in signals)
+        {
+            if (audience.TryGetValue(signal.UserId, out var cap) && QualityGateService.IsCapGap(heights, cap, input.Options.UnprobedNeedsEncode))
+            {
+                gapCap = Math.Max(gapCap, cap);
+            }
+        }
+
+        if (gapCap == 0 || other.OutputHeight > gapCap)
+        {
+            return false;
+        }
+
+        return versions
+            .Where(v => v.Height.HasValue ? v.Height.Value > other.OutputHeight : input.Options.UnprobedNeedsEncode)
+            .Any(source =>
+            {
+                var path = other.ResolveSymlinks ? input.ResolveLink(source.Path) ?? source.Path : source.Path;
+                return MapToEncoderPath(path, other.Folders) is not null;
+            });
     }
 
     private static void AddFolderFindings(EncodeTargetOptions target, BuildInput input, TargetBuild build)

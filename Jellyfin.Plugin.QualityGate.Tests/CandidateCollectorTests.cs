@@ -226,6 +226,9 @@ public class CandidateCollectorTests
         Assert.False(query.IsVirtualItem);
         Assert.Equal(new[] { (ItemSortBy.DatePlayed, SortOrder.Descending) }, query.OrderBy);
         Assert.NotNull(query.User);
+
+        // Without it the query is slow and resumable folders crowd videos out of the limit.
+        Assert.Equal(new[] { MediaType.Video }, query.MediaTypes);
         var signal = Assert.Single(demand.Signals);
         Assert.Equal((movie.Id, DemandTier.ContinueWatching, 0, played), (signal.ItemId, signal.Tier, signal.Depth, signal.LastActivity));
     }
