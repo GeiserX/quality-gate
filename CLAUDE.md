@@ -81,6 +81,13 @@ request would hand over the bytes the cap exists to withhold. A height the libra
 *unknown* (never probed) is a data condition rather than a defect. It is allowed and logged as
 a warning, and negotiation still caps it.
 
+A caller whose assignment, `DefaultPolicyId` or `ApiKeyPolicyId` names a missing or disabled
+policy resolves to `DenyAllPolicy` and is refused outright: 403 on every delivery route and a
+PlaybackInfo response with no sources and `ErrorCode = NotAllowed`. Test for it with
+`QualityGateService.IsDenyAll`, never through `HasHeightCap`: the sentinel carries no
+`MaxHeight`, which is how it was read as unrestricted up to 3.9.0.1. The filter warns once per
+caller and policy id per process.
+
 **MediaSourceResultFilter** is present in the assembly but not registered. Nothing constructs
 it and nothing adds it to `MvcOptions`, so on Jellyfin 12 it never runs and filename patterns
 restrict nothing. It stays only so the older behaviour is still readable in one place.

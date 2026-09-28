@@ -93,22 +93,21 @@ public class ApiKeyPolicyTests : IDisposable
     }
 
     [Fact]
-    public void DisabledPolicy_LeavesTheRequestUncapped()
+    public void DisabledPolicy_Denies()
     {
         Configure("cap", Policy(enabled: false));
 
-        Assert.Null(QualityGateService.GetApiKeyPolicy());
+        Assert.True(QualityGateService.IsDenyAll(QualityGateService.GetApiKeyPolicy()));
     }
 
     [Fact]
-    public void UnresolvablePolicy_LeavesTheRequestUncapped_RatherThanDenying()
+    public void UnresolvablePolicy_Denies_LikeABrokenUserAssignment()
     {
-        // Deliberately NOT the deny-all sentinel used for a broken user assignment. A key that no
-        // longer resolves is an operator mistake whose intent is unknown, and guessing would take
-        // out an integration rather than a person.
+        // The operator asked for these requests to be restricted. Serving them uncapped because the
+        // policy went missing would widen the access they meant to narrow.
         Configure("does-not-exist", Policy());
 
-        Assert.Null(QualityGateService.GetApiKeyPolicy());
+        Assert.True(QualityGateService.IsDenyAll(QualityGateService.GetApiKeyPolicy()));
     }
 
     [Fact]

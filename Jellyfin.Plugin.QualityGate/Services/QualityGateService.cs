@@ -16,8 +16,11 @@ namespace Jellyfin.Plugin.QualityGate.Services;
 public static class QualityGateService
 {
     /// <summary>
-    /// Sentinel policy returned when a user override references an invalid, disabled, or deleted PolicyId.
-    /// Blocks everything (fail-closed) so that admin misconfiguration cannot widen access.
+    /// Sentinel policy returned when an assignment, the default policy or the API-key policy names a
+    /// PolicyId that is missing or disabled. The resolution cap filter refuses every playback and
+    /// delivery request from a caller it resolves to (fail-closed), so that an admin mistake cannot
+    /// widen access. Test for it with <see cref="IsDenyAll"/>, never by its fields: it carries no
+    /// MaxHeight, so the height cap alone would read it as unrestricted.
     /// </summary>
     internal static readonly QualityPolicy DenyAllPolicy = new()
     {
@@ -88,11 +91,12 @@ public static class QualityGateService
     /// This is opt-in through <see cref="PluginConfiguration.ApiKeyPolicyId"/> rather than folded
     /// into <see cref="PluginConfiguration.DefaultPolicyId"/>, because a default policy is about
     /// people, and silently capping API keys on upgrade would break media-serving integrations that
-    /// were working the day before. Unlike a user assignment this does NOT fall back to the deny-all
-    /// sentinel: a configured id that no longer resolves means the operator's intent is unknown, and
-    /// guessing at it here would take out an integration rather than a person.
+    /// were working the day before. A configured id that no longer resolves returns the deny-all
+    /// sentinel, the same as a user assignment does: the operator asked for these requests to be
+    /// restricted, and serving them uncapped because the policy went missing would widen access
+    /// they meant to narrow.
     /// </remarks>
-    /// <returns>The configured policy, or null when unset or unresolvable.</returns>
+    /// <returns>The configured policy, <see cref="DenyAllPolicy"/> when it is missing or disabled, or null when unset.</returns>
     public static QualityPolicy? GetApiKeyPolicy()
     {
         var config = Plugin.Instance?.Configuration;
@@ -101,7 +105,42 @@ public static class QualityGateService
             return null;
         }
 
-        return config.Policies.FirstOrDefault(p => p.Id == config.ApiKeyPolicyId && p.Enabled);
+        return config.Policies.FirstOrDefault(p => p.Id == config.ApiKeyPolicyId && p.Enabled) ?? DenyAllPolicy;
+    }
+
+    /// <summary>
+    /// Checks whether a resolved policy is the deny-all sentinel.
+    /// </summary>
+    /// <param name="policy">The resolved policy.</param>
+    /// <returns>True when the caller's policy is missing or disabled, so every request must be refused.</returns>
+    public static bool IsDenyAll(QualityPolicy? policy)
+    {
+        return ReferenceEquals(policy, DenyAllPolicy);
+    }
+
+    /// <summary>
+    /// Names the setting and the policy id that failed to resolve for a caller who was given
+    /// <see cref="DenyAllPolicy"/>, so the refusal can be explained in the log.
+    /// </summary>
+    /// <param name="userId">The caller, <see cref="Guid.Empty"/> for an API-key or anonymous request.</param>
+    /// <returns>Which setting holds the id, and the id itself.</returns>
+    internal static (string Setting, string PolicyId) GetUnresolvedPolicy(Guid userId)
+    {
+        var config = Plugin.Instance?.Configuration;
+        if (config == null)
+        {
+            return ("configuration", string.Empty);
+        }
+
+        if (userId == Guid.Empty)
+        {
+            return ("API key policy", config.ApiKeyPolicyId);
+        }
+
+        var assignment = config.UserPolicies.FirstOrDefault(up => up.UserId == userId);
+        return assignment != null && !string.IsNullOrEmpty(assignment.PolicyId)
+            ? ("assignment", assignment.PolicyId)
+            : ("default policy", config.DefaultPolicyId);
     }
 
     /// <summary>

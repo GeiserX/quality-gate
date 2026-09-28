@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -11,6 +12,7 @@ using Jellyfin.Plugin.QualityGate.Configuration;
 using Jellyfin.Plugin.QualityGate.Services;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Dlna;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
@@ -67,6 +69,12 @@ namespace Jellyfin.Plugin.QualityGate.Filters;
 /// transcode folder, which for a restricted user are segments this filter already capped.
 /// docs/how-it-works.md records it as an accepted, known bypass and what closing it would take.
 ///
+/// A caller whose assignment, default policy or API-key policy names a policy that is missing or
+/// disabled resolves to <see cref="QualityGateService.DenyAllPolicy"/>. That caller is refused
+/// outright: every delivery route answers 403 and every PlaybackInfo response comes back with no
+/// sources and <see cref="PlaybackErrorCode.NotAllowed"/>, which clients show as "not allowed".
+/// The broken reference is logged once per caller and policy id for the life of the process.
+///
 /// The filter fails OPEN everywhere except one place. An unreadable body, an item it cannot
 /// resolve or an unexpected exception is logged and allowed, because a plugin defect must not
 /// take playback away from everyone. The one place it does not is a delivery request from a
@@ -94,6 +102,12 @@ public class ResolutionCapFilter : IAsyncResourceFilter, IAsyncResultFilter
 
     /// <summary>The PlaybackInfo query parameter and body field that carry the client's ceiling.</summary>
     private const string MaxStreamingBitrateKey = "MaxStreamingBitrate";
+
+    /// <summary>
+    /// Callers already warned about a policy that does not resolve, keyed by user and policy id.
+    /// Static because the filter is scoped: a new instance serves every request.
+    /// </summary>
+    private static readonly ConcurrentDictionary<(Guid UserId, string PolicyId), byte> WarnedUnresolved = new();
 
     private readonly ILogger<ResolutionCapFilter> _logger;
     private readonly IMediaSourceManager _mediaSourceManager;
@@ -141,9 +155,20 @@ public class ResolutionCapFilter : IAsyncResourceFilter, IAsyncResultFilter
             if (isDelivery || IsPlaybackInfoPost(context.HttpContext, path))
             {
                 var userId = GetUserId(context.HttpContext);
-                var policy = GetCappedPolicy(userId);
+                var resolved = GetPolicy(userId);
+                var policy = QualityGateService.HasHeightCap(resolved) ? resolved : null;
 
-                if (policy != null)
+                if (QualityGateService.IsDenyAll(resolved))
+                {
+                    // PlaybackInfo is answered with NotAllowed in phase 2, which also covers the
+                    // GET form that never passes through here.
+                    if (isDelivery)
+                    {
+                        WarnUnresolved(userId);
+                        refuse = true;
+                    }
+                }
+                else if (policy != null)
                 {
                     if (isDelivery)
                     {
@@ -203,8 +228,15 @@ public class ResolutionCapFilter : IAsyncResourceFilter, IAsyncResultFilter
             if (context.Result is ObjectResult { Value: PlaybackInfoResponse response })
             {
                 var userId = GetUserId(context.HttpContext);
-                var policy = GetCappedPolicy(userId);
-                if (policy != null)
+                var resolved = GetPolicy(userId);
+                var policy = QualityGateService.HasHeightCap(resolved) ? resolved : null;
+                if (QualityGateService.IsDenyAll(resolved))
+                {
+                    WarnUnresolved(userId);
+                    response.MediaSources = Array.Empty<MediaSourceInfo>();
+                    response.ErrorCode = PlaybackErrorCode.NotAllowed;
+                }
+                else if (policy != null)
                 {
                     CapPlaybackInfo(response, policy, userId);
                 }
@@ -723,20 +755,47 @@ public class ResolutionCapFilter : IAsyncResourceFilter, IAsyncResultFilter
     }
 
     /// <summary>
+    /// Gets the caller's policy: null when unrestricted, the deny-all sentinel when it names a
+    /// policy that is missing or disabled.
+    /// </summary>
+    private static QualityPolicy? GetPolicy(Guid userId)
+    {
+        // An empty id is Jellyfin's API-key or anonymous caller, not a user who happens to have no
+        // assignment, so it is resolved through the opt-in API-key policy rather than the per-user
+        // table. Without that it matched no assignment, took no default, and was served uncapped.
+        return userId == Guid.Empty
+            ? QualityGateService.GetApiKeyPolicy()
+            : QualityGateService.GetUserPolicy(userId);
+    }
+
+    /// <summary>
     /// Gets the user's policy, but only when it actually caps resolution.
     /// Returns null for an unrestricted user and for a policy with no height cap, so both
     /// see the request exactly as Jellyfin would have handled it.
     /// </summary>
     private static QualityPolicy? GetCappedPolicy(Guid userId)
     {
-        // An empty id is Jellyfin's API-key or anonymous caller, not a user who happens to have no
-        // assignment, so it is resolved through the opt-in API-key policy rather than the per-user
-        // table. Without that it matched no assignment, took no default, and was served uncapped.
-        var policy = userId == Guid.Empty
-            ? QualityGateService.GetApiKeyPolicy()
-            : QualityGateService.GetUserPolicy(userId);
-
+        var policy = GetPolicy(userId);
         return QualityGateService.HasHeightCap(policy) ? policy : null;
+    }
+
+    /// <summary>
+    /// Logs, once per caller and policy id for the life of the process, why a caller on the
+    /// deny-all sentinel is being refused.
+    /// </summary>
+    private void WarnUnresolved(Guid userId)
+    {
+        var (setting, policyId) = QualityGateService.GetUnresolvedPolicy(userId);
+        if (!WarnedUnresolved.TryAdd((userId, policyId), 0))
+        {
+            return;
+        }
+
+        _logger.LogWarning(
+            "QualityGate: policy '{PolicyId}' named by the {Setting} does not exist or is disabled — refusing all playback for {Caller} until it points at an enabled policy",
+            policyId,
+            setting,
+            userId == Guid.Empty ? "API key and anonymous requests" : "user " + userId.ToString("N"));
     }
 
     /// <summary>

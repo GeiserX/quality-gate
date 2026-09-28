@@ -301,6 +301,27 @@ public class QualityGateIntroProviderTests : IDisposable
         Assert.Empty(result);
     }
 
+    [Fact]
+    public async Task GetIntros_PolicyThatDoesNotResolve_SkipsIntro_EvenWhenTheItemListsNoSources()
+    {
+        // The filter refuses every request from this user, so an intro would play and then fail.
+        // An item with no static sources used to slip past the all-sources-blocked check above.
+        ConfigureDefaultIntro();
+        var user = new User("testuser", "default", "default");
+        var assignment = new UserPolicyAssignment { UserId = user.Id, PolicyId = "deleted-policy" };
+        _plugin.Configuration.UserPolicies = new List<UserPolicyAssignment> { assignment };
+        _mediaSourceManagerMock.Setup(m => m.GetStaticMediaSources(
+            It.IsAny<BaseItem>(), It.IsAny<bool>(), It.IsAny<User>()))
+            .Returns(new List<MediaSourceInfo>());
+        var item = new Mock<BaseItem>();
+
+        Assert.Empty(await _provider.GetIntros(item.Object, user));
+
+        // Reverse control: the same user and item on full access get the default intro.
+        assignment.PolicyId = UserPolicyAssignment.FullAccessPolicyId;
+        Assert.Single(await _provider.GetIntros(item.Object, user));
+    }
+
     private string ConfigureDefaultIntro()
     {
         var introPath = Path.Combine(_tempDir, "intro-series.mp4");

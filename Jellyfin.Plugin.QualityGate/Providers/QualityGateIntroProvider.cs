@@ -100,6 +100,16 @@ public class QualityGateIntroProvider : IIntroProvider
             // Check if user has a policy with custom intro
             var policy = QualityGateService.GetUserPolicy(user.Id);
 
+            // A policy that is missing or disabled refuses all playback, so an intro would play and
+            // then the item would be refused. Skip it without looking at the item.
+            if (QualityGateService.IsDenyAll(policy))
+            {
+                _logger.LogDebug(
+                    "QualityGateIntroProvider: Skipping intro — user {UserName} is on a policy that is missing or disabled",
+                    user.Username);
+                return Task.FromResult(result);
+            }
+
             // If user is restricted and ALL sources for this item are blocked, skip the intro
             // to prevent double-error UX (intro plays → then content denied)
             if (policy != null && item != null)

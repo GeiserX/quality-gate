@@ -671,11 +671,11 @@ function renderApiKeyPolicyDropdown(view) {
         select.appendChild(option);
     });
 
-    // A configured id that no longer resolves leaves API keys uncapped, so say so rather than
+    // A configured id that no longer resolves refuses every API-key request, so say so rather than
     // silently selecting "(Uncapped)" and letting a save quietly discard the setting.
     if (current && !matched) {
         select.innerHTML += '<option value="' + escapeAttribute(current) + '" selected>' +
-            'INVALID POLICY - currently uncapped' +
+            'INVALID POLICY - requests refused' +
             '</option>';
     }
 }
