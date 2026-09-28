@@ -43,6 +43,7 @@ public sealed class ConfigPagePatternNoticeTests : IDisposable
         Assert.DoesNotContain("Override transcode bitrate in kbps", card, StringComparison.Ordinal);
         Assert.DoesNotContain("transcode at the selected resolution instead of blocking", card, StringComparison.Ordinal);
         Assert.DoesNotContain(">Transcode to ", card, StringComparison.Ordinal);
+        Assert.DoesNotContain("Transcode (no resolution cap)", card, StringComparison.Ordinal);
         Assert.Contains("Play the intro (stored as 720p)", card, StringComparison.Ordinal);
     }
 
