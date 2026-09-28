@@ -1582,10 +1582,35 @@ public class ResolutionCapFilterTests : IDisposable
             var (allowed, context) = await RunResourceAsync(CreateHttpContext($"/Items/{ItemId}/PlaybackInfo", method, userId));
 
             Assert.False(allowed);
-            var answer = Assert.IsType<PlaybackInfoResponse>(Assert.IsType<ObjectResult>(context.Result).Value);
+            var result = Assert.IsType<ObjectResult>(context.Result);
+            var answer = Assert.IsType<PlaybackInfoResponse>(result.Value);
             Assert.Empty(answer.MediaSources);
             Assert.Equal(PlaybackErrorCode.NotAllowed, answer.ErrorCode);
+
+            // The types PlaybackInfo's own [Produces] offers, so Accept: text/xml cannot pick XML.
+            Assert.Equal(
+                new[] { "application/json", Jellyfin.Extensions.Json.JsonDefaults.CamelCaseMediaType, Jellyfin.Extensions.Json.JsonDefaults.PascalCaseMediaType },
+                result.ContentTypes.ToArray());
         }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task PlaybackInfoGet_ForACappedOrUnrestrictedUser_StillReachesTheAction(bool capped)
+    {
+        if (capped)
+        {
+            UseCappedPolicy();
+        }
+        else
+        {
+            UseFullAccess();
+        }
+
+        var (allowed, context) = await RunResourceAsync(CreateHttpContext($"/Items/{ItemId}/PlaybackInfo", "GET", Guid.NewGuid()));
+
+        AssertAllowed(allowed, context);
     }
 
     [Fact]

@@ -4,11 +4,13 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net.Mime;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.QualityGate.Configuration;
+using Jellyfin.Extensions.Json;
 using Jellyfin.Plugin.QualityGate.Services;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -217,7 +219,12 @@ public class ResolutionCapFilter : IAsyncResourceFilter, IAsyncResultFilter
 
         if (notAllowed)
         {
-            context.Result = new ObjectResult(NotAllowedPlaybackInfo());
+            // The action's [Produces] never runs for a short-circuit, so offer the same types it
+            // would. Without them an Accept: text/xml request gets the type name as XML.
+            context.Result = new ObjectResult(NotAllowedPlaybackInfo())
+            {
+                ContentTypes = { MediaTypeNames.Application.Json, JsonDefaults.CamelCaseMediaType, JsonDefaults.PascalCaseMediaType },
+            };
             return;
         }
 
