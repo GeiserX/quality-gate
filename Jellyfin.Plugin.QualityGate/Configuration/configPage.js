@@ -281,6 +281,21 @@ export function buildFallbackOptions(policy) {
     return html + buildOption(0, 'Transcode (no resolution cap)', enabled && selected === 0);
 }
 
+/** Where the admin page sends anyone asking what actually restricts playback. */
+export var HOW_IT_WORKS_URL = 'https://github.com/GeiserX/quality-gate/blob/main/docs/how-it-works.md';
+
+/** Says, next to the filename patterns, that they no longer restrict playback and what they still do. */
+export function buildLegacyPatternNotice() {
+    return '<div class="fieldDescription qg-legacy-notice">' +
+        '<strong>These patterns do not restrict playback.</strong> Nothing has enforced them since 3.4.0.0, ' +
+        'so users under this policy can still play every version of an item. ' +
+        '<strong>Maximum Resolution</strong> is the setting that restricts playback. ' +
+        'The patterns and If No Match Found now only decide whether an intro plays. When the patterns allow none of an ' +
+        'item\'s files and If No Match Found is Block playback, users under this policy get no intro before that item. ' +
+        '<a href="' + HOW_IT_WORKS_URL + '" target="_blank" rel="noopener">How the cap works</a>' +
+    '</div>';
+}
+
 /** Builds the per-policy toggle that keeps within-cap versions out of bitrate-only transcodes. */
 export function buildKeepDirectToggle(policy, index) {
     var id = 'policy-keep-direct-' + index;
@@ -526,6 +541,7 @@ function renderPolicies(view) {
             '</div>' +
             '<div class="qg-policy-section">' +
                 '<h3 class="qg-policy-section-title">Filename Pattern Rules (Regex)</h3>' +
+                buildLegacyPatternNotice() +
                 '<div class="fieldDescription" style="margin-bottom:.8rem">' +
                     'Match against the filename only (e.g. <code>Movie (2021) - 1080p.mp4</code>). ' +
                     'Supports <a href="https://jellyfin.org/docs/general/server/media/movies/#multiple-versions" target="_blank" rel="noopener">Jellyfin multi-version naming</a>. ' +
@@ -558,13 +574,13 @@ function renderPolicies(view) {
                         '<select is="emby-select" id="policy-fallback-' + index + '" class="emby-select policy-fallback-mode">' +
                             buildFallbackOptions(policy) +
                         '</select>' +
-                        '<div class="fieldDescription">When no file matches the allowed patterns, transcode at the selected resolution instead of blocking.</div>' +
+                        '<div class="fieldDescription">Does not change how media is delivered; Maximum Resolution does. With the patterns above it only decides whether an intro plays before an item whose files the patterns all block. Block playback skips the intro, a transcode option plays it.</div>' +
                     '</div>' +
                     '<div class="inputContainer qg-policy-bitrate-field">' +
                         '<label class="inputLabel inputLabelUnfocused" for="policy-bitrate-' + index + '">Max Bitrate (kbps)</label>' +
                         '<input type="number" id="policy-bitrate-' + index + '" class="emby-input policy-fallback-bitrate" ' +
                             'value="' + (policy.FallbackMaxBitrateKbps || 0) + '" min="0" step="1" />' +
-                        '<div class="fieldDescription">Override transcode bitrate in kbps (e.g. 4000 for 4 Mbps). 0 = auto from resolution.</div>' +
+                        '<div class="fieldDescription">Has no effect. Kept so saved settings are not lost.</div>' +
                     '</div>' +
                     '<div class="checkboxContainer checkboxContainer-withDescription qg-policy-toggle">' +
                         '<label>' +

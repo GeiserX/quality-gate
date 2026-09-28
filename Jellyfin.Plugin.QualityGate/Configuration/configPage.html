@@ -406,6 +406,13 @@
             background: rgba(239, 83, 80, .12);
         }
 
+        .qg-legacy-notice {
+            margin-bottom: .8rem;
+            padding: .6rem .8rem;
+            border-left: 3px solid #c77900;
+            background: rgba(255, 193, 7, .12);
+        }
+
         .qg-effective-warning {
             color: #c77900;
             background: rgba(255, 193, 7, .12);
@@ -628,8 +635,8 @@
                     <div class="verticalSection">
                         <h2 class="sectionTitle">QualityGate</h2>
                         <p class="fieldDescription">
-                            Restrict users to specific media versions based on filename regex patterns.
-                            Define policies with filename rules, then assign them to users.
+                            Cap the resolution each user may be served. Give each policy a Maximum Resolution,
+                            then assign policies to users.
                             Supports <a href="https://jellyfin.org/docs/general/server/media/movies/#multiple-versions" target="_blank" rel="noopener">Jellyfin multi-version naming</a>.
                         </p>
                         <p id="loadingStatus" class="fieldDescription">Loading configuration...</p>
@@ -640,8 +647,8 @@
                             <div class="qg-section-copy">
                                 <h2 class="sectionTitle">Policies</h2>
                                 <p class="fieldDescription">
-                                    Each policy defines which filename patterns are allowed or blocked.
-                                    Patterns are case-insensitive regex matched against the filename (not the full path).
+                                    Each policy's Maximum Resolution is measured against the media's actual height and is what restricts playback.
+                                    Its filename patterns are legacy and do not restrict playback.
                                 </p>
                             </div>
                             <button is="emby-button" type="button" class="raised qg-section-action" id="btnAddPolicy">
