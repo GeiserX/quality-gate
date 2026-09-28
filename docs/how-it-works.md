@@ -177,9 +177,10 @@ existing integration starts transcoding without you asking for it.
 
 It is deliberately separate from the default policy. A default policy is about people, and folding
 API keys into it would silently cap every media-serving integration the moment someone set one.
-For the same reason, an API-key policy that has been deleted or disabled leaves those requests
-uncapped rather than denying them: the operator's intent is no longer knowable, and guessing would
-take out an integration rather than a person.
+An API-key policy that has been deleted or disabled refuses those requests, the same as a broken
+user assignment. The operator asked for them to be restricted, and serving them uncapped because
+the policy went missing would widen the access they meant to narrow. Clear the setting to go back
+to uncapped. See [a policy that cannot be found denies](configuration.md#a-policy-that-cannot-be-found-denies).
 
 ## Fail open, except once
 

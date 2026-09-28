@@ -1,16 +1,20 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net.Mime;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.QualityGate.Configuration;
+using Jellyfin.Extensions.Json;
 using Jellyfin.Plugin.QualityGate.Services;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Dlna;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
@@ -67,6 +71,15 @@ namespace Jellyfin.Plugin.QualityGate.Filters;
 /// transcode folder, which for a restricted user are segments this filter already capped.
 /// docs/how-it-works.md records it as an accepted, known bypass and what closing it would take.
 ///
+/// A caller whose assignment, default policy or API-key policy names a policy that is missing or
+/// disabled resolves to <see cref="QualityGateService.DenyAllPolicy"/>. That caller is refused
+/// outright: every delivery route above answers 403, and PlaybackInfo, GET or POST, is answered
+/// before the action runs with no sources and <see cref="PlaybackErrorCode.NotAllowed"/>, which
+/// clients show as "not allowed". /LiveTv/LiveStreamFiles/{id}/stream.{container} and
+/// /LiveTv/LiveRecordings/{id}/stream are not among the delivery routes, so a client calling them
+/// directly is not refused. jellyfin-web only reaches them through PlaybackInfo, which is.
+/// The broken reference is logged once per caller and policy id for the life of the process.
+///
 /// The filter fails OPEN everywhere except one place. An unreadable body, an item it cannot
 /// resolve or an unexpected exception is logged and allowed, because a plugin defect must not
 /// take playback away from everyone. The one place it does not is a delivery request from a
@@ -94,6 +107,12 @@ public class ResolutionCapFilter : IAsyncResourceFilter, IAsyncResultFilter
 
     /// <summary>The PlaybackInfo query parameter and body field that carry the client's ceiling.</summary>
     private const string MaxStreamingBitrateKey = "MaxStreamingBitrate";
+
+    /// <summary>
+    /// Callers already warned about a policy that does not resolve, keyed by user and policy id.
+    /// Static because the filter is scoped: a new instance serves every request.
+    /// </summary>
+    private static readonly ConcurrentDictionary<(Guid UserId, string PolicyId), byte> WarnedUnresolved = new();
 
     private readonly ILogger<ResolutionCapFilter> _logger;
     private readonly IMediaSourceManager _mediaSourceManager;
@@ -129,6 +148,7 @@ public class ResolutionCapFilter : IAsyncResourceFilter, IAsyncResultFilter
     public async Task OnResourceExecutionAsync(ResourceExecutingContext context, ResourceExecutionDelegate next)
     {
         var refuse = false;
+        var notAllowed = false;
 
         try
         {
@@ -138,12 +158,23 @@ public class ResolutionCapFilter : IAsyncResourceFilter, IAsyncResultFilter
             var path = context.HttpContext.Request.Path.Value ?? string.Empty;
             var isDelivery = IsMediaDeliveryRequest(path);
 
-            if (isDelivery || IsPlaybackInfoPost(context.HttpContext, path))
+            if (isDelivery || IsPlaybackInfoRequest(path))
             {
                 var userId = GetUserId(context.HttpContext);
-                var policy = GetCappedPolicy(userId);
+                var resolved = GetPolicy(userId);
+                var policy = QualityGateService.HasHeightCap(resolved) ? resolved : null;
 
-                if (policy != null)
+                if (QualityGateService.IsDenyAll(resolved))
+                {
+                    // Decided before any item lookup: a lookup that threw would land in the
+                    // fail-open catch below. PlaybackInfo, GET or POST, is answered here so
+                    // Jellyfin's negotiation never runs, since with AutoOpenLiveStream it opens
+                    // a tuner. Phase 2 strips any response that still gets built.
+                    WarnUnresolved(userId);
+                    refuse = isDelivery;
+                    notAllowed = !isDelivery;
+                }
+                else if (policy != null)
                 {
                     if (isDelivery)
                     {
@@ -164,7 +195,7 @@ public class ResolutionCapFilter : IAsyncResourceFilter, IAsyncResultFilter
                             refuse = true;
                         }
                     }
-                    else
+                    else if (IsPlaybackInfoPost(context.HttpContext, path))
                     {
                         await CapDeviceProfileAsync(context.HttpContext, policy, userId).ConfigureAwait(false);
                     }
@@ -186,8 +217,29 @@ public class ResolutionCapFilter : IAsyncResourceFilter, IAsyncResultFilter
             return;
         }
 
+        if (notAllowed)
+        {
+            // The action's [Produces] never runs for a short-circuit, so offer the same types it
+            // would. Without them an Accept: text/xml request gets the type name as XML.
+            context.Result = new ObjectResult(NotAllowedPlaybackInfo())
+            {
+                ContentTypes = { MediaTypeNames.Application.Json, JsonDefaults.CamelCaseMediaType, JsonDefaults.PascalCaseMediaType },
+            };
+            return;
+        }
+
         await next().ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Builds the PlaybackInfo answer for a caller whose policy is missing or disabled: no
+    /// sources, and the error clients show as "not allowed".
+    /// </summary>
+    private static PlaybackInfoResponse NotAllowedPlaybackInfo() => new()
+    {
+        MediaSources = Array.Empty<MediaSourceInfo>(),
+        ErrorCode = PlaybackErrorCode.NotAllowed,
+    };
 
     /// <summary>
     /// Phase 2 — runs before serialization. Guarantees that no source above the cap is
@@ -203,8 +255,16 @@ public class ResolutionCapFilter : IAsyncResourceFilter, IAsyncResultFilter
             if (context.Result is ObjectResult { Value: PlaybackInfoResponse response })
             {
                 var userId = GetUserId(context.HttpContext);
-                var policy = GetCappedPolicy(userId);
-                if (policy != null)
+                var resolved = GetPolicy(userId);
+                var policy = QualityGateService.HasHeightCap(resolved) ? resolved : null;
+                if (QualityGateService.IsDenyAll(resolved))
+                {
+                    // Backstop for phase 1, which answers these requests before the action runs.
+                    WarnUnresolved(userId);
+                    response.MediaSources = Array.Empty<MediaSourceInfo>();
+                    response.ErrorCode = PlaybackErrorCode.NotAllowed;
+                }
+                else if (policy != null)
                 {
                     CapPlaybackInfo(response, policy, userId);
                 }
@@ -723,20 +783,47 @@ public class ResolutionCapFilter : IAsyncResourceFilter, IAsyncResultFilter
     }
 
     /// <summary>
+    /// Gets the caller's policy: null when unrestricted, the deny-all sentinel when it names a
+    /// policy that is missing or disabled.
+    /// </summary>
+    private static QualityPolicy? GetPolicy(Guid userId)
+    {
+        // An empty id is Jellyfin's API-key or anonymous caller, not a user who happens to have no
+        // assignment, so it is resolved through the opt-in API-key policy rather than the per-user
+        // table. Without that it matched no assignment, took no default, and was served uncapped.
+        return userId == Guid.Empty
+            ? QualityGateService.GetApiKeyPolicy()
+            : QualityGateService.GetUserPolicy(userId);
+    }
+
+    /// <summary>
     /// Gets the user's policy, but only when it actually caps resolution.
     /// Returns null for an unrestricted user and for a policy with no height cap, so both
     /// see the request exactly as Jellyfin would have handled it.
     /// </summary>
     private static QualityPolicy? GetCappedPolicy(Guid userId)
     {
-        // An empty id is Jellyfin's API-key or anonymous caller, not a user who happens to have no
-        // assignment, so it is resolved through the opt-in API-key policy rather than the per-user
-        // table. Without that it matched no assignment, took no default, and was served uncapped.
-        var policy = userId == Guid.Empty
-            ? QualityGateService.GetApiKeyPolicy()
-            : QualityGateService.GetUserPolicy(userId);
-
+        var policy = GetPolicy(userId);
         return QualityGateService.HasHeightCap(policy) ? policy : null;
+    }
+
+    /// <summary>
+    /// Logs, once per caller and policy id for the life of the process, why a caller on the
+    /// deny-all sentinel is being refused.
+    /// </summary>
+    private void WarnUnresolved(Guid userId)
+    {
+        var (setting, policyId) = QualityGateService.GetUnresolvedPolicy(userId);
+        if (!WarnedUnresolved.TryAdd((userId, policyId), 0))
+        {
+            return;
+        }
+
+        _logger.LogWarning(
+            "QualityGate: policy '{PolicyId}' named by the {Setting} does not exist or is disabled — refusing playback for {Caller} until it points at an enabled policy",
+            policyId,
+            setting,
+            userId == Guid.Empty ? "API key and anonymous requests" : "user " + userId.ToString("N"));
     }
 
     /// <summary>
@@ -887,6 +974,16 @@ public class ResolutionCapFilter : IAsyncResourceFilter, IAsyncResultFilter
         return path.Contains("/Items/", StringComparison.OrdinalIgnoreCase)
             && (path.EndsWith("/File", StringComparison.OrdinalIgnoreCase)
                 || path.EndsWith("/Download", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Checks whether the request is PlaybackInfo in either form.
+    /// </summary>
+    /// <param name="path">The request path.</param>
+    /// <returns>True for a PlaybackInfo GET or POST.</returns>
+    internal static bool IsPlaybackInfoRequest(string path)
+    {
+        return path.Contains("/PlaybackInfo", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

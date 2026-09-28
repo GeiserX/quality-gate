@@ -131,9 +131,10 @@ covers a failure mode that does exactly that, silently.
 Quality Gate is access control, so review your policies deliberately. Only administrators can
 configure them. Report vulnerabilities through [SECURITY.md](SECURITY.md).
 
-One behaviour worth knowing: deleting or disabling a policy that users are assigned to currently
-grants those users full access rather than removing it. Point users at a low-cap policy instead.
-[Configuration](docs/configuration.md#a-gap-worth-knowing-about) explains why.
+One behaviour worth knowing: deleting or disabling a policy that users are assigned to refuses
+those users playback until you reassign them. The same goes for a default or API-key policy
+that no longer resolves. [Configuration](docs/configuration.md#a-policy-that-cannot-be-found-denies)
+explains it.
 
 ## Contributing
 

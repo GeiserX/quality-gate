@@ -719,28 +719,6 @@ public class ResolutionCapFilterTests : IDisposable
     }
 
     [Fact]
-    public async Task ApiKeyPolicyPointingAtNothing_LeavesTheRequestUncapped()
-    {
-        SetConfig(new PluginConfiguration
-        {
-            Policies = new List<QualityPolicy>
-            {
-                new QualityPolicy { Id = "p1", Name = "720p tier", Enabled = true, MaxHeight = Cap },
-            },
-            ApiKeyPolicyId = "deleted-policy",
-        });
-        SetItemHeight(2160);
-
-        var httpContext = CreateHttpContext(
-            StreamPath(),
-            queryParams: new Dictionary<string, string> { ["static"] = "true" });
-
-        var (allowed, context) = await RunResourceAsync(httpContext);
-
-        AssertAllowed(allowed, context);
-    }
-
-    [Fact]
     public async Task NameIdentifierClaim_StillResolvesTheUser()
     {
         UseCappedPolicy();
@@ -1457,5 +1435,233 @@ public class ResolutionCapFilterTests : IDisposable
         Assert.Contains("\"Property\":\"Height\"", written, StringComparison.Ordinal);
         Assert.Contains("\"Value\":\"720\"", written, StringComparison.Ordinal);
         AssertLoggedAtLeastOnce(LogLevel.Error);
+    }
+
+    // --- a policy that cannot be found denies ---
+    //
+    // The six ways a caller's policy is resolved. The first three must behave exactly as before;
+    // the last three name a policy that is missing or disabled and must refuse everything. Every
+    // denial test uses a 480p item, well within the 720p cap, so a pass cannot come from the cap.
+
+    private const int SmallHeight = 480;
+
+    private static QualityPolicy CappedPolicy(string id = "p1", bool enabled = true) =>
+        new() { Id = id, Name = "720p tier", Enabled = enabled, MaxHeight = Cap };
+
+    private static PluginConfiguration WithAssignment(Guid userId, string policyId, params QualityPolicy[] policies) => new()
+    {
+        Policies = new List<QualityPolicy>(policies),
+        UserPolicies = new List<UserPolicyAssignment> { new() { UserId = userId, PolicyId = policyId } },
+    };
+
+    private static HttpContext StaticStream(Guid? userId) => CreateHttpContext(
+        StreamPath(),
+        userId: userId,
+        queryParams: new Dictionary<string, string> { ["static"] = "true" });
+
+    private async Task AssertDeniedEverywhere(Guid? userId)
+    {
+        SetItemHeight(SmallHeight);
+        var (allowed, context) = await RunResourceAsync(StaticStream(userId));
+        AssertRefused(allowed, context);
+
+        var response = ResponseWithHeights(SmallHeight);
+        await RunResultAsync(CreateHttpContext($"/Items/{ItemId}/PlaybackInfo", "POST", userId), response);
+        Assert.Empty(response.MediaSources);
+        Assert.Equal(PlaybackErrorCode.NotAllowed, response.ErrorCode);
+    }
+
+    private void AssertUnresolvedWarnings(Times times)
+    {
+        _loggerMock.Verify(
+            x => x.Log(
+                LogLevel.Warning,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, _) => v.ToString()!.Contains("does not exist or is disabled", StringComparison.Ordinal)),
+                It.IsAny<Exception>(),
+                (Func<It.IsAnyType, Exception?, string>)It.IsAny<object>()),
+            times);
+    }
+
+    [Fact]
+    public async Task Case1_NoAssignmentAndNoDefault_StaysUnrestricted()
+    {
+        SetConfig(new PluginConfiguration { Policies = new List<QualityPolicy> { CappedPolicy() } });
+        SetItemHeight(2160);
+
+        var (allowed, context) = await RunResourceAsync(StaticStream(Guid.NewGuid()));
+        AssertAllowed(allowed, context);
+
+        var response = ResponseWithHeights(2160, Cap);
+        await RunResultAsync(CreateHttpContext($"/Items/{ItemId}/PlaybackInfo", "POST", Guid.NewGuid()), response);
+        Assert.Equal(2, response.MediaSources.Count);
+        Assert.Null(response.ErrorCode);
+        AssertUnresolvedWarnings(Times.Never());
+    }
+
+    [Fact]
+    public async Task Case2_NoAssignment_TakesTheDefaultPolicy()
+    {
+        SetConfig(new PluginConfiguration { Policies = new List<QualityPolicy> { CappedPolicy() }, DefaultPolicyId = "p1" });
+
+        SetItemHeight(SmallHeight);
+        var (allowed, context) = await RunResourceAsync(StaticStream(Guid.NewGuid()));
+        AssertAllowed(allowed, context);
+
+        SetItemHeight(2160);
+        (allowed, context) = await RunResourceAsync(StaticStream(Guid.NewGuid()));
+        AssertRefused(allowed, context);
+        AssertUnresolvedWarnings(Times.Never());
+    }
+
+    [Fact]
+    public async Task Case3_AssignmentToAnEnabledPolicy_IsCappedByIt()
+    {
+        var userId = Guid.NewGuid();
+        SetConfig(WithAssignment(userId, "p1", CappedPolicy()));
+
+        SetItemHeight(SmallHeight);
+        var (allowed, context) = await RunResourceAsync(StaticStream(userId));
+        AssertAllowed(allowed, context);
+
+        SetItemHeight(2160);
+        (allowed, context) = await RunResourceAsync(StaticStream(userId));
+        AssertRefused(allowed, context);
+        AssertUnresolvedWarnings(Times.Never());
+    }
+
+    [Fact]
+    public async Task Case4_AssignmentToAPolicyThatNoLongerExists_IsRefusedEverything()
+    {
+        var userId = Guid.NewGuid();
+        SetConfig(WithAssignment(userId, "deleted-policy", CappedPolicy()));
+
+        await AssertDeniedEverywhere(userId);
+    }
+
+    [Fact]
+    public async Task Case5_AssignmentToADisabledPolicy_IsRefusedEverything()
+    {
+        var userId = Guid.NewGuid();
+        SetConfig(WithAssignment(userId, "p1", CappedPolicy(enabled: false)));
+
+        await AssertDeniedEverywhere(userId);
+    }
+
+    [Theory]
+    [InlineData("deleted-policy", true)]
+    [InlineData("p1", false)]
+    public async Task Case6_ApiKeyPolicyMissingOrDisabled_IsRefusedEverything(string apiKeyPolicyId, bool enabled)
+    {
+        SetConfig(new PluginConfiguration
+        {
+            Policies = new List<QualityPolicy> { CappedPolicy(enabled: enabled) },
+            ApiKeyPolicyId = apiKeyPolicyId,
+        });
+
+        // No userId: exactly what Jellyfin's API-key authentication produces.
+        await AssertDeniedEverywhere(null);
+    }
+
+    [Fact]
+    public async Task DefaultPolicyThatNoLongerExists_IsRefusedEverything()
+    {
+        SetConfig(new PluginConfiguration { Policies = new List<QualityPolicy> { CappedPolicy() }, DefaultPolicyId = "deleted-policy" });
+
+        await AssertDeniedEverywhere(Guid.NewGuid());
+    }
+
+    [Fact]
+    public async Task UnresolvedPolicy_PlaybackInfoGetAndPost_AreAnsweredBeforeTheActionRuns()
+    {
+        var userId = Guid.NewGuid();
+        SetConfig(WithAssignment(userId, "deleted-policy"));
+
+        foreach (var method in new[] { "GET", "POST" })
+        {
+            var (allowed, context) = await RunResourceAsync(CreateHttpContext($"/Items/{ItemId}/PlaybackInfo", method, userId));
+
+            Assert.False(allowed);
+            var result = Assert.IsType<ObjectResult>(context.Result);
+            var answer = Assert.IsType<PlaybackInfoResponse>(result.Value);
+            Assert.Empty(answer.MediaSources);
+            Assert.Equal(PlaybackErrorCode.NotAllowed, answer.ErrorCode);
+
+            // The types PlaybackInfo's own [Produces] offers, so Accept: text/xml cannot pick XML.
+            Assert.Equal(
+                new[] { "application/json", Jellyfin.Extensions.Json.JsonDefaults.CamelCaseMediaType, Jellyfin.Extensions.Json.JsonDefaults.PascalCaseMediaType },
+                result.ContentTypes.ToArray());
+        }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task PlaybackInfoGet_ForACappedOrUnrestrictedUser_StillReachesTheAction(bool capped)
+    {
+        if (capped)
+        {
+            UseCappedPolicy();
+        }
+        else
+        {
+            UseFullAccess();
+        }
+
+        var (allowed, context) = await RunResourceAsync(CreateHttpContext($"/Items/{ItemId}/PlaybackInfo", "GET", Guid.NewGuid()));
+
+        AssertAllowed(allowed, context);
+    }
+
+    [Fact]
+    public async Task UnresolvedPolicy_PlaybackInfoGet_IsStrippedByTheBackstopToo()
+    {
+        var userId = Guid.NewGuid();
+        SetConfig(WithAssignment(userId, "deleted-policy"));
+        var response = ResponseWithHeights(SmallHeight);
+
+        await RunResultAsync(CreateHttpContext($"/Items/{ItemId}/PlaybackInfo", "GET", userId), response);
+
+        Assert.Empty(response.MediaSources);
+        Assert.Equal(PlaybackErrorCode.NotAllowed, response.ErrorCode);
+    }
+
+    [Fact]
+    public async Task UnresolvedPolicy_IsRefused_WithoutLookingUpTheItem()
+    {
+        // A lookup that throws would land in the fail-open catch, so the deny must not need one.
+        var userId = Guid.NewGuid();
+        SetConfig(WithAssignment(userId, "deleted-policy"));
+        _mediaSourceManagerMock.Setup(m => m.GetMediaStreams(It.IsAny<Guid>())).Throws(new InvalidOperationException("library down"));
+
+        var (allowed, context) = await RunResourceAsync(StaticStream(userId));
+
+        AssertRefused(allowed, context);
+        _mediaSourceManagerMock.Verify(m => m.GetMediaStreams(It.IsAny<Guid>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UnresolvedPolicy_IsLoggedAgain_WhenTheUserNamesADifferentMissingPolicy()
+    {
+        var userId = Guid.NewGuid();
+        SetConfig(WithAssignment(userId, "gone-1"));
+        await AssertDeniedEverywhere(userId);
+
+        SetConfig(WithAssignment(userId, "gone-2"));
+        await AssertDeniedEverywhere(userId);
+
+        AssertUnresolvedWarnings(Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task UnresolvedPolicy_IsLoggedOncePerUser_NotPerRequest()
+    {
+        var userId = Guid.NewGuid();
+        SetConfig(WithAssignment(userId, "deleted-policy"));
+
+        await AssertDeniedEverywhere(userId);
+        await AssertDeniedEverywhere(userId);
+
+        AssertUnresolvedWarnings(Times.Once());
     }
 }

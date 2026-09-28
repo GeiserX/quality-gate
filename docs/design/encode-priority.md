@@ -177,7 +177,7 @@ For each user from `IUserManager.GetUsers()` (there is no `Users` property; `IUs
 - `Policies`: as `Auto`, and the resolved policy id is in `AudiencePolicyIds`.
 - `Users`: the user is in `AudienceUserIds`. An uncapped user is treated as capped at `OutputHeight`. A user capped below `OutputHeight` is skipped and counted in the findings.
 
-Users on a deleted or disabled policy resolve to the deny-all sentinel, whose `MaxHeight` is 0 (`QualityGateService.cs:22-28`). They are uncapped in playback today and are not audience here. The API-key policy has no watch history and is ignored.
+Users on a deleted or disabled policy resolve to the deny-all sentinel, whose `MaxHeight` is 0 (`QualityGateService.cs:22-28`). They are refused playback and are not audience here. The API-key policy has no watch history and is ignored.
 
 The audience is computed once per user and reused by every target, so the per-user queries below run once per user, not once per target.
 

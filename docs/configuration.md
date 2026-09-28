@@ -138,7 +138,8 @@ information at all.
 
 A request that resolves to no user at all, which is what an API key and an unauthenticated
 request both produce, does not enter this table. It takes `ApiKeyPolicyId`, or no policy when that
-is unset. See [how it works](how-it-works.md#api-keys-are-not-capped).
+is unset. An `ApiKeyPolicyId` naming a missing or disabled policy gets the deny-all sentinel, the
+same as a broken assignment. See [how it works](how-it-works.md#api-keys-are-not-capped).
 
 ```text
 explicit assignment for this user?
@@ -152,19 +153,37 @@ no assignment?
 └── not set               -> unrestricted
 ```
 
-### A gap worth knowing about
+### A policy that cannot be found denies
 
-When an assignment points at a policy that was deleted, disabled or mistyped, the code returns
-an internal deny-all sentinel. The intent is fail-closed, so that an admin mistake cannot widen
-access.
+When an assignment, `DefaultPolicyId` or `ApiKeyPolicyId` points at a policy that was deleted,
+disabled or mistyped, the caller gets an internal deny-all sentinel and is refused playback.
+PlaybackInfo, GET or POST, is answered before Jellyfin negotiates anything, with no media sources
+and the error `NotAllowed`, which clients show as not being allowed to play the item. Every
+[delivery route the filter gates](how-it-works.md#direct-delivery) answers 403. No intro plays
+either. The admin page's user table labels these users **Denied (invalid policy)** or **DENIED
+(invalid default)**, and deleting or disabling a policy asks first, saying how many users lose
+playback.
 
-That sentinel no longer denies anything. It carries no maximum resolution, and it expresses its
-restriction purely through the filename patterns that stopped being enforced in 3.4.0.0. The
-resolution cap looks at the sentinel, sees no height, and treats the user as unrestricted.
+Two Live TV routes are not among the gated delivery routes:
+`/LiveTv/LiveStreamFiles/{id}/stream.{container}` and `/LiveTv/LiveRecordings/{id}/stream`. A
+client that calls them directly is not refused. jellyfin-web only reaches them through
+PlaybackInfo, which is.
 
-The practical consequence: **disabling or deleting a policy that users are assigned to grants
-those users full access rather than removing it.** If you want to take access away, point the
-users at a policy with a low `MaxHeight`. Do not rely on deleting the policy they are on.
+The server log says why, once per user and policy id each time Jellyfin starts:
+
+```text
+QualityGate: policy '<policy id>' named by the assignment does not exist or is disabled — refusing playback for user <user id> until it points at an enabled policy
+```
+
+`assignment` reads `default policy` or `API key policy` when that is the setting at fault.
+
+To give such a user playback back, point the assignment at an enabled policy, at
+`__FULL_ACCESS__`, or clear it so the user falls through to the default.
+
+Up to 3.9.0.1 the sentinel carried no maximum resolution, so the resolution cap read it as
+unrestricted: deleting or disabling a policy gave its users full access, and a missing API-key
+policy left those requests uncapped. Upgrading with such a dangling reference takes playback away
+from the users it names.
 
 ## Checking the live configuration
 

@@ -645,7 +645,7 @@ function renderDefaultPolicyDropdown(view) {
 
     if (hasInvalidDefaultPolicy()) {
         select.innerHTML += '<option value="' + escapeAttribute(current) + '" selected>' +
-            'INVALID DEFAULT - currently Full Access' +
+            'INVALID DEFAULT - playback refused' +
             '</option>';
     }
 
@@ -697,11 +697,11 @@ function renderApiKeyPolicyDropdown(view) {
         select.appendChild(option);
     });
 
-    // A configured id that no longer resolves leaves API keys uncapped, so say so rather than
+    // A configured id that no longer resolves refuses every API-key request, so say so rather than
     // silently selecting "(Uncapped)" and letting a save quietly discard the setting.
     if (current && !matched) {
         select.innerHTML += '<option value="' + escapeAttribute(current) + '" selected>' +
-            'INVALID POLICY - currently uncapped' +
+            'INVALID POLICY - requests refused' +
             '</option>';
     }
 }
@@ -1011,6 +1011,37 @@ function addPolicy(view) {
     focusElement(view, '.qg-policy-card[data-index="' + newIndex + '"] .policy-name');
 }
 
+/**
+ * Says who loses playback when a policy stops resolving, for the confirm on delete and disable.
+ * Empty when nobody depends on it.
+ */
+export function lockoutWarning(cfg, policyId) {
+    var assigned = (cfg.UserPolicies || []).filter(function (assignment) {
+        return assignment.PolicyId === policyId;
+    }).length;
+    var lines = [];
+
+    if (assigned > 0) {
+        lines.push(assigned + (assigned === 1 ? ' user is' : ' users are') + ' assigned to it and will lose playback.');
+    }
+
+    if (cfg.DefaultPolicyId === policyId) {
+        lines.push('It is the default policy, so all unassigned users will lose playback.');
+    }
+
+    if (cfg.ApiKeyPolicyId === policyId) {
+        lines.push('It is the API key policy, so API key and anonymous requests will be refused.');
+    }
+
+    return lines.length ? lines.join('\n') + '\nReassign them first to keep their access.' : '';
+}
+
+function confirmPolicyLoss(action, policy) {
+    var warning = lockoutWarning(config, policy.Id);
+
+    return confirm(action + ' policy "' + (policy.Name || 'Unnamed Policy') + '"?' + (warning ? '\n\n' + warning : ''));
+}
+
 function deletePolicy(view, index) {
     var deletedId;
 
@@ -1018,7 +1049,7 @@ function deletePolicy(view, index) {
         return;
     }
 
-    if (!confirm('Delete policy "' + (config.Policies[index].Name || 'Unnamed Policy') + '"?')) {
+    if (!confirmPolicyLoss('Delete', config.Policies[index])) {
         return;
     }
 
@@ -1422,7 +1453,7 @@ function findPolicy(cfg, policyId) {
 
 /**
  * The policy a user plays under, resolved like the server does: an override, else the default.
- * A missing or disabled policy is the deny-all sentinel, which playback treats as uncapped.
+ * A missing or disabled policy is the deny-all sentinel, which playback refuses.
  */
 function effectivePolicyOf(cfg, userId) {
     var override = (cfg.UserPolicies || []).find(function (assignment) {
@@ -2392,6 +2423,19 @@ export default function (view) {
             upgradeNativeWidgets(view);
             markDirty(view);
             return;
+        }
+
+        if (event.target.matches('.policy-enabled') && !event.target.checked) {
+            var disabledCard = event.target.closest('.qg-policy-card');
+            var disabledPolicy = disabledCard && config.Policies[parseInt(disabledCard.dataset.index, 10)];
+
+            if (disabledPolicy && !confirmPolicyLoss('Disable', {
+                Id: disabledPolicy.Id,
+                Name: disabledCard.querySelector('.policy-name').value
+            })) {
+                event.target.checked = true;
+                return;
+            }
         }
 
         if (event.target.matches('#defaultPolicySelect, #apiKeyPolicySelect, .policy-enabled, .policy-fallback-transcode, .policy-name, .policy-max-height')) {

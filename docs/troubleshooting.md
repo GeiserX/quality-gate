@@ -44,17 +44,16 @@ those requests uncapped by design.
 a playback you expected to be capped, the filter did not consider that user restricted, which
 sends you back to steps 2 and 3.
 
-## A user I disabled the policy for now has more access, not less
+## A user cannot play anything after I deleted or disabled their policy
 
-That is the documented behaviour, and it surprises everyone.
+That is deliberate. A user whose assignment, or whose default policy, names a policy that is
+missing or disabled is refused playback, so an admin mistake can never widen access. Clients
+report the item as not allowed, and delivery requests get 403.
 
-Deleting or disabling a policy that users are assigned to does not deny them. It returns an
-internal deny-all sentinel that carries no maximum resolution, so the resolution cap sees no
-height to enforce and treats those users as unrestricted.
-
-To take access away, point the users at a policy with a low `MaxHeight`. Do not rely on removing
-the policy they are on. There is more detail in
-[configuration](configuration.md#a-gap-worth-knowing-about).
+Search the Jellyfin log for `does not exist or is disabled`. The line names the setting and the
+policy id that failed to resolve. Point the assignment at an enabled policy, at
+`__FULL_ACCESS__`, or clear it. Up to 3.9.0.1 these users got full access instead. There is more
+detail in [configuration](configuration.md#a-policy-that-cannot-be-found-denies).
 
 ## The plugin vanished after an update
 
