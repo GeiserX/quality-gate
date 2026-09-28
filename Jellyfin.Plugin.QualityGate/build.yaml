@@ -1,6 +1,6 @@
 name: "QualityGate"
 guid: "9cab70ca-0af3-4d3a-adab-6a0df2496a33"
-version: "3.9.0.1"
+version: "3.9.1.0"
 targetAbi: "12.0.0.0"
 framework: "net10.0"
 owner: "GeiserX"
@@ -11,6 +11,17 @@ imageUrl: ""
 artifacts:
   - Jellyfin.Plugin.QualityGate.dll
 changelog: |
+  ## v3.9.1.0
+  - BEHAVIOUR CHANGE: a user whose assignment or default policy names a deleted, disabled or
+    mistyped policy is now refused playback until it points at an enabled policy. So are API key
+    requests whose API key policy does. Up to 3.9.0.1 these callers had full access. Check the
+    admin page for "Denied (invalid policy)", "DENIED (invalid default)" or "INVALID POLICY"
+    before upgrading. Users with no assignment and no default policy are unchanged
+  - Such callers get 403 on media delivery, and PlaybackInfo answers "not allowed" before Jellyfin
+    negotiates anything. The log names the missing policy id once per user
+  - Deleting or disabling a policy now asks first and says how many users lose playback
+  - The settings page no longer presents the filename patterns and If No Match Found as a
+    playback restriction; Maximum Resolution is what restricts playback
   ## v3.9.0.1
   - Encode priority: with one encoder per library, each encoder no longer reports the other's
     library as unmapped. A gap another encoder will list, with a copy the viewers here can use,
