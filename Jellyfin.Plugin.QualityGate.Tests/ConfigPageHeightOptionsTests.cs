@@ -80,7 +80,7 @@ public sealed class ConfigPageHeightOptionsTests : IDisposable
         var options = Evaluate(
             "page.buildFallbackOptions({ FallbackTranscode: true, FallbackMaxHeight: 1000 })");
 
-        Assert.Contains("<option value=\"1000\" selected>Transcode to 1000p</option>", options, StringComparison.Ordinal);
+        Assert.Contains("<option value=\"1000\" selected>Play the intro (stored as 1000p)</option>", options, StringComparison.Ordinal);
         Assert.Equal("1000", SelectedValue(options));
     }
 

@@ -198,8 +198,8 @@ function getPathPlaceholder(listName) {
 
 function getPathHelpText(listName) {
     return listName === 'fn-allowed'
-        ? 'Regex matched against the filename (not full path). Leave empty to allow all filenames.'
-        : 'Regex matched against the filename (not full path). Matching files are always blocked.';
+        ? 'Regex matched against the filename (not full path). Only decides whether an intro plays. Leave empty to count every filename as allowed.'
+        : 'Regex matched against the filename (not full path). Only decides whether an intro plays. A matching file still plays.';
 }
 
 function getPathAddLabel(listName) {
@@ -268,17 +268,37 @@ export function buildMaxHeightOptions(configured) {
     return html;
 }
 
-/** Builds the If No Match Found options, with the policy's own fallback height always among them. */
+/**
+ * Builds the If No Match Found options, with the policy's own fallback height always among them.
+ * Only Block playback versus the rest has any effect (on the intro); the height is still stored
+ * so a saved config round-trips, but nothing reads it.
+ */
 export function buildFallbackOptions(policy) {
     var enabled = !!policy.FallbackTranscode;
     var selected = toHeight(policy.FallbackMaxHeight);
     var html = buildOption('off', 'Block playback', !enabled);
 
     heightChoices(policy.FallbackMaxHeight).forEach(function (height) {
-        html += buildOption(height, 'Transcode to ' + getHeightLabel(height), enabled && height === selected);
+        html += buildOption(height, 'Play the intro (stored as ' + getHeightLabel(height) + ')', enabled && height === selected);
     });
 
-    return html + buildOption(0, 'Transcode (no resolution cap)', enabled && selected === 0);
+    return html + buildOption(0, 'Play the intro (stored as no cap)', enabled && selected === 0);
+}
+
+/** Where the admin page sends anyone asking what actually restricts playback. */
+export var HOW_IT_WORKS_URL = 'https://github.com/GeiserX/quality-gate/blob/main/docs/how-it-works.md';
+
+/** Says, next to the filename patterns, that they no longer restrict playback and what they still do. */
+export function buildLegacyPatternNotice() {
+    return '<div class="fieldDescription qg-legacy-notice">' +
+        '<strong>These patterns do not restrict playback.</strong> Nothing has enforced them since 3.4.0.0, ' +
+        'so a pattern never keeps a user away from any version of an item. ' +
+        '<strong>Maximum Resolution</strong> is the setting that restricts playback. ' +
+        'The patterns and If No Match Found now only decide whether an intro plays. Users under this policy get no intro ' +
+        'before an item when each of its files is either blocked by the patterns or missing on disk, unless If No Match ' +
+        'Found is set to play the intro and at least one of those files exists. ' +
+        '<a href="' + HOW_IT_WORKS_URL + '" target="_blank" rel="noopener">How the cap works</a>' +
+    '</div>';
 }
 
 /** Builds the per-policy toggle that keeps within-cap versions out of bitrate-only transcodes. */
@@ -494,6 +514,87 @@ function renderAll(view) {
     upgradeNativeWidgets(view);
 }
 
+/** Builds the inside of one policy card. */
+export function buildPolicyCard(policy, index) {
+    var nameId = 'policy-name-' + index;
+    var introId = 'policy-intro-' + index;
+    var enabledId = 'policy-enabled-' + index;
+
+    return '<legend class="qg-policy-legend">Policy ' + (index + 1) + '</legend>' +
+        '<div class="qg-policy-card-header">' +
+            '<div class="qg-policy-heading">' +
+                '<div class="qg-policy-kicker">Define access rules for this policy.</div>' +
+                '<div class="inputContainer qg-policy-name-field">' +
+                    '<label class="inputLabel inputLabelUnfocused" for="' + nameId + '">Policy Name</label>' +
+                    '<input type="text" id="' + nameId + '" class="emby-input policy-name" ' +
+                        'value="' + escapeAttribute(policy.Name || '') + '" ' +
+                        'placeholder="Policy name" />' +
+                '</div>' +
+            '</div>' +
+        '</div>' +
+        '<div class="qg-policy-section">' +
+            '<h3 class="qg-policy-section-title">Filename Pattern Rules (Regex)</h3>' +
+            buildLegacyPatternNotice() +
+            '<div class="fieldDescription" style="margin-bottom:.8rem">' +
+                'Match against the filename only (e.g. <code>Movie (2021) - 1080p.mp4</code>). ' +
+                'Supports <a href="https://jellyfin.org/docs/general/server/media/movies/#multiple-versions" target="_blank" rel="noopener">Jellyfin multi-version naming</a>. ' +
+                'Patterns are case-insensitive regex.' +
+            '</div>' +
+            '<div class="qg-policy-grid">' +
+                buildPathField(policy, index, 'fn-allowed') +
+                buildPathField(policy, index, 'fn-blocked') +
+            '</div>' +
+        '</div>' +
+        '<div class="qg-policy-section">' +
+            '<h3 class="qg-policy-section-title">Playback Behavior</h3>' +
+            '<div class="qg-policy-footer">' +
+                '<div class="selectContainer qg-policy-maxheight-field">' +
+                    '<label class="selectLabel" for="policy-maxheight-' + index + '">Maximum Resolution</label>' +
+                    '<select is="emby-select" id="policy-maxheight-' + index + '" class="emby-select policy-max-height">' +
+                        buildMaxHeightOptions(policy.MaxHeight) +
+                    '</select>' +
+                    '<div class="fieldDescription">Measured against the media\'s actual height, not its filename. Anything taller is served as a transcode capped here, and a request for the original is refused. "No limit" leaves playback untouched.</div>' +
+                '</div>' +
+                '<div class="inputContainer qg-policy-intro-field">' +
+                    '<label class="inputLabel inputLabelUnfocused" for="' + introId + '">Custom Intro Video</label>' +
+                    '<input type="text" id="' + introId + '" class="emby-input policy-intro" ' +
+                        'value="' + escapeAttribute(policy.IntroVideoPath || '') + '" ' +
+                        'placeholder="/media/intros/policy-intro.mp4" />' +
+                    '<div class="fieldDescription">Optional. Users under this policy see this intro instead of the default.</div>' +
+                '</div>' +
+                '<div class="selectContainer qg-policy-fallback-field">' +
+                    '<label class="selectLabel" for="policy-fallback-' + index + '">If No Match Found</label>' +
+                    '<select is="emby-select" id="policy-fallback-' + index + '" class="emby-select policy-fallback-mode">' +
+                        buildFallbackOptions(policy) +
+                    '</select>' +
+                    '<div class="fieldDescription">Does not change how media is delivered; Maximum Resolution does. It only decides whether an intro plays before an item whose files are all blocked by the patterns above or missing on disk. Block playback skips the intro. Any other option plays it if at least one file exists; the resolution in it has no effect.</div>' +
+                '</div>' +
+                '<div class="inputContainer qg-policy-bitrate-field">' +
+                    '<label class="inputLabel inputLabelUnfocused" for="policy-bitrate-' + index + '">Max Bitrate (kbps)</label>' +
+                    '<input type="number" id="policy-bitrate-' + index + '" class="emby-input policy-fallback-bitrate" ' +
+                        'value="' + (policy.FallbackMaxBitrateKbps || 0) + '" min="0" step="1" />' +
+                    '<div class="fieldDescription">Has no effect. Kept so saved settings are not lost.</div>' +
+                '</div>' +
+                '<div class="checkboxContainer checkboxContainer-withDescription qg-policy-toggle">' +
+                    '<label>' +
+                        '<input is="emby-checkbox" type="checkbox" class="policy-enabled" id="' + enabledId + '" ' +
+                            (policy.Enabled !== false ? 'checked' : '') + ' />' +
+                        '<span>Enabled</span>' +
+                    '</label>' +
+                    '<div class="fieldDescription">Disable this policy without deleting its rules.</div>' +
+                '</div>' +
+                buildKeepDirectToggle(policy, index) +
+                '<div class="qg-policy-actions">' +
+                    '<button is="emby-button" type="button" class="raised qg-delete-btn btnDeletePolicy qg-policy-delete" ' +
+                        'style="background:#c62828 !important;color:#fff !important;border-color:#c62828 !important;" ' +
+                        'data-index="' + index + '">' +
+                        '<span>Delete Policy</span>' +
+                    '</button>' +
+                '</div>' +
+            '</div>' +
+        '</div>';
+}
+
 function renderPolicies(view) {
     var container = view.querySelector('#policiesContainer');
 
@@ -504,86 +605,11 @@ function renderPolicies(view) {
     }
 
     config.Policies.forEach(function (policy, index) {
-        var nameId = 'policy-name-' + index;
-        var introId = 'policy-intro-' + index;
-        var enabledId = 'policy-enabled-' + index;
         var card = document.createElement('fieldset');
 
         card.className = 'qg-policy-card';
         card.dataset.index = index;
-        card.innerHTML =
-            '<legend class="qg-policy-legend">Policy ' + (index + 1) + '</legend>' +
-            '<div class="qg-policy-card-header">' +
-                '<div class="qg-policy-heading">' +
-                    '<div class="qg-policy-kicker">Define access rules for this policy.</div>' +
-                    '<div class="inputContainer qg-policy-name-field">' +
-                        '<label class="inputLabel inputLabelUnfocused" for="' + nameId + '">Policy Name</label>' +
-                        '<input type="text" id="' + nameId + '" class="emby-input policy-name" ' +
-                            'value="' + escapeAttribute(policy.Name || '') + '" ' +
-                            'placeholder="Policy name" />' +
-                    '</div>' +
-                '</div>' +
-            '</div>' +
-            '<div class="qg-policy-section">' +
-                '<h3 class="qg-policy-section-title">Filename Pattern Rules (Regex)</h3>' +
-                '<div class="fieldDescription" style="margin-bottom:.8rem">' +
-                    'Match against the filename only (e.g. <code>Movie (2021) - 1080p.mp4</code>). ' +
-                    'Supports <a href="https://jellyfin.org/docs/general/server/media/movies/#multiple-versions" target="_blank" rel="noopener">Jellyfin multi-version naming</a>. ' +
-                    'Patterns are case-insensitive regex.' +
-                '</div>' +
-                '<div class="qg-policy-grid">' +
-                    buildPathField(policy, index, 'fn-allowed') +
-                    buildPathField(policy, index, 'fn-blocked') +
-                '</div>' +
-            '</div>' +
-            '<div class="qg-policy-section">' +
-                '<h3 class="qg-policy-section-title">Playback Behavior</h3>' +
-                '<div class="qg-policy-footer">' +
-                    '<div class="selectContainer qg-policy-maxheight-field">' +
-                        '<label class="selectLabel" for="policy-maxheight-' + index + '">Maximum Resolution</label>' +
-                        '<select is="emby-select" id="policy-maxheight-' + index + '" class="emby-select policy-max-height">' +
-                            buildMaxHeightOptions(policy.MaxHeight) +
-                        '</select>' +
-                        '<div class="fieldDescription">Measured against the media\'s actual height, not its filename. Anything taller is served as a transcode capped here, and a request for the original is refused. "No limit" leaves playback untouched.</div>' +
-                    '</div>' +
-                    '<div class="inputContainer qg-policy-intro-field">' +
-                        '<label class="inputLabel inputLabelUnfocused" for="' + introId + '">Custom Intro Video</label>' +
-                        '<input type="text" id="' + introId + '" class="emby-input policy-intro" ' +
-                            'value="' + escapeAttribute(policy.IntroVideoPath || '') + '" ' +
-                            'placeholder="/media/intros/policy-intro.mp4" />' +
-                        '<div class="fieldDescription">Optional. Users under this policy see this intro instead of the default.</div>' +
-                    '</div>' +
-                    '<div class="selectContainer qg-policy-fallback-field">' +
-                        '<label class="selectLabel" for="policy-fallback-' + index + '">If No Match Found</label>' +
-                        '<select is="emby-select" id="policy-fallback-' + index + '" class="emby-select policy-fallback-mode">' +
-                            buildFallbackOptions(policy) +
-                        '</select>' +
-                        '<div class="fieldDescription">When no file matches the allowed patterns, transcode at the selected resolution instead of blocking.</div>' +
-                    '</div>' +
-                    '<div class="inputContainer qg-policy-bitrate-field">' +
-                        '<label class="inputLabel inputLabelUnfocused" for="policy-bitrate-' + index + '">Max Bitrate (kbps)</label>' +
-                        '<input type="number" id="policy-bitrate-' + index + '" class="emby-input policy-fallback-bitrate" ' +
-                            'value="' + (policy.FallbackMaxBitrateKbps || 0) + '" min="0" step="1" />' +
-                        '<div class="fieldDescription">Override transcode bitrate in kbps (e.g. 4000 for 4 Mbps). 0 = auto from resolution.</div>' +
-                    '</div>' +
-                    '<div class="checkboxContainer checkboxContainer-withDescription qg-policy-toggle">' +
-                        '<label>' +
-                            '<input is="emby-checkbox" type="checkbox" class="policy-enabled" id="' + enabledId + '" ' +
-                                (policy.Enabled !== false ? 'checked' : '') + ' />' +
-                            '<span>Enabled</span>' +
-                        '</label>' +
-                        '<div class="fieldDescription">Disable this policy without deleting its rules.</div>' +
-                    '</div>' +
-                    buildKeepDirectToggle(policy, index) +
-                    '<div class="qg-policy-actions">' +
-                        '<button is="emby-button" type="button" class="raised qg-delete-btn btnDeletePolicy qg-policy-delete" ' +
-                            'style="background:#c62828 !important;color:#fff !important;border-color:#c62828 !important;" ' +
-                            'data-index="' + index + '">' +
-                            '<span>Delete Policy</span>' +
-                        '</button>' +
-                    '</div>' +
-                '</div>' +
-            '</div>';
+        card.innerHTML = buildPolicyCard(policy, index);
         container.appendChild(card);
     });
 
