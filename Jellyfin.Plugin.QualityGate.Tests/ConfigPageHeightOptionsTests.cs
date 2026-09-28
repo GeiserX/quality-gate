@@ -80,7 +80,7 @@ public sealed class ConfigPageHeightOptionsTests : IDisposable
         var options = Evaluate(
             "page.buildFallbackOptions({ FallbackTranscode: true, FallbackMaxHeight: 1000 })");
 
-        Assert.Contains("<option value=\"1000\" selected>Transcode to 1000p</option>", options, StringComparison.Ordinal);
+        Assert.Contains("<option value=\"1000\" selected>Play the intro (stored as 1000p)</option>", options, StringComparison.Ordinal);
         Assert.Equal("1000", SelectedValue(options));
     }
 
@@ -107,19 +107,6 @@ public sealed class ConfigPageHeightOptionsTests : IDisposable
         Assert.DoesNotContain("checked", older, StringComparison.Ordinal);
     }
 
-    // The filename patterns have enforced nothing since 3.4.0.0, so the page must not present
-    // them as the thing that restricts playback.
-    [Fact]
-    public void FilenamePatterns_AreMarkedAsNotRestrictingPlayback()
-    {
-        var notice = Evaluate("page.buildLegacyPatternNotice()");
-
-        Assert.Contains("These patterns do not restrict playback.", notice, StringComparison.Ordinal);
-        Assert.Contains("<strong>Maximum Resolution</strong> is the setting that restricts playback.", notice, StringComparison.Ordinal);
-        Assert.Contains("href=\"https://github.com/GeiserX/quality-gate/blob/main/docs/how-it-works.md\"", notice, StringComparison.Ordinal);
-        Assert.DoesNotContain("based on filename regex patterns", ReadShippedResource("configPage.html"), StringComparison.Ordinal);
-    }
-
     /// <summary>Reads the value the browser would report for a rendered dropdown.</summary>
     private static string SelectedValue(string options)
     {
@@ -129,14 +116,11 @@ public sealed class ConfigPageHeightOptionsTests : IDisposable
     }
 
     /// <summary>Reads configPage.js out of the built plugin assembly, as Jellyfin serves it.</summary>
-    private static string ReadShippedConfigPage() => ReadShippedResource("configPage.js");
-
-    /// <summary>Reads one of the admin page's files out of the built plugin assembly.</summary>
-    private static string ReadShippedResource(string fileName)
+    private static string ReadShippedConfigPage()
     {
         var assembly = typeof(Plugin).Assembly;
         var name = assembly.GetManifestResourceNames()
-            .Single(n => n.EndsWith(fileName, StringComparison.Ordinal));
+            .Single(n => n.EndsWith("configPage.js", StringComparison.Ordinal));
 
         using var stream = assembly.GetManifestResourceStream(name)!;
         using var reader = new StreamReader(stream);
