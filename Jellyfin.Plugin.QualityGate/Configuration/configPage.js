@@ -198,8 +198,8 @@ function getPathPlaceholder(listName) {
 
 function getPathHelpText(listName) {
     return listName === 'fn-allowed'
-        ? 'Regex matched against the filename (not full path). Leave empty to allow all filenames.'
-        : 'Regex matched against the filename (not full path). Matching files are always blocked.';
+        ? 'Regex matched against the filename (not full path). Only decides whether an intro plays. Leave empty to count every filename as allowed.'
+        : 'Regex matched against the filename (not full path). Only decides whether an intro plays. A matching file still plays.';
 }
 
 function getPathAddLabel(listName) {
@@ -288,7 +288,7 @@ export var HOW_IT_WORKS_URL = 'https://github.com/GeiserX/quality-gate/blob/main
 export function buildLegacyPatternNotice() {
     return '<div class="fieldDescription qg-legacy-notice">' +
         '<strong>These patterns do not restrict playback.</strong> Nothing has enforced them since 3.4.0.0, ' +
-        'so users under this policy can still play every version of an item. ' +
+        'so a pattern never keeps a user away from any version of an item. ' +
         '<strong>Maximum Resolution</strong> is the setting that restricts playback. ' +
         'The patterns and If No Match Found now only decide whether an intro plays. When the patterns allow none of an ' +
         'item\'s files and If No Match Found is Block playback, users under this policy get no intro before that item. ' +
