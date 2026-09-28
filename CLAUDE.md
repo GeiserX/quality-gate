@@ -82,8 +82,11 @@ request would hand over the bytes the cap exists to withhold. A height the libra
 a warning, and negotiation still caps it.
 
 A caller whose assignment, `DefaultPolicyId` or `ApiKeyPolicyId` names a missing or disabled
-policy resolves to `DenyAllPolicy` and is refused outright: 403 on every delivery route and a
-PlaybackInfo response with no sources and `ErrorCode = NotAllowed`. Test for it with
+policy resolves to `DenyAllPolicy` and is refused before any item lookup: 403 on every gated
+delivery route, and PlaybackInfo (GET or POST) answered in phase 1 with no sources and
+`ErrorCode = NotAllowed`, so Jellyfin never negotiates or opens a live stream. Phase 2 strips any
+PlaybackInfo response that still gets built. The `/LiveTv/LiveStreamFiles/…/stream.*` and
+`/LiveTv/LiveRecordings/…/stream` routes are not gated. Test for it with
 `QualityGateService.IsDenyAll`, never through `HasHeightCap`: the sentinel carries no
 `MaxHeight`, which is how it was read as unrestricted up to 3.9.0.1. The filter warns once per
 caller and policy id per process.

@@ -47,7 +47,7 @@ sends you back to steps 2 and 3.
 ## A user cannot play anything after I deleted or disabled their policy
 
 That is deliberate. A user whose assignment, or whose default policy, names a policy that is
-missing or disabled is refused all playback, so an admin mistake can never widen access. Clients
+missing or disabled is refused playback, so an admin mistake can never widen access. Clients
 report the item as not allowed, and delivery requests get 403.
 
 Search the Jellyfin log for `does not exist or is disabled`. The line names the setting and the

@@ -1572,6 +1572,63 @@ public class ResolutionCapFilterTests : IDisposable
     }
 
     [Fact]
+    public async Task UnresolvedPolicy_PlaybackInfoGetAndPost_AreAnsweredBeforeTheActionRuns()
+    {
+        var userId = Guid.NewGuid();
+        SetConfig(WithAssignment(userId, "deleted-policy"));
+
+        foreach (var method in new[] { "GET", "POST" })
+        {
+            var (allowed, context) = await RunResourceAsync(CreateHttpContext($"/Items/{ItemId}/PlaybackInfo", method, userId));
+
+            Assert.False(allowed);
+            var answer = Assert.IsType<PlaybackInfoResponse>(Assert.IsType<ObjectResult>(context.Result).Value);
+            Assert.Empty(answer.MediaSources);
+            Assert.Equal(PlaybackErrorCode.NotAllowed, answer.ErrorCode);
+        }
+    }
+
+    [Fact]
+    public async Task UnresolvedPolicy_PlaybackInfoGet_IsStrippedByTheBackstopToo()
+    {
+        var userId = Guid.NewGuid();
+        SetConfig(WithAssignment(userId, "deleted-policy"));
+        var response = ResponseWithHeights(SmallHeight);
+
+        await RunResultAsync(CreateHttpContext($"/Items/{ItemId}/PlaybackInfo", "GET", userId), response);
+
+        Assert.Empty(response.MediaSources);
+        Assert.Equal(PlaybackErrorCode.NotAllowed, response.ErrorCode);
+    }
+
+    [Fact]
+    public async Task UnresolvedPolicy_IsRefused_WithoutLookingUpTheItem()
+    {
+        // A lookup that throws would land in the fail-open catch, so the deny must not need one.
+        var userId = Guid.NewGuid();
+        SetConfig(WithAssignment(userId, "deleted-policy"));
+        _mediaSourceManagerMock.Setup(m => m.GetMediaStreams(It.IsAny<Guid>())).Throws(new InvalidOperationException("library down"));
+
+        var (allowed, context) = await RunResourceAsync(StaticStream(userId));
+
+        AssertRefused(allowed, context);
+        _mediaSourceManagerMock.Verify(m => m.GetMediaStreams(It.IsAny<Guid>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UnresolvedPolicy_IsLoggedAgain_WhenTheUserNamesADifferentMissingPolicy()
+    {
+        var userId = Guid.NewGuid();
+        SetConfig(WithAssignment(userId, "gone-1"));
+        await AssertDeniedEverywhere(userId);
+
+        SetConfig(WithAssignment(userId, "gone-2"));
+        await AssertDeniedEverywhere(userId);
+
+        AssertUnresolvedWarnings(Times.Exactly(2));
+    }
+
+    [Fact]
     public async Task UnresolvedPolicy_IsLoggedOncePerUser_NotPerRequest()
     {
         var userId = Guid.NewGuid();

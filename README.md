@@ -132,7 +132,7 @@ Quality Gate is access control, so review your policies deliberately. Only admin
 configure them. Report vulnerabilities through [SECURITY.md](SECURITY.md).
 
 One behaviour worth knowing: deleting or disabling a policy that users are assigned to refuses
-those users all playback until you reassign them. The same goes for a default or API-key policy
+those users playback until you reassign them. The same goes for a default or API-key policy
 that no longer resolves. [Configuration](docs/configuration.md#a-policy-that-cannot-be-found-denies)
 explains it.
 

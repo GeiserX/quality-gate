@@ -71,8 +71,11 @@ namespace Jellyfin.Plugin.QualityGate.Filters;
 ///
 /// A caller whose assignment, default policy or API-key policy names a policy that is missing or
 /// disabled resolves to <see cref="QualityGateService.DenyAllPolicy"/>. That caller is refused
-/// outright: every delivery route answers 403 and every PlaybackInfo response comes back with no
-/// sources and <see cref="PlaybackErrorCode.NotAllowed"/>, which clients show as "not allowed".
+/// outright: every delivery route above answers 403, and PlaybackInfo, GET or POST, is answered
+/// before the action runs with no sources and <see cref="PlaybackErrorCode.NotAllowed"/>, which
+/// clients show as "not allowed". /LiveTv/LiveStreamFiles/{id}/stream.{container} and
+/// /LiveTv/LiveRecordings/{id}/stream are not among the delivery routes, so a client calling them
+/// directly is not refused. jellyfin-web only reaches them through PlaybackInfo, which is.
 /// The broken reference is logged once per caller and policy id for the life of the process.
 ///
 /// The filter fails OPEN everywhere except one place. An unreadable body, an item it cannot
@@ -143,6 +146,7 @@ public class ResolutionCapFilter : IAsyncResourceFilter, IAsyncResultFilter
     public async Task OnResourceExecutionAsync(ResourceExecutingContext context, ResourceExecutionDelegate next)
     {
         var refuse = false;
+        var notAllowed = false;
 
         try
         {
@@ -152,7 +156,7 @@ public class ResolutionCapFilter : IAsyncResourceFilter, IAsyncResultFilter
             var path = context.HttpContext.Request.Path.Value ?? string.Empty;
             var isDelivery = IsMediaDeliveryRequest(path);
 
-            if (isDelivery || IsPlaybackInfoPost(context.HttpContext, path))
+            if (isDelivery || IsPlaybackInfoRequest(path))
             {
                 var userId = GetUserId(context.HttpContext);
                 var resolved = GetPolicy(userId);
@@ -160,13 +164,13 @@ public class ResolutionCapFilter : IAsyncResourceFilter, IAsyncResultFilter
 
                 if (QualityGateService.IsDenyAll(resolved))
                 {
-                    // PlaybackInfo is answered with NotAllowed in phase 2, which also covers the
-                    // GET form that never passes through here.
-                    if (isDelivery)
-                    {
-                        WarnUnresolved(userId);
-                        refuse = true;
-                    }
+                    // Decided before any item lookup: a lookup that threw would land in the
+                    // fail-open catch below. PlaybackInfo, GET or POST, is answered here so
+                    // Jellyfin's negotiation never runs, since with AutoOpenLiveStream it opens
+                    // a tuner. Phase 2 strips any response that still gets built.
+                    WarnUnresolved(userId);
+                    refuse = isDelivery;
+                    notAllowed = !isDelivery;
                 }
                 else if (policy != null)
                 {
@@ -189,7 +193,7 @@ public class ResolutionCapFilter : IAsyncResourceFilter, IAsyncResultFilter
                             refuse = true;
                         }
                     }
-                    else
+                    else if (IsPlaybackInfoPost(context.HttpContext, path))
                     {
                         await CapDeviceProfileAsync(context.HttpContext, policy, userId).ConfigureAwait(false);
                     }
@@ -211,8 +215,24 @@ public class ResolutionCapFilter : IAsyncResourceFilter, IAsyncResultFilter
             return;
         }
 
+        if (notAllowed)
+        {
+            context.Result = new ObjectResult(NotAllowedPlaybackInfo());
+            return;
+        }
+
         await next().ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Builds the PlaybackInfo answer for a caller whose policy is missing or disabled: no
+    /// sources, and the error clients show as "not allowed".
+    /// </summary>
+    private static PlaybackInfoResponse NotAllowedPlaybackInfo() => new()
+    {
+        MediaSources = Array.Empty<MediaSourceInfo>(),
+        ErrorCode = PlaybackErrorCode.NotAllowed,
+    };
 
     /// <summary>
     /// Phase 2 — runs before serialization. Guarantees that no source above the cap is
@@ -232,6 +252,7 @@ public class ResolutionCapFilter : IAsyncResourceFilter, IAsyncResultFilter
                 var policy = QualityGateService.HasHeightCap(resolved) ? resolved : null;
                 if (QualityGateService.IsDenyAll(resolved))
                 {
+                    // Backstop for phase 1, which answers these requests before the action runs.
                     WarnUnresolved(userId);
                     response.MediaSources = Array.Empty<MediaSourceInfo>();
                     response.ErrorCode = PlaybackErrorCode.NotAllowed;
@@ -792,7 +813,7 @@ public class ResolutionCapFilter : IAsyncResourceFilter, IAsyncResultFilter
         }
 
         _logger.LogWarning(
-            "QualityGate: policy '{PolicyId}' named by the {Setting} does not exist or is disabled — refusing all playback for {Caller} until it points at an enabled policy",
+            "QualityGate: policy '{PolicyId}' named by the {Setting} does not exist or is disabled — refusing playback for {Caller} until it points at an enabled policy",
             policyId,
             setting,
             userId == Guid.Empty ? "API key and anonymous requests" : "user " + userId.ToString("N"));
@@ -946,6 +967,16 @@ public class ResolutionCapFilter : IAsyncResourceFilter, IAsyncResultFilter
         return path.Contains("/Items/", StringComparison.OrdinalIgnoreCase)
             && (path.EndsWith("/File", StringComparison.OrdinalIgnoreCase)
                 || path.EndsWith("/Download", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Checks whether the request is PlaybackInfo in either form.
+    /// </summary>
+    /// <param name="path">The request path.</param>
+    /// <returns>True for a PlaybackInfo GET or POST.</returns>
+    internal static bool IsPlaybackInfoRequest(string path)
+    {
+        return path.Contains("/PlaybackInfo", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

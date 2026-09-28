@@ -156,16 +156,23 @@ no assignment?
 ### A policy that cannot be found denies
 
 When an assignment, `DefaultPolicyId` or `ApiKeyPolicyId` points at a policy that was deleted,
-disabled or mistyped, the caller gets an internal deny-all sentinel and is refused everything.
-Every delivery route answers 403, and PlaybackInfo comes back with no media sources and the error
-`NotAllowed`, which clients show as not being allowed to play the item. No intro plays either. The
-admin page's user table labels these users **Denied (invalid policy)** or **DENIED (invalid
-default)**.
+disabled or mistyped, the caller gets an internal deny-all sentinel and is refused playback.
+PlaybackInfo, GET or POST, is answered before Jellyfin negotiates anything, with no media sources
+and the error `NotAllowed`, which clients show as not being allowed to play the item. Every
+[delivery route the filter gates](how-it-works.md#direct-delivery) answers 403. No intro plays
+either. The admin page's user table labels these users **Denied (invalid policy)** or **DENIED
+(invalid default)**, and deleting or disabling a policy asks first, saying how many users lose
+playback.
+
+Two Live TV routes are not among the gated delivery routes:
+`/LiveTv/LiveStreamFiles/{id}/stream.{container}` and `/LiveTv/LiveRecordings/{id}/stream`. A
+client that calls them directly is not refused. jellyfin-web only reaches them through
+PlaybackInfo, which is.
 
 The server log says why, once per user and policy id each time Jellyfin starts:
 
 ```text
-QualityGate: policy '<policy id>' named by the assignment does not exist or is disabled — refusing all playback for user <user id> until it points at an enabled policy
+QualityGate: policy '<policy id>' named by the assignment does not exist or is disabled — refusing playback for user <user id> until it points at an enabled policy
 ```
 
 `assignment` reads `default policy` or `API key policy` when that is the setting at fault.
