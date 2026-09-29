@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/images/banner.svg" alt="Quality Gate banner" width="900"/></p>
+<p align="center"><img src="docs/images/banner.svg" alt="Quality Gate" width="900"/></p>
 
 <h1 align="center">Quality Gate</h1>
 
@@ -12,11 +12,10 @@
 
 <p align="center"><strong>Cap the resolution a Jellyfin user may be served</strong></p>
 
-Quality Gate caps how tall a video a user can be served. The cap is measured against the media's
-real height, read from its video stream, so it holds whatever the file is called and survives a
-rename, a re-encode or a symlink. Media above the cap is not hidden: it is served as a capped
-transcode, or as a lower-resolution version of the same item, and requests for the original file
-are refused.
+Quality Gate is a Jellyfin plugin that caps how tall a video a user can be served. The cap is
+checked against the media's real height, read from its video stream, so it survives a rename, a
+re-encode or a symlink. Media above the cap is served as a capped transcode or as a
+lower-resolution version of the same item, and the original file is refused.
 
 **`Maximum Resolution` is the only setting that restricts playback.** Since 3.4.0.0 the filename
 patterns, fallback-transcode and blocked-message fields enforce nothing;
@@ -46,17 +45,17 @@ Then add a policy with **Maximum Resolution** `720p`, assign a user, and prove t
 
 | Guide | What it covers |
 |---|---|
-| [Getting started](docs/getting-started.md) | Install, cap one user at 720p, and prove the cap holds |
-| [Installation](docs/installation.md) | Every install method, upgrading, building from source, releases, contributing |
+| [Getting started](docs/getting-started.md) | Install (repository or manual), cap one user at 720p, prove the cap holds, upgrade |
 | [Configuration](docs/configuration.md) | Every setting, how a user's policy is chosen, **and the fields that do not restrict playback** |
 | [How it works](docs/how-it-works.md) | The routes covered, the one that is not, what to trust, and security |
 | [One library, two qualities](docs/one-library.md) | Keeping a smaller encode beside each original, and the companion encoder |
 | [Encode priority](docs/encode-priority.md) | Having the encoder make the copies capped viewers are about to watch first |
 | [Troubleshooting](docs/troubleshooting.md) | When it is not behaving |
+| [Development](docs/development.md) | Building from source, tests, releases |
 
-Pull requests are welcome. CI has to be green and the patch covered; [building from source](docs/installation.md#building-from-source) has the build and test commands.
+Pull requests are welcome. CI has to be green and the patch covered; [building from source](docs/development.md#building-from-source) has the build and test commands.
 
-## Other Jellyfin projects by GeiserX
+## Related projects
 
 - [smart-covers](https://github.com/GeiserX/smart-covers) provides cover extraction for books, audiobooks, comics, magazines and music libraries, with online fallback
 - [whisper-subs](https://github.com/GeiserX/whisper-subs) generates subtitles locally using Whisper
@@ -65,4 +64,4 @@ Pull requests are welcome. CI has to be green and the patch covered; [building f
 
 ## License
 
-GPL-3.0. See [LICENSE](LICENSE). Thanks to [Jellyfin](https://jellyfin.org), the Free Software Media System, and the Jellyfin plugin development community.
+[GPL-3.0-or-later](LICENSE). Thanks to [Jellyfin](https://jellyfin.org) and its plugin community.

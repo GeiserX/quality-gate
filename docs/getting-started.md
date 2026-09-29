@@ -5,7 +5,7 @@ minutes, and the last step tells you how to prove the cap actually holds.
 
 ## Requirements
 
-- Jellyfin 12 (`targetAbi` is `12.0.0.0`). QualityGate 3.4.0.0 and later will not load on 10.x.
+- Jellyfin 12 (`targetAbi` is `12.0.0.0`, `net10.0`). QualityGate 3.4.0.0 and later will not load on 10.x. If you are still on 10.11, the last build for it is 3.3.6.0, and it is no longer maintained.
 - Admin access to the Jellyfin web UI.
 - Your media must have been scanned, so Jellyfin knows each file's real resolution. The cap
   reads the height from the video stream, so an item Jellyfin has never probed cannot be
@@ -25,7 +25,11 @@ minutes, and the last step tells you how to prove the cap actually holds.
    did not load, and nothing is being enforced. See
    [troubleshooting](troubleshooting.md#the-plugin-vanished-after-an-update).
 
-Manual installation and building from source are covered in [installation](installation.md).
+The plugin GUID is `9cab70ca-0af3-4d3a-adab-6a0df2496a33`. You need it for the configuration
+API, and for the reinstall command in [troubleshooting](troubleshooting.md#the-plugin-vanished-after-an-update).
+
+To install without the repository, see [Manual installation](#manual-installation) below. Building
+from source is in [Development](development.md#building-from-source).
 
 ## Create a policy
 
@@ -85,6 +89,91 @@ curl -s -o /dev/null -w '%{http_code}\n' \
 A capped user must get `403` for an item above the cap. If you get `200`, the cap is not
 working. Run the same request as an unrestricted user and confirm you get `200` there, so you
 know the test itself is meaningful.
+
+## Manual installation
+
+Take the version number from the
+[latest release](https://github.com/GeiserX/quality-gate/releases/latest) rather than copying
+one from a document. Extract the zip so that `Jellyfin.Plugin.QualityGate.dll` sits directly
+inside a folder under `plugins/`.
+
+Jellyfin expects this layout:
+
+```text
+config/plugins/
+  QualityGate_3.7.0.0/
+    Jellyfin.Plugin.QualityGate.dll
+    build.yaml
+    meta.json          <- written by Jellyfin's installer, not present in the zip
+```
+
+The folder name is conventionally `Name_Version`. The release zip contains only the DLL and
+`build.yaml`; `meta.json` is written by Jellyfin itself when it installs from the repository, and
+it is what Jellyfin reads to know which version is installed and whether an update exists.
+
+Do not hand-write `meta.json`, and never copy one from an older version folder. It carries
+`"status": "Deleted"`, and the plugin will remove itself on the next restart. If you need version
+tracking, install from the repository instead of by hand.
+
+### Docker
+
+```bash
+VERSION="3.7.0.0"
+curl -L -o QualityGate.zip \
+  "https://github.com/GeiserX/quality-gate/releases/download/v${VERSION}/quality-gate_${VERSION}.zip"
+unzip QualityGate.zip -d /path/to/jellyfin/config/plugins/QualityGate_${VERSION}/
+docker restart jellyfin
+```
+
+### Linux
+
+```bash
+VERSION="3.7.0.0"
+curl -L -o QualityGate.zip \
+  "https://github.com/GeiserX/quality-gate/releases/download/v${VERSION}/quality-gate_${VERSION}.zip"
+sudo unzip QualityGate.zip -d /var/lib/jellyfin/plugins/QualityGate_${VERSION}/
+sudo chown -R jellyfin:jellyfin /var/lib/jellyfin/plugins/QualityGate_${VERSION}/
+sudo systemctl restart jellyfin
+```
+
+### Windows
+
+There are two data directories, and which one applies depends on how Jellyfin was installed:
+
+- Installed as a **Windows service** (the default installer):
+  `%PROGRAMDATA%\Jellyfin\Server\plugins\QualityGate_<version>\`
+- **Portable** or tray builds run under your own account:
+  `%LOCALAPPDATA%\jellyfin\plugins\QualityGate_<version>\`
+
+Putting the DLL in the wrong one leaves it outside the folder Jellyfin scans, and it will simply
+never appear. Confirm which applies from **Dashboard, About**, then restart Jellyfin from
+Services or the tray icon.
+
+### macOS
+
+Use whichever data directory your install actually reports, rather than assuming. Check
+**Dashboard, About**, or `JELLYFIN_DATA_DIR` if you set it. For a default install that is
+`~/.local/share/jellyfin`.
+
+```bash
+VERSION="3.7.0.0"
+DATA_DIR="$HOME/.local/share/jellyfin"   # confirm this against Dashboard, About
+curl -L -o QualityGate.zip \
+  "https://github.com/GeiserX/quality-gate/releases/download/v${VERSION}/quality-gate_${VERSION}.zip"
+unzip QualityGate.zip -d "$DATA_DIR/plugins/QualityGate_${VERSION}/"
+```
+
+## Upgrading
+
+Update through the catalogue and restart. Jellyfin marks the old version folder deleted and
+removes it on the next start.
+
+On overlay filesystems, notably Unraid's shfs, that removal can fail in a way that takes the new
+version with it. If a plugin disappears after an upgrade, that is what happened, and
+[troubleshooting](troubleshooting.md#the-plugin-vanished-after-an-update) has the recovery.
+
+Upgrading never touches your policies. They live in
+`config/plugins/configurations/Jellyfin.Plugin.QualityGate.xml`, outside the plugin folder.
 
 ## What to read next
 

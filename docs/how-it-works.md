@@ -207,7 +207,7 @@ without warning.
 ## Security
 
 Quality Gate is access control, so review your policies deliberately. Only administrators can
-configure them. Report vulnerabilities through [SECURITY.md](../SECURITY.md).
+configure them. Report vulnerabilities through [SECURITY.md](https://github.com/GeiserX/quality-gate/blob/main/SECURITY.md).
 
 One behaviour worth knowing: deleting or disabling a policy that users are assigned to refuses
 those users playback until you reassign them. The same goes for a default or API-key policy
