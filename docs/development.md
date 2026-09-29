@@ -30,8 +30,9 @@ and they must agree:
 - `Jellyfin.Plugin.QualityGate/meta.json`
 
 The published manifest is **derived from the releases that exist**, not from the copy in the
-repo. Every release with a plugin zip is included, its checksum computed from the bytes actually
-served and its `targetAbi` read from the `build.yaml` inside the zip.
+repo. Every non-draft release tagged `vX.Y.Z.W`, from 2.0.2.0 up, with a plugin zip whose
+`build.yaml` states a `targetAbi` is included, its checksum computed from the bytes actually
+served and its `targetAbi` read from that `build.yaml`.
 
 That is deliberate. It used to be the committed copy plus one new entry, which made a bookkeeping
 commit load-bearing: when that commit did not land, the next release rebuilt from a stale base and

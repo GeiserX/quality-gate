@@ -101,7 +101,7 @@ Jellyfin expects this layout:
 
 ```text
 config/plugins/
-  QualityGate_3.7.0.0/
+  QualityGate_3.9.1.0/
     Jellyfin.Plugin.QualityGate.dll
     build.yaml
     meta.json          <- written by Jellyfin's installer, not present in the zip
@@ -118,7 +118,7 @@ tracking, install from the repository instead of by hand.
 ### Docker
 
 ```bash
-VERSION="3.7.0.0"
+VERSION="3.9.1.0"
 curl -L -o QualityGate.zip \
   "https://github.com/GeiserX/quality-gate/releases/download/v${VERSION}/quality-gate_${VERSION}.zip"
 unzip QualityGate.zip -d /path/to/jellyfin/config/plugins/QualityGate_${VERSION}/
@@ -128,7 +128,7 @@ docker restart jellyfin
 ### Linux
 
 ```bash
-VERSION="3.7.0.0"
+VERSION="3.9.1.0"
 curl -L -o QualityGate.zip \
   "https://github.com/GeiserX/quality-gate/releases/download/v${VERSION}/quality-gate_${VERSION}.zip"
 sudo unzip QualityGate.zip -d /var/lib/jellyfin/plugins/QualityGate_${VERSION}/
@@ -156,7 +156,7 @@ Use whichever data directory your install actually reports, rather than assuming
 `~/.local/share/jellyfin`.
 
 ```bash
-VERSION="3.7.0.0"
+VERSION="3.9.1.0"
 DATA_DIR="$HOME/.local/share/jellyfin"   # confirm this against Dashboard, About
 curl -L -o QualityGate.zip \
   "https://github.com/GeiserX/quality-gate/releases/download/v${VERSION}/quality-gate_${VERSION}.zip"
