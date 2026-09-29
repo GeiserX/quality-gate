@@ -21,7 +21,7 @@ contribution needs the build and the tests green, and the patch covered.
 ## Releases
 
 Pushing a version bump to `main` cuts a release and publishes the plugin manifest to GitHub
-Pages, which is what the repository URL above serves. The version is declared in three places
+Pages, which is what the repository URL in [Getting started](getting-started.md) serves. The version is declared in three places
 and they must agree:
 
 - `Jellyfin.Plugin.QualityGate/Jellyfin.Plugin.QualityGate.csproj` (`AssemblyVersion`,
