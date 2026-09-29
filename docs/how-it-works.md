@@ -203,3 +203,13 @@ reports nothing unusual. If you are relying on the cap rather than on separate l
 "is QualityGate Active" as something to monitor, not something to assume. See
 [troubleshooting](troubleshooting.md#the-plugin-vanished-after-an-update) for how it can vanish
 without warning.
+
+## Security
+
+Quality Gate is access control, so review your policies deliberately. Only administrators can
+configure them. Report vulnerabilities through [SECURITY.md](../SECURITY.md).
+
+One behaviour worth knowing: deleting or disabling a policy that users are assigned to refuses
+those users playback until you reassign them. The same goes for a default or API-key policy
+that no longer resolves. [Configuration](configuration.md#a-policy-that-cannot-be-found-denies)
+explains it.

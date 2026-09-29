@@ -182,3 +182,14 @@ If it still appears twice, work through this in order:
 
 A renamed file does not repair a group that has already formed the wrong way. Rename first, then
 rescan.
+
+## Companion: quality-gate-encoder
+
+A cap only helps a viewer if a version within it exists. Without one, Jellyfin transcodes live.
+[quality-gate-encoder](https://github.com/GeiserX/quality-gate-encoder) (Docker image
+[`drumsergio/quality-gate-encoder`](https://hub.docker.com/r/drumsergio/quality-gate-encoder),
+formerly jellyfin-encoder) pre-encodes a library into 720p versions such as `Film - 720p.mkv`.
+Quality Gate then serves those to capped users instead of a live transcode, and version grouping
+(this page) shows each one beside its original.
+[Encode priority](encode-priority.md) lets the plugin tell the encoder which files to make
+first: the ones capped viewers are about to watch.
