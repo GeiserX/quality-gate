@@ -52,6 +52,23 @@ jobs:
       - name: Run tests
         run: dotnet test --no-build -c Release --verbosity normal
 
+      - name: Set up Python for the docs
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: docs/requirements-docs.txt
+
+      # The docs site and the plugin manifest ship in one Pages artifact: a repository
+      # has one Pages deployment. The site is built before the release is cut, so a
+      # broken page stops the run before anything is tagged. The last line is a guard:
+      # site/manifest.json is the plugin catalogue and the site must never produce one.
+      - name: Build the docs site
+        run: |
+          pip install -r docs/requirements-docs.txt
+          mkdocs build --strict
+          test ! -e site/manifest.json
+
       - name: Get version from csproj
         id: version
         run: |
@@ -100,13 +117,28 @@ jobs:
           print("manifest contains %s and %d versions in total" % (want, len(have)))
           CHECK
 
+      # https://geiserx.github.io/quality-gate/manifest.json is stored inside every
+      # Jellyfin server that installed the plugin. The derived manifest is copied into
+      # the site unchanged and checked there, because site/ is what is deployed.
+      - name: Put the manifest beside the site
+        run: |
+          cp manifest.json site/manifest.json
+          cmp manifest.json site/manifest.json
+          python3 - <<'CHECK'
+          import json
+          m = json.load(open("site/manifest.json"))
+          assert m[0]["guid"] == "9cab70ca-0af3-4d3a-adab-6a0df2496a33", "not the plugin catalogue"
+          assert m[0]["versions"], "empty version list"
+          print("site/manifest.json: %d versions, newest %s" % (len(m[0]["versions"]), m[0]["versions"][0]["version"]))
+          CHECK
+
       - name: Setup Pages
         uses: actions/configure-pages@v6
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          path: .
+          path: site
 
       - name: Deploy to GitHub Pages
         id: deployment
@@ -127,6 +159,23 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Set up Python for the docs
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: docs/requirements-docs.txt
+
+      # The docs site and the plugin manifest ship in one Pages artifact: a repository
+      # has one Pages deployment. The site is built before the release is cut, so a
+      # broken page stops the run before anything is tagged. The last line is a guard:
+      # site/manifest.json is the plugin catalogue and the site must never produce one.
+      - name: Build the docs site
+        run: |
+          pip install -r docs/requirements-docs.txt
+          mkdocs build --strict
+          test ! -e site/manifest.json
+
       - name: Build the published manifest from the releases
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -134,13 +183,28 @@ jobs:
           python3 .github/scripts/build-manifest.py \
             "$GITHUB_REPOSITORY" manifest.json manifest.json
 
+      # https://geiserx.github.io/quality-gate/manifest.json is stored inside every
+      # Jellyfin server that installed the plugin. The derived manifest is copied into
+      # the site unchanged and checked there, because site/ is what is deployed.
+      - name: Put the manifest beside the site
+        run: |
+          cp manifest.json site/manifest.json
+          cmp manifest.json site/manifest.json
+          python3 - <<'CHECK'
+          import json
+          m = json.load(open("site/manifest.json"))
+          assert m[0]["guid"] == "9cab70ca-0af3-4d3a-adab-6a0df2496a33", "not the plugin catalogue"
+          assert m[0]["versions"], "empty version list"
+          print("site/manifest.json: %d versions, newest %s" % (len(m[0]["versions"]), m[0]["versions"][0]["version"]))
+          CHECK
+
       - name: Setup Pages
         uses: actions/configure-pages@v6
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          path: .
+          path: site
 
       - name: Deploy to GitHub Pages
         id: deployment
