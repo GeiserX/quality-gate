@@ -1,7 +1,6 @@
 ---
 hide:
   - navigation
-  - toc
 ---
 
 # Quality Gate { .qg-visually-hidden }
