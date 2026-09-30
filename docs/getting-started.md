@@ -25,6 +25,8 @@ minutes, and the last step tells you how to prove the cap actually holds.
    did not load, and nothing is being enforced. See
    [troubleshooting](troubleshooting.md#the-plugin-vanished-after-an-update).
 
+![Dashboard, Plugins: the QualityGate card showing version 3.9.1.0 and Active](images/screenshots/plugins-active.png)
+
 The plugin GUID is `9cab70ca-0af3-4d3a-adab-6a0df2496a33`. You need it for the configuration
 API, and for the reinstall command in [troubleshooting](troubleshooting.md#the-plugin-vanished-after-an-update).
 

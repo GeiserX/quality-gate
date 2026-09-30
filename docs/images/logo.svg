@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Quality Gate">
+  <!--
+    The height gantry from banner.svg: two posts, a beam, two chains and the
+    yellow-and-black hazard bar, thickened to read at 1.6rem. Same shapes and
+    colours as the banner; the frame takes the banner's chain colour so it
+    shows on the dark header.
+  -->
+  <g fill="#9A8CC0">
+    <rect x="8" y="8" width="20" height="112"/>
+    <rect x="100" y="8" width="20" height="112"/>
+    <rect x="8" y="8" width="112" height="20"/>
+  </g>
+  <path d="M40 28 v24 M88 28 v24" stroke="#9A8CC0" stroke-width="4" stroke-dasharray="6 4"/>
+  <clipPath id="bar"><rect x="20" y="52" width="88" height="32" rx="4"/></clipPath>
+  <rect x="20" y="52" width="88" height="32" rx="4" fill="#FFC928"/>
+  <g clip-path="url(#bar)" fill="#1B1B1B">
+    <path d="M20 52 h18 l-22 32 h-18 z"/>
+    <path d="M56 52 h18 l-22 32 h-18 z"/>
+    <path d="M92 52 h18 l-22 32 h-18 z"/>
+    <path d="M128 52 h18 l-22 32 h-18 z"/>
+  </g>
+</svg>
