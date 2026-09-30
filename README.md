@@ -10,7 +10,7 @@
 
 **Quality Gate** is a Jellyfin plugin that caps the video height each user can be served: 480p, 720p, 1080p, 1440p or 4K, per user or as a default for everyone. The cap is measured on the file's real video stream, so a rename, a re-encode or a symlink does not get around it. Media above the cap arrives as a capped transcode, or as a smaller version of the same item when one exists, and the original file is refused.
 
-Jellyfin's own limit is a bitrate for remote clients, not a height: a low-bitrate 4K file passes it, a viewer on the local network is not limited at all, and a client's quality setting is the viewer's own choice. Quality Gate checks pixels, for every client, on every route that hands out video.
+Jellyfin's own limit is a bitrate for remote clients, not a height: a low-bitrate 4K file passes it, a viewer on the local network is not limited at all, and a client's quality setting is the viewer's own choice. Quality Gate checks pixels, for every client, on every route that hands out video, with one documented exception.
 
 <p align="center"><img src="docs/images/screenshots/settings-policies.png" alt="The Quality Gate settings page in Jellyfin: the note that each policy's Maximum Resolution is what restricts playback, and the first policy card, named 720p Only" width="900"></p>
 

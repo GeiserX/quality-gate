@@ -27,10 +27,11 @@ says how to give that user playback back.
 ## Version Grouping
 
 Tick **Group an encoded copy with its original** and a movies library shows `Film.mkv` and
-`Film - 720p.mkv` as one film with two versions, wherever the two files sit. The Media Info dialog of a film
-lists both. A capped viewer is offered the version within their cap; an unrestricted viewer gets the original
-first. [One library, two qualities](one-library.md) has the naming rule and what to check before switching it
-on.
+`Film - 720p.mkv` as one film with two versions when both files sit in the same folder, whatever
+that folder is called. The Media Info dialog of a film lists both. A capped viewer is offered the
+version within their cap; an unrestricted viewer gets the original first.
+[One library, two qualities](one-library.md) has the naming rule and what to check before
+switching it on.
 
 ![The Media Info dialog of Sintel: two media sources, Sintel (2010).mkv at 3840x2160 and Sintel (2010) - 720p.mkv at 1280x720, in one film](images/screenshots/film-versions.png)
 
