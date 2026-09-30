@@ -1,0 +1,45 @@
+name: Docs
+
+# The strict docs build as a pull request check. It never deploys: this repository
+# has one Pages deployment, and build.yml owns it, because the same artifact carries
+# the plugin catalogue (manifest.json) that every installed Jellyfin server polls.
+# A push to main runs build.yml, which builds this same site and deploys it beside
+# the manifest. Two deploying workflows would take turns overwriting each other.
+#
+# No paths filter, on purpose: a check skipped by a path filter stays Pending and
+# blocks the merge once it is a required check. The build takes seconds.
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build (strict)
+    # Public repo: GitHub-hosted runners are free and unlimited here, and the
+    # job runs on pull requests, so it must never touch a self-hosted runner.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # This job never pushes; a persisted token is readable by pip and every MkDocs plugin.
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: docs/requirements-docs.txt
+
+      - name: Install dependencies
+        run: pip install -r docs/requirements-docs.txt
+
+      # mkdocs.yml sets `strict: true`; the flag here keeps the build strict
+      # even if someone removes that line. The last line is the guard build.yml
+      # relies on: the site must never produce a manifest.json of its own.
+      - name: Build
+        run: |
+          mkdocs build --strict
+          test ! -e site/manifest.json

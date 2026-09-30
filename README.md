@@ -33,20 +33,23 @@ Needs Jellyfin 12: add this repository under **Dashboard, Plugins, Repositories*
 https://geiserx.github.io/quality-gate/manifest.json
 ```
 
-Then open **Dashboard, Plugins, QualityGate**, add a policy with **Maximum Resolution** `720p` (the only field that restricts playback), assign a user under **User Access** and save. As that user, a `curl` on `/Items/<id>/Download` of a 1080p film must answer `403`, and an unrestricted user must get `200` ([Getting started](docs/getting-started.md) has the command).
+Then open **Dashboard, Plugins, QualityGate**, add a policy with **Maximum Resolution** `720p` (the only field that restricts playback), assign a user under **User Access** and save. As that user, a `curl` on `/Items/<id>/Download` of a 1080p film must answer `403`, and an unrestricted user must get `200` ([Getting started](https://geiserx.github.io/quality-gate/getting-started/#prove-it-works) has the command).
 
 It is not DRM, and if the plugin fails to load every user is unrestricted, so watch that it stays **Active**.
 
 ## Documentation
 
-- [Getting started](docs/getting-started.md): install from the repository or by hand, cap one user at 720p, prove it, upgrade
-- [Configuration](docs/configuration.md): every setting, how a user's policy is chosen, and the fields that do not restrict playback
-- [Usage](docs/usage.md): the settings page section by section, with screenshots
-- [One library, two qualities](docs/one-library.md): a smaller copy beside each original, shown as one film with two versions
-- [Encode priority](docs/encode-priority.md): having the encoder make the copies capped viewers need first
-- [How it works](docs/how-it-works.md): the routes covered, the one that is not, what to trust
-- [Troubleshooting](docs/troubleshooting.md): when it is not behaving
-- [Development](docs/development.md): building from source, tests, releases
+The full documentation is at [geiserx.github.io/quality-gate](https://geiserx.github.io/quality-gate/).
+
+- [Getting started](https://geiserx.github.io/quality-gate/getting-started/): install from the repository or by hand, cap one user at 720p, prove it, upgrade
+- [Usage](https://geiserx.github.io/quality-gate/usage/): the settings page section by section, with screenshots
+- [One library, two qualities](https://geiserx.github.io/quality-gate/one-library/): a smaller copy beside each original, shown as one film with two versions
+- [Encode priority](https://geiserx.github.io/quality-gate/encode-priority/): having the encoder make the copies capped viewers need first
+- [Configuration](https://geiserx.github.io/quality-gate/configuration/): every setting, how a user's policy is chosen, and the fields that do not restrict playback
+- [How it works](https://geiserx.github.io/quality-gate/how-it-works/): the routes covered, the one that is not, what to trust
+- [Troubleshooting](https://geiserx.github.io/quality-gate/troubleshooting/): when it is not behaving
+- [Development](https://geiserx.github.io/quality-gate/development/): building from source, tests, releases
+- [Related projects](https://geiserx.github.io/quality-gate/related/): the encoder and the rest of the family
 
 Report security problems through the [security policy](SECURITY.md), not in a public issue.
 
