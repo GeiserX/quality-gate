@@ -27,6 +27,7 @@ bld/
 .vscode/
 
 # Build artifacts
+site/
 *.dll
 *.exe
 *.pdb
