@@ -1,7 +1,7 @@
 # Usage
 
 The settings page, section by section. Open it under **Dashboard, Plugins, QualityGate**. The screenshots
-come from a demo server with two of the Blender open films and five invented users; nothing on them is a
+come from a demo server with two of the Blender open films and six invented users; nothing on them is a
 real person or a real server.
 
 ## Policies

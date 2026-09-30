@@ -6,7 +6,7 @@
     "description": "Quality Gate lets Jellyfin administrators cap the resolution a user may be served. The cap is measured against the media's actual height, read from its video stream, so it holds whatever the file is called. Media above the cap is served as a capped transcode, or as a lower-resolution version of the same item where one exists, and requests for the original file are refused. Useful for bandwidth management and tiered access.",
     "owner": "GeiserX",
     "category": "General",
-    "imageUrl": "",
+    "imageUrl": "https://raw.githubusercontent.com/GeiserX/quality-gate/main/docs/images/icon-512.png",
     "versions": [
       {
         "version": "3.8.0.0",
