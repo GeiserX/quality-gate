@@ -24,22 +24,33 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # This job never pushes; a persisted token is readable by pip and every MkDocs plugin.
+          # This job never pushes; a persisted token is readable by pip and by the build.
           persist-credentials: false
 
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.13'
+          # pip's download cache only. Zensical's own build cache (.cache/) is
+          # never kept between runs: its docs advise against it on CI, and
+          # --clean below starts from nothing anyway.
           cache: pip
           cache-dependency-path: docs/requirements-docs.txt
 
       - name: Install dependencies
         run: pip install -r docs/requirements-docs.txt
 
-      # mkdocs.yml sets `strict: true`; the flag here keeps the build strict
-      # even if someone removes that line. The last line is the guard build.yml
-      # relies on: the site must never produce a manifest.json of its own.
+      # zensical.toml sets `strict = true`; the flag here keeps the build strict
+      # even if someone removes that line. `python -m zensical`, never the bare
+      # `zensical` command, the same as every other GeiserX docs site. The last
+      # line is the guard build.yml relies on: the site must never produce a
+      # manifest.json of its own.
       - name: Build
         run: |
-          mkdocs build --strict
+          python -m zensical build --clean --strict
           test ! -e site/manifest.json
+
+      # What the strict build does not check: a page in no nav entry, a nav
+      # entry for a missing file, a missing image, a /rooted link, a raw <title>
+      # in a page.
+      - name: Check the built site
+        run: python -I .github/scripts/site-check.py site

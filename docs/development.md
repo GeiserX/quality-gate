@@ -22,8 +22,20 @@ contribution needs the build and the tests green, and the patch covered.
 
 Pushing a version bump to `main` cuts a release and publishes the plugin manifest to GitHub
 Pages, which is what the repository URL in [Getting started](getting-started.md) serves. The same run
-builds this documentation site with `mkdocs build --strict` and deploys it beside the manifest, so a
-broken page stops the run before anything is tagged; pull requests run that build as the `Docs` check.
+builds this documentation site with [Zensical](https://zensical.org/) and deploys it beside the
+manifest, so a broken page stops the run before anything is tagged; pull requests run that build as
+the `Docs` check. To build it yourself:
+
+```bash
+pip install -r docs/requirements-docs.txt
+python -m zensical build --clean --strict
+python -I .github/scripts/site-check.py site
+```
+
+The strict build fails on a broken link or anchor; `site-check.py` fails on what the build lets
+through: a page left out of the nav, a nav entry for a missing file, a missing image, a link rooted
+at `/`.
+
 The version is declared in three places and they must agree:
 
 - `Jellyfin.Plugin.QualityGate/Jellyfin.Plugin.QualityGate.csproj` (`AssemblyVersion`,

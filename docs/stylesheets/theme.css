@@ -30,6 +30,13 @@
   --md-typeset-a-color: #7e3f95;
 }
 
+/* Zensical's modern look paints the current page in the side nav with the
+   accent, which is that same faint yellow on the light scheme. Use the link
+   colour there instead. */
+[data-md-color-scheme="default"] .md-nav--primary .md-nav__item .md-nav__link--active {
+  color: var(--md-typeset-a-color);
+}
+
 /* Fixed logo size so it does not crowd the site name. */
 .md-header__button.md-logo img,
 .md-header__button.md-logo svg {
@@ -43,9 +50,15 @@
  * .md-header__topic and the page title in a second one, and swaps them on
  * scroll. Styling both would change every page title too. */
 .md-header__topic:first-child .md-ellipsis {
-  color: #ffffff;
   font-weight: 800;
   letter-spacing: -0.01em;
+}
+
+/* That colour only on the dark scheme: Zensical's modern header takes the page
+   background, so on the light scheme it is white and a light name would vanish.
+   There the name keeps the default text colour. */
+[data-md-color-scheme="slate"] .md-header__topic:first-child .md-ellipsis {
+  color: #ffffff;
 }
 
 /* Keep the mark and the name close, so they read as one unit. */
